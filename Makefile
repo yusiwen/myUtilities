@@ -2,8 +2,9 @@ NAME=myUtils
 BINDIR=bin
 VERSION=$(shell git describe --tags || echo "unknown version")
 BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/yusiwen/myUtilities/Version=$(VERSION)" \
-		-X "github.com/yusiwen/myUtilities/BuildTime=$(BUILDTIME)" \
+GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
+		-X "main.CommitSHA=$(shell git rev-parse --short HEAD)" \
+		-X "main.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \
