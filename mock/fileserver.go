@@ -10,7 +10,7 @@ import (
 )
 
 func (o FileServerOptions) Run() error {
-	// Make local directory
+	// Make a local directory
 	if err := os.MkdirAll(o.LocalDir, os.ModePerm); err != nil {
 		return fmt.Errorf("create local directory failed: %v", err)
 	}

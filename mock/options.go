@@ -7,6 +7,11 @@ type FileServerOptions struct {
 	MaxFileSize int64  `help:"Maximum file size in megabytes." default:"50"`
 }
 
+type MockServerOptions struct {
+	Port int `help:"Port to listen on." default:"8081"`
+}
+
 type Options struct {
 	FileServer FileServerOptions `cmd:"" name:"file-server" help:"Start a mock file server to receive files."`
+	MockServer MockServerOptions `cmd:"" name:"mock-server" help:"Start a mock server to receive requests."`
 }

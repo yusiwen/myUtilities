@@ -5,17 +5,39 @@ import (
 	"fmt"
 	"github.com/ryanolee/go-chaff"
 	"net/http"
+	"os"
+	"strconv"
 )
-
-type MockServerOptions struct {
-	Port int `help:"Port to listen on." default:"8081"`
-}
 
 const schema = `{"properties": {
 		"id": {"type": "integer"},
 		"name": {"type": "string"}
 	}
 }`
+
+var data []interface{}
+
+func init() {
+	for i := 0; i < 100; i++ {
+		generator, err := chaff.ParseSchemaStringWithDefaults(schema)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		result := generator.GenerateWithDefaults()
+
+		data = append(data, result)
+	}
+}
+
+type MockResponse struct {
+	Response
+	PageNo   int         `json:"pageNo"`
+	PageSize int         `json:"pageSize"`
+	Total    int         `json:"total"`
+	Data     interface{} `json:"data"`
+}
 
 func (o *MockServerOptions) Run() error {
 	http.HandleFunc("/api/mock/query", o.queryHandler)
@@ -32,22 +54,40 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, `{"code": "0", "msg": "GET method only"}`, http.StatusOK)
 		return
 	}
+	pageNo := parseInt(r.URL.Query().Get("pageNo"), 1)
+	pageSize := min(parseInt(r.URL.Query().Get("pageSize"), 10), len(data))
 
-	generator, err := chaff.ParseSchemaStringWithDefaults(schema)
-	if err != nil {
-		http.Error(w, `{"code": "0", "msg": "Schema loading error"}`, http.StatusOK)
-		return
+	maxPageNo := (len(data) + pageSize - 1) / pageSize
+	pageNo = min(maxPageNo, pageNo)
+
+	result := data[pageNo-1 : pageNo-1+pageSize]
+
+	resp := MockResponse{
+		Response: Response{
+			Code: "1",
+			Msg:  "OK",
+		},
+		Data:     result,
+		PageNo:   pageNo,
+		PageSize: pageSize,
+		Total:    len(data),
 	}
-
-	fmt.Println(generator.Metadata.Errors)
-	result := generator.GenerateWithDefaults()
-
-	res, err := json.Marshal(result)
+	res, err := json.Marshal(resp)
 	if err != nil {
 		http.Error(w, `{"code": "0", "msg": "JSON generating error"}`, http.StatusOK)
 		return
 	}
 
-	fmt.Fprintf(w, `{"code": "1", "msg": "OK", "data": %s}`, res)
+	fmt.Fprintf(w, "%s", res)
 	return
+}
+
+func parseInt(value string, defaultValue int) int {
+	if value == "" {
+		return defaultValue
+	}
+	if result, err := strconv.Atoi(value); err == nil {
+		return result
+	}
+	return defaultValue
 }
