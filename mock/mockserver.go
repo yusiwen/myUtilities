@@ -17,8 +17,8 @@ const schema = `{"properties": {
 
 var data []interface{}
 
-func init() {
-	for i := 0; i < 100; i++ {
+func generateData(size int) {
+	for i := 0; i < size; i++ {
 		generator, err := chaff.ParseSchemaStringWithDefaults(schema)
 		if err != nil {
 			fmt.Println(err)
@@ -40,6 +40,12 @@ type MockResponse struct {
 }
 
 func (o *MockServerOptions) Run() error {
+	if o.Size > 10000 {
+		return fmt.Errorf("size to large, max 10000")
+	}
+
+	generateData(o.Size)
+
 	http.HandleFunc("/api/mock/query", o.queryHandler)
 
 	fmt.Printf("Server listening at :%d\n", o.Port)

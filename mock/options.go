@@ -9,6 +9,7 @@ type FileServerOptions struct {
 
 type MockServerOptions struct {
 	Port int `help:"Port to listen on." default:"8081"`
+	Size int `help:"Number of records to generate." default:"100"`
 }
 
 type Options struct {
