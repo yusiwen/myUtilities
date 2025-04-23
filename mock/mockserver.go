@@ -6,13 +6,14 @@ import (
 	"github.com/ryanolee/go-chaff"
 	"net/http"
 	"os"
-	"strconv"
 )
 
-const schema = `{"properties": {
+const schema = `{
+	"properties": {
 		"id": {"type": "integer"},
 		"name": {"type": "string"}
-	}
+	},
+	"required": ["id", "name"]
 }`
 
 var data []interface{}
@@ -31,12 +32,13 @@ func generateData(size int) {
 	}
 }
 
+type Result struct {
+	Data interface{} `json:"Data"`
+}
+
 type MockResponse struct {
 	Response
-	PageNo   int         `json:"pageNo"`
-	PageSize int         `json:"pageSize"`
-	Total    int         `json:"total"`
-	Data     interface{} `json:"data"`
+	Result Result `json:"Result"`
 }
 
 func (o *MockServerOptions) Run() error {
@@ -55,13 +57,26 @@ func (o *MockServerOptions) Run() error {
 	return nil
 }
 
+type queryRequest struct {
+	PageNo   int `json:"pageNo"`
+	PageSize int `json:"pageSize"`
+}
+
 func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"code": "0", "msg": "GET method only"}`, http.StatusOK)
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"Status": {"Code": "1", "Message": "POST method only"}}`, http.StatusOK)
 		return
 	}
-	pageNo := parseInt(r.URL.Query().Get("pageNo"), 1)
-	pageSize := min(parseInt(r.URL.Query().Get("pageSize"), 10), len(data))
+
+	var req queryRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, `{"Status": {"Code": "2", "Message": "JSON parsing error"}}`, http.StatusOK)
+		return
+	}
+
+	pageNo := req.PageNo
+	pageSize := req.PageSize
 
 	maxPageNo := (len(data) + pageSize - 1) / pageSize
 	pageNo = min(maxPageNo, pageNo)
@@ -70,30 +85,21 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 
 	resp := MockResponse{
 		Response: Response{
-			Code: "1",
-			Msg:  "OK",
+			Status: Status{
+				Code:    "0",
+				Message: "OK",
+			},
 		},
-		Data:     result,
-		PageNo:   pageNo,
-		PageSize: pageSize,
-		Total:    len(data),
+		Result: Result{
+			Data: result,
+		},
 	}
 	res, err := json.Marshal(resp)
 	if err != nil {
-		http.Error(w, `{"code": "0", "msg": "JSON generating error"}`, http.StatusOK)
+		http.Error(w, `{"Status": {"Code": "3", "Message": "JSON generating error"}}`, http.StatusOK)
 		return
 	}
 
 	fmt.Fprintf(w, "%s", res)
 	return
-}
-
-func parseInt(value string, defaultValue int) int {
-	if value == "" {
-		return defaultValue
-	}
-	if result, err := strconv.Atoi(value); err == nil {
-		return result
-	}
-	return defaultValue
 }

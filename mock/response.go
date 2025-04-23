@@ -1,6 +1,9 @@
 package mock
 
+type Status struct {
+	Code    string `json:"Code"`
+	Message string `json:"Message"`
+}
 type Response struct {
-	Code string `json:"code"`
-	Msg  string `json:"msg"`
+	Status Status `json:"Status"`
 }
