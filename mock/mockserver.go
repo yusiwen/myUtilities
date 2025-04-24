@@ -75,13 +75,18 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	pageNo := req.PageNo
+	pageNo := max(req.PageNo, 1)
 	pageSize := req.PageSize
 
 	maxPageNo := (len(data) + pageSize - 1) / pageSize
-	pageNo = min(maxPageNo, pageNo)
-
-	result := data[pageNo-1 : pageNo-1+pageSize]
+	fmt.Println("len(data): ", len(data))
+	fmt.Printf("pageNo: %d, pageSize: %d, maxPageNo: %d\n", pageNo, pageSize, maxPageNo)
+	var result interface{}
+	if pageNo > maxPageNo {
+		result = []interface{}{}
+	} else {
+		result = data[(pageNo-1)*pageSize : min(len(data), pageNo*pageSize)]
+	}
 
 	resp := MockResponse{
 		Response: Response{
