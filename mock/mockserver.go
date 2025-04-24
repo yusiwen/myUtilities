@@ -47,6 +47,7 @@ func loadFile(fileName string) error {
 	for i := 0; i < len(rs); i++ {
 		d[i] = rs[i]
 	}
+	fmt.Printf("loaded %d records from %s\n", len(d), fileName)
 	return nil
 }
 
