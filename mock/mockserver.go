@@ -1,11 +1,14 @@
 package mock
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"github.com/ryanolee/go-chaff"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 const schema = `{
@@ -16,20 +19,71 @@ const schema = `{
 	"required": ["id", "name"]
 }`
 
-var data []interface{}
+var data map[string][]interface{}
 
-func generateData(size int) {
+func loadFile(fileName string) error {
+	file, err := os.Open(fileName)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return err
+	}
+	header := records[0]
+	rs := make([]map[string]string, len(records)-1)
+	for i := 1; i < len(records); i++ {
+		rs[i-1] = make(map[string]string)
+		for j := 0; j < len(header); j++ {
+			rs[i-1][header[j]] = records[i][j]
+		}
+	}
+	fileNameWithoutExt := fileNameWithoutExtension(fileName)
+	data[fileNameWithoutExt] = make([]interface{}, len(rs))
+	d := data[fileNameWithoutExt]
+	for i := 0; i < len(rs); i++ {
+		d[i] = rs[i]
+	}
+	return nil
+}
+
+func loadRandomData(size int) error {
+	data["default"] = make([]interface{}, size)
+	d := data["default"]
 	for i := 0; i < size; i++ {
 		generator, err := chaff.ParseSchemaStringWithDefaults(schema)
 		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			return err
 		}
 
 		result := generator.GenerateWithDefaults()
 
-		data = append(data, result)
+		d = append(d, result)
 	}
+	return nil
+}
+
+func (o *MockServerOptions) generateData() error {
+	data = make(map[string][]interface{})
+
+	if o.CsvFile != "" {
+		files := strings.Split(o.CsvFile, ";")
+		for _, file := range files {
+			err := loadFile(file)
+			if err != nil {
+				return err
+			}
+		}
+	} else {
+		err := loadRandomData(o.Size)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 type Result struct {
@@ -46,12 +100,16 @@ func (o *MockServerOptions) Run() error {
 		return fmt.Errorf("size to large, max 10000")
 	}
 
-	generateData(o.Size)
+	err := o.generateData()
+	if err != nil {
+		return err
+	}
 
-	http.HandleFunc("/api/mock/query", o.queryHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/mock/query/{rs}", o.queryHandler)
 
 	fmt.Printf("Server listening at :%d\n", o.Port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux); err != nil {
 		return fmt.Errorf("server listen failed: %v", err)
 	}
 	return nil
@@ -78,14 +136,20 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 	pageNo := max(req.PageNo, 1)
 	pageSize := req.PageSize
 
-	maxPageNo := (len(data) + pageSize - 1) / pageSize
-	fmt.Println("len(data): ", len(data))
+	rsName := r.PathValue("rs")
+	if len(rsName) == 0 {
+		rsName = "default"
+	}
+	d := data[rsName]
+
+	maxPageNo := (len(d) + pageSize - 1) / pageSize
+	fmt.Println("len(d): ", len(d))
 	fmt.Printf("pageNo: %d, pageSize: %d, maxPageNo: %d\n", pageNo, pageSize, maxPageNo)
 	var result interface{}
 	if pageNo > maxPageNo {
 		result = []interface{}{}
 	} else {
-		result = data[(pageNo-1)*pageSize : min(len(data), pageNo*pageSize)]
+		result = d[(pageNo-1)*pageSize : min(len(d), pageNo*pageSize)]
 	}
 
 	resp := MockResponse{
@@ -107,4 +171,8 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 
 	fmt.Fprintf(w, "%s", res)
 	return
+}
+
+func fileNameWithoutExtension(fileName string) string {
+	return strings.TrimSuffix(filepath.Base(fileName), filepath.Ext(fileName))
 }
