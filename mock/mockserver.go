@@ -70,8 +70,8 @@ func loadRandomData(size int) error {
 func (o *MockServerOptions) generateData() error {
 	data = make(map[string][]interface{})
 
-	if o.CsvFile != "" {
-		files := strings.Split(o.CsvFile, ";")
+	if o.CsvFiles != "" {
+		files := strings.Split(o.CsvFiles, ";")
 		for _, file := range files {
 			err := loadFile(file)
 			if err != nil {

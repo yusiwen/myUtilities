@@ -8,9 +8,9 @@ type FileServerOptions struct {
 }
 
 type MockServerOptions struct {
-	Port    int    `help:"Port to listen on." default:"8081"`
-	Size    int    `help:"Number of records to generate." default:"100"`
-	CsvFile string `help:"CSV file to read as data." default:""`
+	Port     int    `help:"Port to listen on." default:"8081"`
+	Size     int    `help:"Number of records to generate." default:"100"`
+	CsvFiles string `help:"CSV files to read as data, separated by semi-colon" default:""`
 }
 
 type Options struct {
