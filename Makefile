@@ -1,4 +1,4 @@
-NAME=myUtils
+NAME=mu
 BINDIR=bin
 VERSION=$(shell git describe --tags || echo "unknown version")
 BUILDTIME=$(shell date -u)
@@ -8,13 +8,14 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" 
 		-w -s -buildid='
 
 PLATFORM_LIST = \
+	darwin-arm64 \
 	linux-amd64 \
 	linux-armv8
 
 WINDOWS_ARCH_LIST = \
 	windows-amd64
 
-all: linux-amd64 linux-armv8 windows-amd64 # Most used
+all: linux-amd64 linux-armv8 windows-amd64 darwin-arm64 # Most used
 
 docker:
 	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
