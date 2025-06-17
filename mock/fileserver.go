@@ -16,12 +16,23 @@ func (o FileServerOptions) Run() error {
 	}
 
 	http.HandleFunc("/api/mock/file", o.uploadHandler)
+	http.HandleFunc("/api/mock/file-error", o.uploadErrorHandler)
 
 	fmt.Printf("Server listening at :%d\n", o.Port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), nil); err != nil {
 		return fmt.Errorf("server listen failed: %v", err)
 	}
 	return nil
+}
+
+func (o FileServerOptions) uploadErrorHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{
+        "result": 0,
+        "code": "0",
+        "msg": "Mocking Error"
+    }`)
 }
 
 func (o FileServerOptions) uploadHandler(w http.ResponseWriter, r *http.Request) {
