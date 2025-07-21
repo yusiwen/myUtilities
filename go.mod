@@ -3,7 +3,7 @@ module github.com/yusiwen/myUtilities
 go 1.24
 
 require (
-	github.com/alecthomas/kong v1.10.0
+	github.com/alecthomas/kong v1.12.1
 	github.com/ryanolee/go-chaff v0.1.0
 )
 
