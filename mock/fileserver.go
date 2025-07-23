@@ -16,7 +16,8 @@ func (o FileServerOptions) Run() error {
 	}
 
 	http.HandleFunc("/api/mock/file", o.uploadHandler)
-	http.HandleFunc("/api/mock/file-error", o.uploadErrorHandler)
+	http.HandleFunc("/api/mock/file-error/unknown-fields", o.uploadUnknownHandler)
+	http.HandleFunc("/api/mock/file-error/missing-fields", o.uploadMissingHandler)
 
 	fmt.Printf("Server listening at :%d\n", o.Port)
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), nil); err != nil {
@@ -25,13 +26,21 @@ func (o FileServerOptions) Run() error {
 	return nil
 }
 
-func (o FileServerOptions) uploadErrorHandler(w http.ResponseWriter, r *http.Request) {
+func (o FileServerOptions) uploadUnknownHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{
         "result": 0,
         "code": "0",
         "msg": "Mocking Error"
+    }`)
+}
+
+func (o FileServerOptions) uploadMissingHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `{
+        "msg": "OK"
     }`)
 }
 
