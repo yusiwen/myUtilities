@@ -50,9 +50,9 @@ func (o *DBProxyOptions) getBackends() ([]*db.OracleBackendStatus, error) {
 					Port:     o.DbPort[i],
 					Priority: o.RoutePriority[i],
 				},
-				Username:    o.DbUsername[i],
-				Password:    o.DbPassword[i],
-				ServiceName: o.DbName[i],
+				Username:    o.DbUsername,
+				Password:    o.DbPassword,
+				ServiceName: o.DbName,
 			},
 		})
 	}

@@ -8,9 +8,9 @@ type DBProxyOptions struct {
 	RoutePriority  []int    `help:"Priority of route" default:"0"`
 	DbHost         []string `help:"Host of database" default:""`
 	DbPort         []int    `help:"Port of database" default:"1521"`
-	DbName         []string `help:"Name of database" default:""`
-	DbUsername     []string `help:"User name to connect to database" default:""`
-	DbPassword     []string `help:"Password to connect to database" default:""`
+	DbName         string   `help:"Name of database" default:""`
+	DbUsername     string   `help:"User name to connect to database" default:""`
+	DbPassword     string   `help:"Password to connect to database" default:""`
 	DbTestQuery    string   `help:"SQL query statement to test connection" default:"SELECT '1' FROM DUAL"`
 	DbTestExpected string   `help:"Expected result of SQL query statement to test connection" default:"1"`
 	DbTestTimeout  int      `help:"Timeout in seconds for health check." default:"5"`
