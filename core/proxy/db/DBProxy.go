@@ -78,7 +78,7 @@ func (p *OracleProxy) handleClient(clientConn net.Conn) {
 	// 获取活动后端
 	backend, err := p.getActiveBackend()
 	if err != nil {
-		log.Printf("No available backend: %v", err)
+		log.Printf("Failed to route: %v", err)
 		return
 	}
 
@@ -123,17 +123,6 @@ func (p *OracleProxy) getActiveBackend() (*OracleBackendStatus, error) {
 	p.Mutex.RLock()
 	defer p.Mutex.RUnlock()
 
-	// 尝试使用当前选中的后端
-	if p.CurrentIdx < len(p.Backends) {
-		backend := p.Backends[p.CurrentIdx]
-		backend.Mutex.RLock()
-		if backend.IsAvailable {
-			backend.Mutex.RUnlock()
-			return backend, nil
-		}
-		backend.Mutex.RUnlock()
-	}
-
 	// 查找第一个可用的后端（按优先级）
 	for i, backend := range p.Backends {
 		backend.Mutex.RLock()
@@ -145,12 +134,13 @@ func (p *OracleProxy) getActiveBackend() (*OracleBackendStatus, error) {
 			p.CurrentIdx = i
 			p.Mutex.Unlock()
 
+			log.Printf("Using new route by priority: %s", backend.Config.Name)
 			return backend, nil
 		}
 		backend.Mutex.RUnlock()
 	}
 
-	return nil, errors.New("no available backends")
+	return nil, errors.New("no available route found")
 }
 
 // 启动健康检查

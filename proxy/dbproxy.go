@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/yusiwen/myUtilities/core/proxy"
 	"github.com/yusiwen/myUtilities/core/proxy/db"
+	"sort"
 	"time"
 )
 
@@ -56,6 +57,9 @@ func (o *DBProxyOptions) getBackends() ([]*db.OracleBackendStatus, error) {
 			},
 		})
 	}
+	sort.Slice(backends, func(i, j int) bool {
+		return backends[i].Config.Priority < backends[j].Config.Priority
+	})
 	return backends, nil
 }
 
