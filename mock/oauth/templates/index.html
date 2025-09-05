@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OAuth 2.0 授权服务器</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <h1>OAuth 2.0 授权服务器</h1>
+    <p>这是一个简单的 OAuth 2.0 授权服务器演示。</p>
+
+    <h2>已注册的客户端</h2>
+    <ul>
+        {{range .Clients}}
+        <li><strong>{{.Name}}</strong> (ID: {{.ID}})</li>
+        {{end}}
+    </ul>
+
+    <h2>测试授权流程</h2>
+    <p>要测试授权流程，请访问以下 URL：</p>
+    <code>
+        http://localhost:8000/authorize?response_type=code&client_id=client1&redirect_uri=http://localhost:8080/callback&scope=read&state=xyz123
+    </code>
+</div>
+</body>
+</html>

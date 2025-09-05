@@ -13,7 +13,12 @@ type MockServerOptions struct {
 	CsvFiles string `help:"CSV files to read as data, separated by semi-colon" default:""`
 }
 
+type OAuthServerOptions struct {
+	Port int `help:"Port to listen on." default:"8083"`
+}
+
 type Options struct {
-	FileServer FileServerOptions `cmd:"" name:"file-server" help:"Start a mock file server to receive files."`
-	MockServer MockServerOptions `cmd:"" name:"mock-server" help:"Start a mock server to receive requests."`
+	FileServer  FileServerOptions  `cmd:"" name:"file-server" help:"Start a mock file server to receive files."`
+	MockServer  MockServerOptions  `cmd:"" name:"mock-server" help:"Start a mock server to receive requests."`
+	OAuthServer OAuthServerOptions `cmd:"" name:"oauth-server" help:"Start a mock oauth server to receive requests."`
 }

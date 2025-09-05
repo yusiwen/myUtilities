@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>授权请求</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <h1>授权请求</h1>
+    <p>您好, <strong>{{.User.Username}}</strong>!</p>
+    <p>应用程序 <strong>{{.Client.Name}}</strong> 希望访问您的账户。</p>
+
+    <div class="permissions">
+        <h3>请求的权限:</h3>
+        <ul>
+            <li>读取您的基本信息</li>
+            <li>访问您的电子邮件地址</li>
+        </ul>
+    </div>
+
+    <form method="POST">
+        <div class="actions">
+            <button type="submit" name="decision" value="allow" class="btn-allow">允许</button>
+            <button type="submit" name="decision" value="deny" class="btn-deny">拒绝</button>
+        </div>
+    </form>
+</div>
+</body>
+</html>
