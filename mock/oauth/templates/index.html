@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="utf-8">
 <head>
     <title>OAuth 2.0 授权服务器</title>
     <link rel="stylesheet" href="/static/style.css">
@@ -8,6 +8,8 @@
 <div class="container">
     <h1>OAuth 2.0 授权服务器</h1>
     <p>这是一个简单的 OAuth 2.0 授权服务器演示。</p>
+
+    <button class="register-btn" id="registerBtn">Register New Client</button>
 
     <h2>已注册的客户端</h2>
     <ul>
@@ -18,9 +20,196 @@
 
     <h2>测试授权流程</h2>
     <p>要测试授权流程，请访问以下 URL：</p>
-    <code>
-        http://localhost:8000/authorize?response_type=code&client_id=client1&redirect_uri=http://localhost:8080/callback&scope=read&state=xyz123
+    <code id="hostDisplay">
+        place holder
     </code>
 </div>
+
+<div class="modal-overlay" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-header">
+            <h2 class="modal-title">Register New Client</h2>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="clientId">Client ID</label>
+                <input type="text" id="clientId" placeholder="Enter a unique client identifier" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="clientName">Client Name</label>
+                <input type="text" id="clientName" placeholder="Enter a unique client name" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="clientSecret">Client Secret</label>
+                <input type="text" id="clientSecret" placeholder="Enter a unique client secret" autocomplete="off">
+            </div>
+            <div class="form-group">
+                <label for="redirectUri">Redirect URI</label>
+                <input type="text" id="redirectUri" placeholder="https://example.com/oauth/callback" autocomplete="off">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel" id="cancelBtn">Cancel</button>
+            <button class="btn btn-submit" id="submitBtn">OK</button>
+        </div>
+    </div>
+</div>
+
+<div class="notification" id="notification"></div>
+
+<script>
+    // Get the host from window.location
+    const currentHost = window.location.host;
+    const currentProtocol = window.location.protocol;
+
+    // Get the HTML element where the host will be displayed
+    const hostElement = document.getElementById('hostDisplay');
+
+    // Set the text content of the element to the current host
+    hostElement.textContent = currentProtocol + '//' + currentHost + '/authorize?response_type=code&client_id=client1&redirect_uri=http://localhost:8080/callback&scope=read&state=xyz123';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Get DOM elements
+        const registerBtn = document.getElementById('registerBtn');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const clientIdInput = document.getElementById('clientId');
+        const clientNameInput = document.getElementById('clientName');
+        const clientSecretInput = document.getElementById('clientSecret')
+        const redirectUriInput = document.getElementById('redirectUri');
+        const notification = document.getElementById('notification');
+
+        // Show modal when register button is clicked
+        registerBtn.addEventListener('click', function() {
+            modalOverlay.classList.add('active');
+            clientIdInput.focus();
+        });
+
+        // Hide modal when cancel button is clicked
+        cancelBtn.addEventListener('click', function() {
+            modalOverlay.classList.remove('active');
+            clearForm();
+        });
+
+        // Handle form submission
+        submitBtn.addEventListener('click', function() {
+            const clientId = clientIdInput.value.trim();
+            const clientName = clientNameInput.value.trim();
+            const clientSecret = clientSecretInput.value.trim();
+            const redirectUri = redirectUriInput.value.trim();
+
+            // Simple validation
+            if (!clientId) {
+                showNotification('Client ID is required', 'error');
+                clientIdInput.focus();
+                return;
+            }
+
+            if (!clientName) {
+                showNotification('Client Name is required', 'error');
+                clientNameInput.focus();
+                return;
+            }
+
+            if (!clientSecret) {
+                showNotification('Client Secret is required', 'error');
+                clientSecretInput.focus();
+                return;
+            }
+
+            if (!redirectUri) {
+                showNotification('Redirect URI is required', 'error');
+                redirectUriInput.focus();
+                return;
+            }
+
+            if (!isValidUrl(redirectUri)) {
+                showNotification('Please enter a valid URL', 'error');
+                redirectUriInput.focus();
+                return;
+            }
+
+            // Simulate backend call
+            registerClient(clientId, clientName, clientSecret, redirectUri);
+        });
+
+        // Close modal when clicking outside the modal content
+        modalOverlay.addEventListener('click', function(e) {
+            if (e.target === modalOverlay) {
+                modalOverlay.classList.remove('active');
+                clearForm();
+            }
+        });
+
+        // Simulate backend registration
+        async function registerClient(clientId, clientName, clientSecret, redirectUri) {
+            // In a real application, this would be a fetch or axios call to your backend API
+            showNotification('Registering client...', 'success');
+
+            try {
+                const response = await fetch('/clients', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        clientId: clientId,
+                        clientName: clientName,
+                        clientSecret: clientSecret,
+                        redirectUri: redirectUri,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                showNotification(`Client "${clientId}" registered successfully!`, 'success');
+
+                setTimeout(() => {
+                    modalOverlay.classList.remove('active');
+                    clearForm();
+
+                    // In a real application, you might redirect or update the UI here
+                    location.href = '/';
+                }, 1500);
+
+            } catch (error) {
+                modalOverlay.classList.remove('active');
+                showNotification('Failed to register client. Please try again.', 'error');
+                return;
+            }
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            notification.textContent = message;
+            notification.className = 'notification ' + type;
+
+            // Hide notification after 3 seconds
+            setTimeout(() => {
+                notification.className = 'notification';
+            }, 3000);
+        }
+
+        // Clear form inputs
+        function clearForm() {
+            clientIdInput.value = '';
+            redirectUriInput.value = '';
+        }
+
+        // Simple URL validation
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+    });
+</script>
 </body>
 </html>

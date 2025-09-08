@@ -155,6 +155,7 @@ func parseTemplates() (*template.Template, error) {
 // SetupRoutes 设置HTTP路由处理
 func (s *AuthServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", s.homeHandler)
+	mux.HandleFunc("/clients", s.clientsHandler)
 	mux.HandleFunc("/login", s.loginHandler)
 	mux.HandleFunc("/auth", s.authHandler)
 	mux.HandleFunc("/authorize", s.authorizeHandler)
@@ -174,6 +175,52 @@ func (s *AuthServer) homeHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *AuthServer) clientsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		data := map[string]interface{}{
+			"Clients": s.clients,
+		}
+		err := s.templates.ExecuteTemplate(w, "clients.html", data)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	case "POST":
+		s.addClients(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *AuthServer) addClients(w http.ResponseWriter, r *http.Request) {
+	type Input struct {
+		ClientID     string `json:"clientId"`
+		ClientName   string `json:"clientName"`
+		ClientSecret string `json:"clientSecret"`
+		RedirectURI  string `json:"redirectUri"`
+	}
+
+	var input Input
+	err := json.NewDecoder(r.Body).Decode(&input)
+	if err != nil {
+		http.Error(w, "Invalid input", http.StatusBadRequest)
+		return
+	}
+
+	if s.clients[input.ClientID] != nil {
+		http.Error(w, "Client ID already exists", http.StatusBadRequest)
+		return
+	}
+
+	client := &Client{
+		ID:           input.ClientID,
+		Name:         input.ClientName,
+		Secret:       input.ClientSecret,
+		RedirectURIs: []string{input.RedirectURI},
+	}
+	s.clients[client.ID] = client
 }
 
 // 登录页面处理器
