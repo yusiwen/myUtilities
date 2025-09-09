@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // 注意：嵌入路径是相对于当前文件的路径
@@ -47,6 +49,14 @@ type AccessToken struct {
 	ClientID  string
 }
 
+// JWT 声明结构
+type JwtCustomClaims struct {
+	UserID   string `json:"user_id"`
+	ClientID string `json:"client_id"`
+	Scope    string `json:"scope"`
+	jwt.RegisteredClaims
+}
+
 // 用户信息
 type User struct {
 	ID       string
@@ -76,6 +86,7 @@ type AuthServer struct {
 	sessions     map[string]string
 	templates    *template.Template
 	staticFS     http.FileSystem
+	jwtSecret    []byte // 用于签名JWT的密钥
 }
 
 // NewAuthServer 创建并初始化一个新的认证服务器实例
@@ -87,6 +98,7 @@ func NewAuthServer() *AuthServer {
 		accessTokens: make(map[string]*AccessToken),
 		authRequests: make(map[string]*AuthRequest),
 		sessions:     make(map[string]string),
+		jwtSecret:    []byte("your-256-bit-secret"), // 请使用更安全的密钥
 	}
 
 	// 初始化示例数据
@@ -94,7 +106,7 @@ func NewAuthServer() *AuthServer {
 		ID:           "client1",
 		Name:         "示例应用",
 		Secret:       "secret1",
-		RedirectURIs: []string{"http://localhost:8080/callback"},
+		RedirectURIs: []string{"http://localhost:8080/login/oauth2/code/custom-auth-server"},
 	}
 
 	server.users["user1"] = &User{
@@ -161,6 +173,7 @@ func (s *AuthServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/authorize", s.authorizeHandler)
 	mux.HandleFunc("/token", s.tokenHandler)
 	mux.HandleFunc("/userinfo", s.userInfoHandler)
+	mux.HandleFunc("/verify", s.verifyTokenHandler)
 
 	// 静态文件服务
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(s.staticFS)))
@@ -506,15 +519,29 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	expirationTime := time.Now().Add(time.Hour)
+	claims := &JwtCustomClaims{
+		UserID:   authCode.UserID,
+		ClientID: clientID,
+		Scope:    authCode.Scope,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(expirationTime),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			Issuer:    "http://localhost",
+			Subject:   authCode.UserID,
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	// 生成访问令牌
-	accessToken, err := generateRandomString(32)
+	accessToken, err := token.SignedString(s.jwtSecret)
 	if err != nil {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "Token generation error", http.StatusInternalServerError)
 		return
 	}
 
 	// 存储访问令牌
-	token := &AccessToken{
+	cachedToken := &AccessToken{
 		Token:     accessToken,
 		Type:      "Bearer",
 		ExpiresIn: 3600, // 1小时有效期
@@ -522,10 +549,12 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 		UserID:    authCode.UserID,
 		ClientID:  clientID,
 	}
-	s.accessTokens[accessToken] = token
+	s.accessTokens[accessToken] = cachedToken
 
 	// 清理已使用的授权码
 	delete(s.authCodes, code)
+
+	log.Printf("Generated token for user %s: %s", authCode.UserID, accessToken)
 
 	// 返回令牌响应
 	w.Header().Set("Content-Type", "application/json")
@@ -566,6 +595,70 @@ func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
 		"sub":  user.ID,
 		"name": user.Username,
 	})
+}
+
+// verifyHandler 验证JWT Token的接口
+func (s *AuthServer) verifyTokenHandler(w http.ResponseWriter, r *http.Request) {
+	// 支持GET和POST请求
+	if r.Method != "GET" && r.Method != "POST" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// 从查询参数或请求头中获取token
+	var tokenString string
+	if r.Method == "GET" {
+		tokenString = r.URL.Query().Get("token")
+	} else {
+		// 从POST请求体中获取
+		r.ParseForm()
+		tokenString = r.FormValue("token")
+	}
+
+	// 如果查询参数中没有，尝试从Authorization头获取
+	if tokenString == "" {
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			tokenString = authHeader[7:]
+		}
+	}
+
+	if tokenString == "" {
+		http.Error(w, "Token required", http.StatusBadRequest)
+		return
+	}
+
+	// 解析和验证Token
+	claims := &JwtCustomClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		// 验证签名方法
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return s.jwtSecret, nil
+	})
+
+	// 处理验证结果
+	response := map[string]interface{}{}
+	if err != nil {
+		response["valid"] = false
+		response["error"] = err.Error()
+		w.WriteHeader(http.StatusUnauthorized)
+	} else if !token.Valid {
+		response["valid"] = false
+		response["error"] = "Invalid token"
+		w.WriteHeader(http.StatusUnauthorized)
+	} else {
+		response["valid"] = true
+		response["user_id"] = claims.UserID
+		response["client_id"] = claims.ClientID
+		response["scope"] = claims.Scope
+		response["expires_at"] = claims.ExpiresAt.Time.Unix()
+	}
+
+	// 返回验证结果
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 // 生成随机字符串
