@@ -69,6 +69,8 @@ github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0t
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/ryanolee/go-chaff v0.1.1 h1:H/8Ma8ditKnLPr2zRjw2fC0tm1C8hN8MLqZZEqpQvRo=
 github.com/ryanolee/go-chaff v0.1.1/go.mod h1:BdImcGWJPzwujNuBAOMmFHw2LUnQisDUwGPf0kWVwng=
+github.com/ryanolee/go-chaff v0.1.2 h1:g1mLKDqZ6x0sIF1jLPkOQewsbMPFAWuMxAEjtGNL3x0=
+github.com/ryanolee/go-chaff v0.1.2/go.mod h1:BdImcGWJPzwujNuBAOMmFHw2LUnQisDUwGPf0kWVwng=
 github.com/santhosh-tekuri/jsonschema v1.2.4 h1:hNhW8e7t+H1vgY+1QeEQpveR6D4+OwKPXCfD2aieJis=
 github.com/santhosh-tekuri/jsonschema v1.2.4/go.mod h1:TEAUOeZSmIxTTuHatJzrvARHiuO9LYd+cIxzgEHCQI4=
 github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 h1:n661drycOFuPLCN3Uc8sB6B/s6Z4t2xvBgU1htSHuq8=
