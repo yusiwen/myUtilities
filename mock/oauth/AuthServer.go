@@ -568,15 +568,25 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 
 // 用户信息端点处理器
 func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
-	// 从Authorization头获取访问令牌
-	authHeader := r.Header.Get("Authorization")
-	if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
-		http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
+	if r.Method != "GET" {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	accessToken := authHeader[7:]
+	accessToken := r.URL.Query().Get("access_token")
+	if accessToken == "" {
+		// 从Authorization头获取访问令牌
+		authHeader := r.Header.Get("Authorization")
+		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
+			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		accessToken = authHeader[7:]
+	}
+
 	token, exists := s.accessTokens[accessToken]
+
 	if !exists {
 		http.Error(w, "Invalid access token", http.StatusUnauthorized)
 		return
