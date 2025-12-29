@@ -51,6 +51,7 @@ func (p *OracleProxy) Start() error {
 			log.Printf("Accept error: %v", err)
 			continue
 		}
+		log.Printf("New client connection from %s", clientConn.RemoteAddr())
 
 		go p.handleClient(clientConn)
 	}
@@ -75,69 +76,96 @@ func (p *OracleProxy) Close() {
 func (p *OracleProxy) handleClient(clientConn net.Conn) {
 	defer clientConn.Close()
 
-	// 获取活动后端
-	backend, err := p.getActiveBackend()
-	if err != nil {
-		log.Printf("Failed to route: %v", err)
-		return
-	}
+	for {
+		var rst = func() bool {
+			log.Printf("Routing connection for %s", clientConn.RemoteAddr())
+			// 获取活动后端
+			backend, err := p.getActiveBackend()
+			if err != nil {
+				log.Printf("Failed to route: %v", err)
+				return false
+			}
 
-	log.Printf("Routing connection to %s (%s)", backend.Config.Name, backend.Config.Host)
+			log.Printf("Routing connection to %s (%s)", backend.Config.Name, backend.Config.Host)
 
-	// 连接到后端数据库
-	backendConn, err := net.DialTimeout("tcp",
-		fmt.Sprintf("%s:%d", backend.Config.Host, backend.Config.Port), 3*time.Second)
-	if err != nil {
-		log.Printf("Failed to connect to backend %s: %v", backend.Config.Name, err)
-		return
-	}
-	defer backendConn.Close()
+			// 连接到后端数据库
+			backendConn, err := net.DialTimeout("tcp",
+				fmt.Sprintf("%s:%d", backend.Config.Host, backend.Config.Port), 3*time.Second)
+			if err != nil {
+				log.Printf("Failed to connect to backend %s: %v", backend.Config.Name, err)
+				return false
+			}
+			var once sync.Once
+			defer once.Do(func() { backendConn.Close() })
 
-	// 启动双向数据转发
-	var wg sync.WaitGroup
-	wg.Add(2)
+			// 启动双向数据转发
+			var wg sync.WaitGroup
+			wg.Add(2)
 
-	// 客户端 -> 后端
-	go func() {
-		defer wg.Done()
-		_, err := io.Copy(backendConn, clientConn)
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Printf("Client->Backend copy error: %v", err)
+			// 客户端 -> 后端
+			go func() {
+				defer wg.Done()
+				_, err := io.Copy(backendConn, clientConn)
+				if err != nil && !errors.Is(err, io.EOF) {
+					log.Printf("Client->Backend copy error: %v, %s", err, clientConn.RemoteAddr())
+				}
+				log.Printf("Exit Client->Backend forwarding for %s", clientConn.RemoteAddr())
+			}()
+
+			// 后端 -> 客户端
+			go func() {
+				defer wg.Done()
+				_, err := io.Copy(clientConn, backendConn)
+				if err != nil && !errors.Is(err, io.EOF) {
+					log.Printf("Backend->Client copy error: %v, %s", err, clientConn.RemoteAddr())
+				}
+				log.Printf("Exit Backend->Client forwarding for %s", clientConn.RemoteAddr())
+			}()
+
+			go func() {
+				<-backend.Context.Done()
+				once.Do(func() { backendConn.Close() })
+				log.Printf("Helper goroutine for %s exited", clientConn.RemoteAddr())
+			}()
+
+			wg.Wait()
+
+			backend.Mutex.RLock()
+			if backend.LastError == nil {
+				backend.Cancel()
+				backend.Mutex.RUnlock()
+				return true
+			} else {
+				backend.Mutex.RUnlock()
+				return false
+			}
+		}()
+		if rst {
+			break
 		}
-	}()
-
-	// 后端 -> 客户端
-	go func() {
-		defer wg.Done()
-		_, err := io.Copy(clientConn, backendConn)
-		if err != nil && !errors.Is(err, io.EOF) {
-			log.Printf("Backend->Client copy error: %v", err)
-		}
-	}()
-
-	wg.Wait()
+		log.Printf("Backend is not available, retrying...")
+	}
+	log.Printf("Goroutine for %s exited", clientConn.RemoteAddr())
 }
 
 // 获取活动后端
 func (p *OracleProxy) getActiveBackend() (*OracleBackendStatus, error) {
-	p.Mutex.RLock()
-	defer p.Mutex.RUnlock()
+	p.Mutex.Lock()
+	defer p.Mutex.Unlock()
 
 	// 查找第一个可用的后端（按优先级）
 	for i, backend := range p.Backends {
-		backend.Mutex.RLock()
 		if backend.IsAvailable {
-			backend.Mutex.RUnlock()
+			if backend.Context == nil || backend.Context.Err() != nil {
+				backend.Context, backend.Cancel = context.WithCancel(context.Background())
+			}
 
 			// 更新当前选中的后端
-			p.Mutex.Lock()
 			p.CurrentIdx = i
-			p.Mutex.Unlock()
 
 			log.Printf("Using new route by priority: %s", backend.Config.Name)
 			return backend, nil
 		}
-		backend.Mutex.RUnlock()
 	}
 
 	return nil, errors.New("no available route found")
@@ -189,6 +217,9 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 		backend.LastError = fmt.Errorf("TCP check failed: %w", err)
 		backend.LastCheck = time.Now()
 		backend.Mutex.Unlock()
+		if backend.Cancel != nil {
+			backend.Cancel()
+		}
 		log.Printf("Backend '%s' TCP check failed: %v", backend.Config.Name, err)
 		return
 	}
@@ -200,6 +231,9 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 		backend.LastError = fmt.Errorf("SQL check failed: %w", err)
 		backend.LastCheck = time.Now()
 		backend.Mutex.Unlock()
+		if backend.Cancel != nil {
+			backend.Cancel()
+		}
 		log.Printf("Backend '%s' SQL check failed: %v", backend.Config.Name, err)
 		return
 	}
@@ -209,6 +243,9 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 	backend.IsAvailable = true
 	backend.LastError = nil
 	backend.LastCheck = time.Now()
+	if backend.Context == nil || backend.Context.Err() != nil {
+		backend.Context, backend.Cancel = context.WithCancel(context.Background())
+	}
 	backend.Mutex.Unlock()
 
 	log.Printf("Backend %s is healthy", backend.Config.Name)
