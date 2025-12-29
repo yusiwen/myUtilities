@@ -24,6 +24,8 @@ type BackendStatus struct {
 	IsAvailable bool
 	LastCheck   time.Time
 	LastError   error
+	Context     context.Context
+	Cancel      context.CancelFunc
 	Mutex       sync.RWMutex
 }
 
