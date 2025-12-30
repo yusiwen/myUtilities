@@ -3,7 +3,7 @@ module github.com/yusiwen/myUtilities
 go 1.24
 
 require (
-	github.com/alecthomas/kong v1.12.1
+	github.com/alecthomas/kong v1.13.0
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/morikuni/aec v1.0.0
