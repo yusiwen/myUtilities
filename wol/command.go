@@ -7,10 +7,28 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/sabhiram/go-wol/wol"
 )
+
+var (
+	hostnameRE = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$`)
+	macRE      = regexp.MustCompile(`^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$`)
+)
+
+func validHostname(name string) bool {
+	if len(name) > 253 {
+		return false
+	}
+	return hostnameRE.MatchString(name)
+}
+
+func validMAC(mac string) bool {
+	return macRE.MatchString(mac)
+}
 
 func (o *ServeOptions) Run() error {
 	// Open KV store
@@ -35,6 +53,10 @@ func (o *ServeOptions) Run() error {
 		hostname := r.PathValue("hostname")
 		if hostname == "" {
 			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
+			return
+		}
+		if !validHostname(hostname) {
+			http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
 			return
 		}
 		entry, err := store.Get(hostname)
@@ -78,6 +100,15 @@ func (o *ServeOptions) Run() error {
 				http.Error(w, `{"error": "name and mac are required"}`, http.StatusBadRequest)
 				return
 			}
+			if !validHostname(req.Name) {
+				http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
+				return
+			}
+			if !validMAC(req.Mac) {
+				http.Error(w, `{"error": "invalid MAC address format (expected aa:bb:cc:dd:ee:ff)"}`, http.StatusBadRequest)
+				return
+			}
+			req.Mac = strings.ToLower(req.Mac)
 			if err := store.Set(req.Name, req.Mac, req.Iface); err != nil {
 				http.Error(w, fmt.Sprintf(`{"error": "failed to set alias: %v"}`, err), http.StatusInternalServerError)
 				return
@@ -113,6 +144,10 @@ func (o *ServeOptions) Run() error {
 		hostname := r.PathValue("hostname")
 		if hostname == "" {
 			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
+			return
+		}
+		if !validHostname(hostname) {
+			http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
