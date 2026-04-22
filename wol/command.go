@@ -6,11 +6,13 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/sabhiram/go-wol/wol"
 )
 
-func (o *Options) Run() error {
+func (o *ServeOptions) Run() error {
 	// Open KV store
 	store, err := OpenStore(o.DBPath)
 	if err != nil {
@@ -102,6 +104,27 @@ func (o *Options) Run() error {
 		}
 	})
 
+	// Boot notification endpoint (called by agent on startup)
+	mux.HandleFunc("/boot/{hostname}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		hostname := r.PathValue("hostname")
+		if hostname == "" {
+			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
+			return
+		}
+		now := time.Now()
+		if err := store.RecordBoot(hostname, now); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, now.Format(time.RFC3339))
+		log.Printf("Boot notification received from %s at %s", hostname, now.Format(time.RFC3339))
+	})
+
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
 	return http.ListenAndServe(addr, mux)
@@ -184,6 +207,41 @@ func sendWOL(mac, iface string) error {
 	}
 	if n != 102 {
 		return fmt.Errorf("magic packet sent was %d bytes (expected 102 bytes sent)", n)
+	}
+	return nil
+}
+
+func (o *AgentOptions) Run() error {
+	hostname := o.Hostname
+	if hostname == "" {
+		var err error
+		hostname, err = os.Hostname()
+		if err != nil {
+			return fmt.Errorf("failed to get hostname: %v", err)
+		}
+	}
+	log.Printf("Agent: registering hostname %q to server %s", hostname, o.Server)
+
+	// Retry with backoff in case the server is not ready yet
+	maxRetries := 5
+	for i := range maxRetries {
+		url := fmt.Sprintf("%s/boot/%s", o.Server, hostname)
+		resp, err := http.Post(url, "application/json", nil)
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				log.Printf("Agent: successfully registered %q at %s", hostname, o.Server)
+				return nil
+			}
+			return fmt.Errorf("agent: server returned status %d for %s", resp.StatusCode, hostname)
+		}
+		if i < maxRetries-1 {
+			wait := time.Duration(i+1) * time.Second
+			log.Printf("Agent: attempt %d failed, retrying in %v: %v", i+1, wait, err)
+			time.Sleep(wait)
+		} else {
+			return fmt.Errorf("agent: failed to register %q after %d retries: %v", hostname, maxRetries, err)
+		}
 	}
 	return nil
 }

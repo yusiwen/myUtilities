@@ -8,12 +8,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	bolt "github.com/coreos/bbolt"
 )
 
 const (
 	bucketName = "Aliases"
+	bootBucket = "Boot"
 )
 
 // MacIface holds a MAC Address to wake up, along with an optionally specified
@@ -70,9 +72,12 @@ func OpenStore(dbPath string) (*Store, error) {
 		return nil, err
 	}
 
-	// Create bucket if not exists
+	// Create buckets if not exists
 	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte(bucketName))
+		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists([]byte(bootBucket))
 		return err
 	}); err != nil {
 		db.Close()
@@ -157,4 +162,40 @@ func (s *Store) List() (map[string]MacIface, error) {
 		return nil
 	})
 	return result, err
+}
+
+// RecordBoot stores a boot timestamp for a given hostname.
+func (s *Store) RecordBoot(hostname string, t time.Time) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(t.Unix()); err != nil {
+		return err
+	}
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bootBucket))
+		return bucket.Put([]byte(hostname), buf.Bytes())
+	})
+}
+
+// GetBootTime retrieves the last boot time for a hostname.
+func (s *Store) GetBootTime(hostname string) (time.Time, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	var ts int64
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(bootBucket))
+		value := bucket.Get([]byte(hostname))
+		if value == nil {
+			return fmt.Errorf("hostname %q not found in boot bucket", hostname)
+		}
+		return gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts)
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Unix(ts, 0), nil
 }
