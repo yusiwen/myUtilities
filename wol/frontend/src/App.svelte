@@ -5,6 +5,10 @@
   let editingName = $state(null)
   let error = $state('')
   let bootTimes = $state({})
+  let success = $state('')
+  let wolCooldowns = $state({})
+  let wolTimers = $state({})
+  let successTimer = $state(null)
 
   async function fetchAliases() {
     try {
@@ -72,13 +76,18 @@
   }
 
   async function handleWol(name) {
+    // 检查冷却时间
+    if (wolCooldowns[name] > 0) return
+    
     error = ''
     try {
       const res = await fetch(`/api/wake/${encodeURIComponent(name)}`, {
         method: 'POST'
       })
       if (res.ok) {
+        showSuccess(`WOL request sent to ${name}`)
         await fetchBootTime(name)
+        startCooldown(name)
       } else {
         const data = await res.json()
         error = data.error || 'WOL request failed'
@@ -113,6 +122,30 @@
     return d.toLocaleString()
   }
 
+  // 启动倒计时（10秒）
+  function startCooldown(name) {
+    wolCooldowns[name] = 10
+    const timerId = setInterval(() => {
+      wolCooldowns[name]--
+      if (wolCooldowns[name] <= 0) {
+        clearInterval(timerId)
+        delete wolCooldowns[name]
+        delete wolTimers[name]
+      }
+    }, 1000)
+    wolTimers[name] = timerId
+  }
+
+  // 显示成功消息（3秒后自动清除）
+  function showSuccess(message) {
+    success = message
+    if (successTimer) clearTimeout(successTimer)
+    successTimer = setTimeout(() => {
+      success = ''
+      successTimer = null
+    }, 3000)
+  }
+
   $effect(() => {
     fetchAliases()
   })
@@ -121,6 +154,14 @@
     const names = Object.keys(aliases)
     names.forEach(fetchBootTime)
   })
+
+  $effect(() => {
+    return () => {
+      // 清理所有定时器
+      Object.values(wolTimers).forEach(timerId => clearInterval(timerId))
+      if (successTimer) clearTimeout(successTimer)
+    }
+  })
 </script>
 
 <main>
@@ -128,6 +169,10 @@
 
   {#if error}
     <div class="error">{error}</div>
+  {/if}
+
+  {#if success}
+    <div class="success">{success}</div>
   {/if}
 
   <section class="form-section">
@@ -174,7 +219,18 @@
               <td class="mono">{entry.Mac}</td>
               <td class="boot-cell">{bootStatus(name)}</td>
               <td class="actions">
-                <button class="btn-wol" onclick={() => handleWol(name)} title="Wake on LAN">⚡ WOL</button>
+                <button 
+                  class="btn-wol" 
+                  onclick={() => handleWol(name)} 
+                  title="Wake on LAN"
+                  disabled={wolCooldowns[name] > 0}
+                >
+                  {#if wolCooldowns[name] > 0}
+                    ⏳ WOL ({wolCooldowns[name]}s)
+                  {:else}
+                    ⚡ WOL
+                  {/if}
+                </button>
                 <button class="btn-edit" onclick={() => editAlias(name)}>✏️ Edit</button>
                 <button class="btn-delete" onclick={() => handleDelete(name)}>🗑️ Delete</button>
               </td>
@@ -369,5 +425,19 @@
 
   .btn-delete:hover {
     background: #c0392b;
+  }
+
+  .success {
+    background: #d4edda;
+    color: #155724;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 0.9em;
+  }
+
+  .btn-wol:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>
