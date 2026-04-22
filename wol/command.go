@@ -23,7 +23,11 @@ func (o *ServeOptions) Run() error {
 
 	// Start HTTP server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/wake/{hostname}", func(w http.ResponseWriter, r *http.Request) {
+
+	// Frontend static files (must be registered before API to handle /)
+	mux.Handle("/", frontendHandler())
+
+	mux.HandleFunc("/api/wake/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
 			return
@@ -50,7 +54,7 @@ func (o *ServeOptions) Run() error {
 	})
 
 	// Alias management endpoints
-	mux.HandleFunc("/aliases", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/aliases", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodGet:
@@ -85,7 +89,7 @@ func (o *ServeOptions) Run() error {
 		}
 	})
 
-	mux.HandleFunc("/aliases/{name}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/aliases/{name}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		name := r.PathValue("name")
 		if name == "" {
@@ -104,25 +108,33 @@ func (o *ServeOptions) Run() error {
 		}
 	})
 
-	// Boot notification endpoint (called by agent on startup)
-	mux.HandleFunc("/boot/{hostname}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
-			return
-		}
+	// Boot notification/query endpoint
+	mux.HandleFunc("/api/boot/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		hostname := r.PathValue("hostname")
 		if hostname == "" {
 			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
 			return
 		}
-		now := time.Now()
-		if err := store.RecordBoot(hostname, now); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
-			return
-		}
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, now.Format(time.RFC3339))
-		log.Printf("Boot notification received from %s at %s", hostname, now.Format(time.RFC3339))
+		switch r.Method {
+		case http.MethodPost:
+			now := time.Now()
+			if err := store.RecordBoot(hostname, now); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, now.Format(time.RFC3339))
+			log.Printf("Boot notification received from %s at %s", hostname, now.Format(time.RFC3339))
+		case http.MethodGet:
+			t, err := store.GetBootTime(hostname)
+			if err != nil {
+				http.Error(w, `{"boot_time": ""}`, http.StatusOK)
+				return
+			}
+			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, t.Format(time.RFC3339))
+		default:
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		}
 	})
 
 	addr := fmt.Sprintf(":%d", o.Port)
@@ -225,7 +237,7 @@ func (o *AgentOptions) Run() error {
 	// Retry with backoff in case the server is not ready yet
 	maxRetries := 5
 	for i := range maxRetries {
-		url := fmt.Sprintf("%s/boot/%s", o.Server, hostname)
+		url := fmt.Sprintf("%s/api/boot/%s", o.Server, hostname)
 		resp, err := http.Post(url, "application/json", nil)
 		if err == nil {
 			resp.Body.Close()
