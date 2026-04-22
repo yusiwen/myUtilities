@@ -177,16 +177,130 @@ func (o *ServeOptions) Run() error {
 	return http.ListenAndServe(addr, mux)
 }
 
+// getInterfaceByName attempts to find an interface by name, with improved error messages.
+func getInterfaceByName(name string) (*net.Interface, error) {
+	// First try exact match
+	iface, err := net.InterfaceByName(name)
+	if err == nil {
+		return iface, nil
+	}
+	
+	// If not found, try case-insensitive search
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list interfaces: %v", err)
+	}
+	
+	lowerName := strings.ToLower(name)
+	var matches []string
+	for _, i := range interfaces {
+		if strings.ToLower(i.Name) == lowerName {
+			return &i, nil
+		}
+		matches = append(matches, i.Name)
+	}
+	
+	// Build helpful error message
+	errMsg := fmt.Sprintf("interface %q not found\n\nAvailable interfaces:", name)
+	if len(matches) > 0 {
+		errMsg += "\n  " + strings.Join(matches, "\n  ")
+	} else {
+		errMsg += "\n  (no interfaces found)"
+	}
+	
+	return nil, fmt.Errorf(errMsg)
+}
+
+// selectBestInterfaceForWOL selects the most suitable interface for WOL broadcasts.
+func selectBestInterfaceForWOL() (*net.Interface, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list interfaces: %v", err)
+	}
+	
+	var candidates []*net.Interface
+	
+	for i := range interfaces {
+		iface := &interfaces[i]
+		
+		// Skip virtual, bluetooth, tunnel, and loopback interfaces
+		ifName := strings.ToLower(iface.Name)
+		if strings.Contains(ifName, "virtual") ||
+		   strings.Contains(ifName, "vmware") ||
+		   strings.Contains(ifName, "vbox") ||
+		   strings.Contains(ifName, "bluetooth") ||
+		   strings.Contains(ifName, "tunnel") ||
+		   strings.Contains(ifName, "loopback") ||
+		   strings.Contains(ifName, "pseudo") {
+			continue
+		}
+		
+		// Check for IPv4 address
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		
+		hasIPv4 := false
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if ok && ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+				hasIPv4 = true
+				break
+			}
+		}
+		
+		if hasIPv4 {
+			candidates = append(candidates, iface)
+		}
+	}
+	
+	// Prioritize wired Ethernet interfaces
+	for _, iface := range candidates {
+		ifName := strings.ToLower(iface.Name)
+		if strings.Contains(ifName, "ether") && !strings.Contains(ifName, "virtual") {
+			return iface, nil
+		}
+	}
+	
+	// Then wireless interfaces
+	for _, iface := range candidates {
+		ifName := strings.ToLower(iface.Name)
+		if strings.Contains(ifName, "wi-fi") || strings.Contains(ifName, "wlan") || strings.Contains(ifName, "wireless") {
+			return iface, nil
+		}
+	}
+	
+	// Return first candidate if any
+	if len(candidates) > 0 {
+		return candidates[0], nil
+	}
+	
+	return nil, fmt.Errorf("no suitable interface found for WOL (no interfaces with IPv4 addresses)")
+}
+
 // ipFromInterface returns a *net.UDPAddr from a network interface name.
 func ipFromInterface(iface string) (*net.UDPAddr, error) {
-	ief, err := net.InterfaceByName(iface)
-	if err != nil {
-		return nil, err
+	var ief *net.Interface
+	var err error
+	
+	if iface == "" {
+		// Auto-select best interface
+		ief, err = selectBestInterfaceForWOL()
+		if err != nil {
+			return nil, fmt.Errorf("failed to auto-select interface: %v", err)
+		}
+		log.Printf("Auto-selected interface: %s", ief.Name)
+	} else {
+		ief, err = getInterfaceByName(iface)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	addrs, err := ief.Addrs()
 	if err == nil && len(addrs) <= 0 {
-		err = fmt.Errorf("no address associated with interface %s", iface)
+		err = fmt.Errorf("no address associated with interface %s", ief.Name)
 	}
 	if err != nil {
 		return nil, err
@@ -196,14 +310,14 @@ func ipFromInterface(iface string) (*net.UDPAddr, error) {
 	for _, addr := range addrs {
 		switch ip := addr.(type) {
 		case *net.IPNet:
-			if ip.IP.To4() != nil {
+			if ip.IP.To4() != nil && !ip.IP.IsLoopback() {
 				return &net.UDPAddr{
 					IP: ip.IP,
 				}, nil
 			}
 		}
 	}
-	return nil, fmt.Errorf("no address associated with interface %s", iface)
+	return nil, fmt.Errorf("no IPv4 address associated with interface %s", ief.Name)
 }
 
 func sendWOL(mac, iface string) error {
@@ -212,13 +326,9 @@ func sendWOL(mac, iface string) error {
 	udpPort := "9"
 
 	// Determine local address based on interface
-	var localAddr *net.UDPAddr
-	if iface != "" {
-		var err error
-		localAddr, err = ipFromInterface(iface)
-		if err != nil {
-			return err
-		}
+	localAddr, err := ipFromInterface(iface)
+	if err != nil {
+		return err
 	}
 
 	// Resolve broadcast address
@@ -290,5 +400,134 @@ func (o *AgentOptions) Run() error {
 			return fmt.Errorf("agent: failed to register %q after %d retries: %v", hostname, maxRetries, err)
 		}
 	}
+	return nil
+}
+
+func (o *InterfacesOptions) Run() error {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return fmt.Errorf("failed to list interfaces: %v", err)
+	}
+	
+	fmt.Printf("Available network interfaces (%d found):\n", len(interfaces))
+	fmt.Println(strings.Repeat("=", 60))
+	
+	for i, iface := range interfaces {
+		fmt.Printf("%d. %s\n", i+1, iface.Name)
+		
+		if o.Verbose {
+			// Show MAC address
+			if iface.HardwareAddr != nil {
+				fmt.Printf("   MAC: %s\n", iface.HardwareAddr)
+			}
+			
+			// Show flags
+			fmt.Printf("   Flags: %v\n", iface.Flags)
+			
+			// Show IP addresses
+			addrs, err := iface.Addrs()
+			if err == nil && len(addrs) > 0 {
+				fmt.Printf("   Addresses:\n")
+				for _, addr := range addrs {
+					fmt.Printf("     - %s\n", addr)
+				}
+			}
+			
+			// Determine interface type
+			ifName := strings.ToLower(iface.Name)
+			var types []string
+			if strings.Contains(ifName, "ether") && !strings.Contains(ifName, "virtual") {
+				types = append(types, "Wired Ethernet")
+			} else if strings.Contains(ifName, "virtual") || strings.Contains(ifName, "vmware") || strings.Contains(ifName, "vbox") {
+				types = append(types, "Virtual Adapter")
+			} else if strings.Contains(ifName, "wi-fi") || strings.Contains(ifName, "wlan") || strings.Contains(ifName, "wireless") {
+				types = append(types, "Wireless")
+			} else if strings.Contains(ifName, "bluetooth") {
+				types = append(types, "Bluetooth")
+			} else if strings.Contains(ifName, "tunnel") {
+				types = append(types, "Tunnel")
+			} else if strings.Contains(ifName, "loopback") {
+				types = append(types, "Loopback")
+			}
+			
+			if len(types) > 0 {
+				fmt.Printf("   Type: %s\n", strings.Join(types, ", "))
+			}
+			
+			// Check if suitable for WOL
+			suitable := true
+			if strings.Contains(ifName, "loopback") || strings.Contains(ifName, "tunnel") {
+				suitable = false
+			} else {
+				// Check for IPv4 address
+				hasIPv4 := false
+				addrs, _ := iface.Addrs()
+				for _, addr := range addrs {
+					ipNet, ok := addr.(*net.IPNet)
+					if ok && ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+						hasIPv4 = true
+						break
+					}
+				}
+				suitable = hasIPv4
+			}
+			
+			if suitable {
+				fmt.Printf("   ✓ Suitable for WOL\n")
+			} else {
+				fmt.Printf("   ✗ Not suitable for WOL\n")
+			}
+			
+			fmt.Println()
+		} else {
+			// Brief info
+			var info []string
+			if iface.HardwareAddr != nil {
+				info = append(info, fmt.Sprintf("MAC: %s", iface.HardwareAddr))
+			}
+			
+			// Count IPv4 addresses
+			ipv4Count := 0
+			addrs, _ := iface.Addrs()
+			for _, addr := range addrs {
+				ipNet, ok := addr.(*net.IPNet)
+				if ok && ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+					ipv4Count++
+				}
+			}
+			if ipv4Count > 0 {
+				info = append(info, fmt.Sprintf("IPv4: %d", ipv4Count))
+			}
+			
+			if len(info) > 0 {
+				fmt.Printf("   (%s)\n", strings.Join(info, ", "))
+			}
+		}
+	}
+	
+	// Show recommendation for WOL
+	fmt.Println("\nRecommendation for WOL:")
+	fmt.Println(strings.Repeat("-", 60))
+	bestIface, err := selectBestInterfaceForWOL()
+	if err != nil {
+		fmt.Printf("  Could not determine best interface: %v\n", err)
+	} else {
+		fmt.Printf("  Recommended interface: %s\n", bestIface.Name)
+		if bestIface.HardwareAddr != nil {
+			fmt.Printf("  MAC address: %s\n", bestIface.HardwareAddr)
+		}
+		
+		// Show IP addresses
+		addrs, _ := bestIface.Addrs()
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if ok && ipNet.IP.To4() != nil && !ipNet.IP.IsLoopback() {
+				fmt.Printf("  IPv4 address: %s\n", ipNet.IP)
+			}
+		}
+		
+		fmt.Printf("\n  Use: mu wol serve %s\n", bestIface.Name)
+	}
+	
 	return nil
 }

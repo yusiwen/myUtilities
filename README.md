@@ -53,8 +53,12 @@ mu run --commands "echo hello" --commands "ls -la"
 Starts an HTTP server with a Svelte frontend and REST API for managing WOL aliases.
 
 ```bash
-# Start server
+# Start server (interface name examples: br-lan on Linux, en0 on macOS, Ethernet0 on Windows)
 mu wol serve en0 --port 8080
+
+# List available network interfaces
+mu wol interfaces
+mu wol interfaces -v  # verbose output
 
 # Run boot notification agent on remote machines
 mu wol agent http://server:8080
