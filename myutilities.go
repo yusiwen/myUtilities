@@ -6,6 +6,7 @@ import (
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/proxy"
 	"github.com/yusiwen/myUtilities/runner"
+	"github.com/yusiwen/myUtilities/wol"
 )
 
 type MyUtilities struct {
@@ -14,4 +15,5 @@ type MyUtilities struct {
 	Mocker    mock.Options                `cmd:"" name:"mock" help:"Mockers."`
 	Proxy     proxy.Options               `cmd:"" name:"proxy" help:"Proxies."`
 	Runner    runner.CommandRunnerOptions `cmd:"" name:"run" help:"Run commands."`
+	Wol       wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`
 }
