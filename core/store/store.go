@@ -1,4 +1,4 @@
-package wol
+package store
 
 import (
 	"bytes"
@@ -25,18 +25,18 @@ type MacIface struct {
 	Iface string
 }
 
-// DecodeToMacIface takes a byte buffer and converts decodes it using the gob
+// decodeToMacIface takes a byte buffer and converts decodes it using the gob
 // package to a MacIface entry.
-func DecodeToMacIface(buf *bytes.Buffer) (MacIface, error) {
+func decodeToMacIface(buf *bytes.Buffer) (MacIface, error) {
 	var entry MacIface
 	decoder := gob.NewDecoder(buf)
 	err := decoder.Decode(&entry)
 	return entry, err
 }
 
-// EncodeFromMacIface takes a MAC and an Iface and encodes a gob with a MacIface
+// encodeFromMacIface takes a MAC and an Iface and encodes a gob with a MacIface
 // entry.
-func EncodeFromMacIface(mac, iface string) (*bytes.Buffer, error) {
+func encodeFromMacIface(mac, iface string) (*bytes.Buffer, error) {
 	buf := bytes.NewBuffer(nil)
 	entry := MacIface{mac, iface}
 	err := gob.NewEncoder(buf).Encode(entry)
@@ -110,7 +110,7 @@ func (s *Store) Get(hostname string) (MacIface, error) {
 			return fmt.Errorf("hostname %q not found", hostname)
 		}
 		var err error
-		entry, err = DecodeToMacIface(bytes.NewBuffer(value))
+		entry, err = decodeToMacIface(bytes.NewBuffer(value))
 		return err
 	})
 	return entry, err
@@ -121,7 +121,7 @@ func (s *Store) Set(hostname, mac, iface string) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	buf, err := EncodeFromMacIface(mac, iface)
+	buf, err := encodeFromMacIface(mac, iface)
 	if err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (s *Store) List() (map[string]MacIface, error) {
 		bucket := tx.Bucket([]byte(bucketName))
 		cursor := bucket.Cursor()
 		for k, v := cursor.First(); k != nil; k, v = cursor.Next() {
-			entry, err := DecodeToMacIface(bytes.NewBuffer(v))
+			entry, err := decodeToMacIface(bytes.NewBuffer(v))
 			if err != nil {
 				return err
 			}
