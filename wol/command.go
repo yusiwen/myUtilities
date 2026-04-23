@@ -184,13 +184,13 @@ func getInterfaceByName(name string) (*net.Interface, error) {
 	if err == nil {
 		return iface, nil
 	}
-	
+
 	// If not found, try case-insensitive search
 	interfaces, err := net.Interfaces()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %v", err)
 	}
-	
+
 	lowerName := strings.ToLower(name)
 	var matches []string
 	for _, i := range interfaces {
@@ -199,7 +199,7 @@ func getInterfaceByName(name string) (*net.Interface, error) {
 		}
 		matches = append(matches, i.Name)
 	}
-	
+
 	// Build helpful error message
 	errMsg := fmt.Sprintf("interface %q not found\n\nAvailable interfaces:", name)
 	if len(matches) > 0 {
@@ -207,8 +207,8 @@ func getInterfaceByName(name string) (*net.Interface, error) {
 	} else {
 		errMsg += "\n  (no interfaces found)"
 	}
-	
-	return nil, fmt.Errorf(errMsg)
+
+	return nil, fmt.Errorf("%s", errMsg)
 }
 
 // selectBestInterfaceForWOL selects the most suitable interface for WOL broadcasts.
@@ -217,30 +217,30 @@ func selectBestInterfaceForWOL() (*net.Interface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list interfaces: %v", err)
 	}
-	
+
 	var candidates []*net.Interface
-	
+
 	for i := range interfaces {
 		iface := &interfaces[i]
-		
+
 		// Skip virtual, bluetooth, tunnel, and loopback interfaces
 		ifName := strings.ToLower(iface.Name)
 		if strings.Contains(ifName, "virtual") ||
-		   strings.Contains(ifName, "vmware") ||
-		   strings.Contains(ifName, "vbox") ||
-		   strings.Contains(ifName, "bluetooth") ||
-		   strings.Contains(ifName, "tunnel") ||
-		   strings.Contains(ifName, "loopback") ||
-		   strings.Contains(ifName, "pseudo") {
+			strings.Contains(ifName, "vmware") ||
+			strings.Contains(ifName, "vbox") ||
+			strings.Contains(ifName, "bluetooth") ||
+			strings.Contains(ifName, "tunnel") ||
+			strings.Contains(ifName, "loopback") ||
+			strings.Contains(ifName, "pseudo") {
 			continue
 		}
-		
+
 		// Check for IPv4 address
 		addrs, err := iface.Addrs()
 		if err != nil {
 			continue
 		}
-		
+
 		hasIPv4 := false
 		for _, addr := range addrs {
 			ipNet, ok := addr.(*net.IPNet)
@@ -249,12 +249,12 @@ func selectBestInterfaceForWOL() (*net.Interface, error) {
 				break
 			}
 		}
-		
+
 		if hasIPv4 {
 			candidates = append(candidates, iface)
 		}
 	}
-	
+
 	// Prioritize wired Ethernet interfaces
 	for _, iface := range candidates {
 		ifName := strings.ToLower(iface.Name)
@@ -262,7 +262,7 @@ func selectBestInterfaceForWOL() (*net.Interface, error) {
 			return iface, nil
 		}
 	}
-	
+
 	// Then wireless interfaces
 	for _, iface := range candidates {
 		ifName := strings.ToLower(iface.Name)
@@ -270,12 +270,12 @@ func selectBestInterfaceForWOL() (*net.Interface, error) {
 			return iface, nil
 		}
 	}
-	
+
 	// Return first candidate if any
 	if len(candidates) > 0 {
 		return candidates[0], nil
 	}
-	
+
 	return nil, fmt.Errorf("no suitable interface found for WOL (no interfaces with IPv4 addresses)")
 }
 
@@ -283,7 +283,7 @@ func selectBestInterfaceForWOL() (*net.Interface, error) {
 func ipFromInterface(iface string) (*net.UDPAddr, error) {
 	var ief *net.Interface
 	var err error
-	
+
 	if iface == "" {
 		// Auto-select best interface
 		ief, err = selectBestInterfaceForWOL()
@@ -408,22 +408,22 @@ func (o *InterfacesOptions) Run() error {
 	if err != nil {
 		return fmt.Errorf("failed to list interfaces: %v", err)
 	}
-	
+
 	fmt.Printf("Available network interfaces (%d found):\n", len(interfaces))
 	fmt.Println(strings.Repeat("=", 60))
-	
+
 	for i, iface := range interfaces {
 		fmt.Printf("%d. %s\n", i+1, iface.Name)
-		
+
 		if o.Verbose {
 			// Show MAC address
 			if iface.HardwareAddr != nil {
 				fmt.Printf("   MAC: %s\n", iface.HardwareAddr)
 			}
-			
+
 			// Show flags
 			fmt.Printf("   Flags: %v\n", iface.Flags)
-			
+
 			// Show IP addresses
 			addrs, err := iface.Addrs()
 			if err == nil && len(addrs) > 0 {
@@ -432,7 +432,7 @@ func (o *InterfacesOptions) Run() error {
 					fmt.Printf("     - %s\n", addr)
 				}
 			}
-			
+
 			// Determine interface type
 			ifName := strings.ToLower(iface.Name)
 			var types []string
@@ -449,11 +449,11 @@ func (o *InterfacesOptions) Run() error {
 			} else if strings.Contains(ifName, "loopback") {
 				types = append(types, "Loopback")
 			}
-			
+
 			if len(types) > 0 {
 				fmt.Printf("   Type: %s\n", strings.Join(types, ", "))
 			}
-			
+
 			// Check if suitable for WOL
 			suitable := true
 			if strings.Contains(ifName, "loopback") || strings.Contains(ifName, "tunnel") {
@@ -471,13 +471,13 @@ func (o *InterfacesOptions) Run() error {
 				}
 				suitable = hasIPv4
 			}
-			
+
 			if suitable {
 				fmt.Printf("   ✓ Suitable for WOL\n")
 			} else {
 				fmt.Printf("   ✗ Not suitable for WOL\n")
 			}
-			
+
 			fmt.Println()
 		} else {
 			// Brief info
@@ -485,7 +485,7 @@ func (o *InterfacesOptions) Run() error {
 			if iface.HardwareAddr != nil {
 				info = append(info, fmt.Sprintf("MAC: %s", iface.HardwareAddr))
 			}
-			
+
 			// Count IPv4 addresses
 			ipv4Count := 0
 			addrs, _ := iface.Addrs()
@@ -498,13 +498,13 @@ func (o *InterfacesOptions) Run() error {
 			if ipv4Count > 0 {
 				info = append(info, fmt.Sprintf("IPv4: %d", ipv4Count))
 			}
-			
+
 			if len(info) > 0 {
 				fmt.Printf("   (%s)\n", strings.Join(info, ", "))
 			}
 		}
 	}
-	
+
 	// Show recommendation for WOL
 	fmt.Println("\nRecommendation for WOL:")
 	fmt.Println(strings.Repeat("-", 60))
@@ -516,7 +516,7 @@ func (o *InterfacesOptions) Run() error {
 		if bestIface.HardwareAddr != nil {
 			fmt.Printf("  MAC address: %s\n", bestIface.HardwareAddr)
 		}
-		
+
 		// Show IP addresses
 		addrs, _ := bestIface.Addrs()
 		for _, addr := range addrs {
@@ -525,9 +525,9 @@ func (o *InterfacesOptions) Run() error {
 				fmt.Printf("  IPv4 address: %s\n", ipNet.IP)
 			}
 		}
-		
+
 		fmt.Printf("\n  Use: mu wol serve %s\n", bestIface.Name)
 	}
-	
+
 	return nil
 }

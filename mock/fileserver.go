@@ -84,7 +84,7 @@ func (o FileServerOptions) uploadHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	log.Println("File uploaded: %s", dstPath)
+	log.Printf("File uploaded: %s", dstPath)
 
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{

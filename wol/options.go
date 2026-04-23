@@ -12,7 +12,7 @@ type AgentOptions struct {
 }
 
 type InterfacesOptions struct {
-	Verbose bool `help:"Show detailed interface information including IP addresses." short:"v"`
+	Verbose bool `help:"Show detailed interface information including IP addresses." short:"V"`
 }
 
 type Options struct {
