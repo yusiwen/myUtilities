@@ -1,10 +1,11 @@
 NAME=mu
 BINDIR=bin
-VERSION=$(shell git describe --tags || echo "unknown version")
+VERSION=$(shell /usr/bin/git --no-pager describe --tags || echo "unknown version")
+COMMIT_SHA=$(shell /usr/bin/git --no-pager rev-parse --short HEAD)
 BUILDTIME=$(shell date -u)
 FRONTEND_DIR=wol/frontend
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
-		-X "main.CommitSHA=$(shell git rev-parse --short HEAD)" \
+		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
