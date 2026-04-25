@@ -17,6 +17,7 @@ PLATFORM_LIST = \
 frontend:
 	@echo "Building Svelte frontend..."
 	cd $(FRONTEND_DIR) && npm install --silent && npm run build
+	@echo '{"version": "$(VERSION)"}' > $(FRONTEND_DIR)/dist/version.json
 
 WINDOWS_ARCH_LIST = \
 	windows-amd64

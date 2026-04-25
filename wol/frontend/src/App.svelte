@@ -9,6 +9,7 @@
   let wolCooldowns = $state({})
   let wolTimers = $state({})
   let successTimer = $state(null)
+  let appVersion = $state('1.0.0')
 
   async function fetchAliases() {
     try {
@@ -148,7 +149,18 @@
 
   $effect(() => {
     fetchAliases()
+    fetchVersion()
   })
+
+  async function fetchVersion() {
+    try {
+      const res = await fetch('/version.json')
+      const data = await res.json()
+      appVersion = data.version || '1.0.0'
+    } catch (e) {
+      appVersion = '1.0.0'
+    }
+  }
 
   $effect(() => {
     const names = Object.keys(aliases)
@@ -165,7 +177,7 @@
 </script>
 
 <main>
-  <h1>WOL Manager</h1>
+  <h1>WOL Manager <span class="version">{appVersion}</span></h1>
 
   {#if error}
     <div class="error">{error}</div>
@@ -242,6 +254,11 @@
   </section>
 </main>
 
+<footer>
+  <p>Created by Siwen Yu (yusiwen@gmail.com)</p>
+  <p><a href="https://github.com/yusiwen/myUtilities">https://github.com/yusiwen/myUtilities</a></p>
+</footer>
+
 <style>
   :global(*) {
     margin: 0;
@@ -256,6 +273,21 @@
     line-height: 1.6;
   }
 
+  footer {
+    text-align: center;
+    color: #bdc3c7;
+    padding: 20px;
+    font-size: 0.85em;
+  }
+
+  footer a {
+    color: #bdc3c7;
+  }
+
+  footer a:hover {
+    color: #95a5a6;
+  }
+
   main {
     max-width: 900px;
     margin: 0 auto;
@@ -266,6 +298,15 @@
     font-size: 1.8em;
     margin-bottom: 20px;
     color: #2c3e50;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  h1 .version {
+    font-size: 0.4em;
+    color: #7f8c8d;
+    margin-right: 10px;
   }
 
   h2 {
