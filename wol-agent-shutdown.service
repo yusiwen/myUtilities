@@ -1,0 +1,13 @@
+[Unit]
+Description=WOL Agent Shutdown Notifier
+DefaultDependencies=no
+Before=shutdown.target
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mu wol agent --shutdown --server http://192.168.2.1:18080 --hostname myhost
+
+[Install]
+WantedBy=halt.target poweroff.target reboot.target

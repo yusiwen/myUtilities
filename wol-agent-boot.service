@@ -1,0 +1,14 @@
+[Unit]
+Description=WOL Agent Boot Notification
+Documentation=https://github.com/yusiwen/myUtilities
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/mu wol agent --boot --server http://192.168.2.1:18080 --hostname myhost
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

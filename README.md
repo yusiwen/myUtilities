@@ -82,3 +82,23 @@ mu wol agent --shutdown --server http://192.168.1.100:8080 --hostname nuc12
 | `GET` | `/` | Svelte frontend UI |
 
 Hostname must conform to RFC 952/1123. MAC must be in `xx:xx:xx:xx:xx:xx` format.
+
+#### systemd Integration
+
+Example oneshot service files are provided for sending boot/shutdown notifications automatically.
+
+**Boot** — `wol-agent-boot.service`: fires after network is online, before user login. Edit `ExecStart` to match your server and hostname, then:
+
+```bash
+sudo cp wol-agent-boot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now wol-agent-boot.service
+```
+
+**Shutdown** — `wol-agent-shutdown.service`: fires only on actual system halt/poweroff/reboot. It uses `DefaultDependencies=no` + `Before=shutdown.target` to ensure the network is still available when the notification is sent. Unlike `ExecStop` in a combined unit, it cannot be triggered by a manual `systemctl stop`. Edit `ExecStart`, then:
+
+```bash
+sudo cp wol-agent-shutdown.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable wol-agent-shutdown.service
+```
