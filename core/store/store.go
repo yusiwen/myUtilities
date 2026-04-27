@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	bucketName = "Aliases"
-	bootBucket = "Boot"
+	bucketName   = "Aliases"
+	bootBucket   = "Boot"
+	statusBucket = "Status"
 )
 
 // MacIface holds a MAC Address to wake up, along with an optionally specified
@@ -77,7 +78,10 @@ func OpenStore(dbPath string) (*Store, error) {
 		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
 			return err
 		}
-		_, err := tx.CreateBucketIfNotExists([]byte(bootBucket))
+		if _, err := tx.CreateBucketIfNotExists([]byte(bootBucket)); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists([]byte(statusBucket))
 		return err
 	}); err != nil {
 		db.Close()
@@ -198,4 +202,33 @@ func (s *Store) GetBootTime(hostname string) (time.Time, error) {
 		return time.Time{}, err
 	}
 	return time.Unix(ts, 0), nil
+}
+
+// SetStatus stores the current status for a hostname (e.g., "boot", "shutdown").
+func (s *Store) SetStatus(hostname, status string) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	return s.db.Update(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(statusBucket))
+		return bucket.Put([]byte(hostname), []byte(status))
+	})
+}
+
+// GetStatus retrieves the current status for a hostname.
+// Returns an empty string if no status has been recorded.
+func (s *Store) GetStatus(hostname string) (string, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	var status string
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket([]byte(statusBucket))
+		value := bucket.Get([]byte(hostname))
+		if value != nil {
+			status = string(value)
+		}
+		return nil
+	})
+	return status, err
 }

@@ -63,7 +63,8 @@ myutilities.go
 ├── Installer (cmd: install)    - Install binaries from GitHub releases
 ├── Mocker (cmd: mock)          - Mock servers for testing
 ├── Proxy (cmd: proxy)          - Database proxy
-└── Runner (cmd: run)           - Command runner with display
+├── Runner (cmd: run)           - Command runner with display
+└── Wol (cmd: wol)              - Wake-on-LAN HTTP server with agent
 ```
 
 ### Core Packages
@@ -78,6 +79,13 @@ The `core/` directory contains reusable business logic:
 - `core/watcher/` - Event-driven resource watching system
   - Implements a Kubernetes-style watch pattern with `WatchServer`, `EventStore`
   - `Watcher` interface for pluggable resource monitors
+- `core/net/` - Network utilities
+  - `SendWOL()` - Wake-on-LAN magic packet sender
+  - `GetInterfaceDetails()`, `SelectBestInterfaceForWOL()` - Network interface discovery
+  - `ValidHostname()`, `ValidMAC()` - Input validation
+- `core/store/` - BoltDB key-value store
+  - `Store` struct with mutex-guarded BoltDB operations
+  - Buckets: `Aliases` (hostname→MAC), `Boot` (boot timestamps), `Status` (boot/shutdown state)
 
 ### Command Packages
 
@@ -99,6 +107,12 @@ The `core/` directory contains reusable business logic:
 - `runner/` - Command runner
   - Executes bash commands sequentially
   - Displays real-time output with ANSI colors
+
+- `wol/` - Wake-on-LAN HTTP server and agent
+  - `serve` subcommand: HTTP server with Svelte frontend, alias CRUD, WOL magic packet sending
+  - `agent` subcommand: sends boot/shutdown notifications to the WOL server with retry backoff
+  - `interfaces` subcommand: lists available network interfaces with WOL suitability info
+  - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `wol/frontend/`)
 
 ### Key Dependencies
 

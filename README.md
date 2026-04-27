@@ -50,7 +50,7 @@ mu run --commands "echo hello" --commands "ls -la"
 
 ### wol — Wake-on-LAN HTTP server
 
-Starts an HTTP server with a Svelte frontend and REST API for managing WOL aliases.
+Starts an HTTP server with a Svelte frontend and REST API for managing WOL aliases and tracking host status (boot/shutdown).
 
 ```bash
 # Start server (interface name examples: br-lan on Linux, en0 on macOS, Ethernet0 on Windows)
@@ -60,8 +60,11 @@ mu wol serve en0 --port 8080
 mu wol interfaces
 mu wol interfaces -v  # verbose output
 
-# Run boot notification agent on remote machines
-mu wol agent http://server:8080
+# Send boot notification from a remote machine
+mu wol agent --boot --server http://192.168.1.100:8080 --hostname nuc12
+
+# Send shutdown notification from a remote machine
+mu wol agent --shutdown --server http://192.168.1.100:8080 --hostname nuc12
 ```
 
 #### API Endpoints
@@ -72,8 +75,10 @@ mu wol agent http://server:8080
 | `POST` | `/api/aliases` | Add/update alias (JSON: `{"name":"<host>","mac":"<mac>"}`) |
 | `DELETE` | `/api/aliases/{name}` | Delete an alias |
 | `POST` | `/api/wake/{hostname}` | Send WOL magic packet |
-| `POST` | `/api/boot/{hostname}` | Record boot notification (agent) |
+| `POST` | `/api/boot/{hostname}` | Record boot notification and set status to "boot" |
 | `GET` | `/api/boot/{hostname}` | Query last boot time |
+| `POST` | `/api/shutdown/{hostname}` | Record shutdown notification and set status to "shutdown" |
+| `GET` | `/api/shutdown/{hostname}` | Query current status (boot/shutdown/unknown) |
 | `GET` | `/` | Svelte frontend UI |
 
 Hostname must conform to RFC 952/1123. MAC must be in `xx:xx:xx:xx:xx:xx` format.

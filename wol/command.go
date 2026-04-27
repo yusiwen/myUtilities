@@ -142,6 +142,10 @@ func (o *ServeOptions) Run() error {
 				http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
 				return
 			}
+			if err := store.SetStatus(hostname, "boot"); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "failed to set status: %v"}`, err), http.StatusInternalServerError)
+				return
+			}
 			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, now.Format(time.RFC3339))
 			log.Printf("Boot notification received from %s at %s", hostname, now.Format(time.RFC3339))
 		case http.MethodGet:
@@ -151,6 +155,42 @@ func (o *ServeOptions) Run() error {
 				return
 			}
 			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, t.Format(time.RFC3339))
+		default:
+			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Shutdown notification/query endpoint
+	mux.HandleFunc("/api/shutdown/{hostname}", func(w http.ResponseWriter, r *http.Request) {
+		hostname := r.PathValue("hostname")
+		if hostname == "" {
+			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
+			return
+		}
+		if !corenet.ValidHostname(hostname) {
+			http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.Method {
+		case http.MethodPost:
+			now := time.Now()
+			if err := store.SetStatus(hostname, "shutdown"); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "failed to set status: %v"}`, err), http.StatusInternalServerError)
+				return
+			}
+			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "shutdown_time": "%s"}`, hostname, now.Format(time.RFC3339))
+			log.Printf("Shutdown notification received from %s at %s", hostname, now.Format(time.RFC3339))
+		case http.MethodGet:
+			status, err := store.GetStatus(hostname)
+			if err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "failed to get status: %v"}`, err), http.StatusInternalServerError)
+				return
+			}
+			if status == "" {
+				status = "unknown"
+			}
+			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "state": "%s"}`, hostname, status)
 		default:
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		}
@@ -170,17 +210,30 @@ func (o *AgentOptions) Run() error {
 			return fmt.Errorf("failed to get hostname: %v", err)
 		}
 	}
-	log.Printf("Agent: registering hostname %q to server %s", hostname, o.Server)
+
+	if o.Boot && o.Shutdown {
+		return fmt.Errorf("agent: --boot and --shutdown are mutually exclusive")
+	}
+
+	// Default to boot notification if neither flag is specified
+	action := "boot"
+	apiPath := "boot"
+	if o.Shutdown {
+		action = "shutdown"
+		apiPath = "shutdown"
+	}
+
+	log.Printf("Agent: sending %s notification for hostname %q to server %s", action, hostname, o.Server)
 
 	// Retry with backoff in case the server is not ready yet
 	maxRetries := 5
 	for i := range maxRetries {
-		url := fmt.Sprintf("%s/api/boot/%s", o.Server, hostname)
+		url := fmt.Sprintf("%s/api/%s/%s", o.Server, apiPath, hostname)
 		resp, err := http.Post(url, "application/json", nil)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
-				log.Printf("Agent: successfully registered %q at %s", hostname, o.Server)
+				log.Printf("Agent: %s notification sent for %q at %s", action, hostname, o.Server)
 				return nil
 			}
 			return fmt.Errorf("agent: server returned status %d for %s", resp.StatusCode, hostname)
@@ -190,7 +243,7 @@ func (o *AgentOptions) Run() error {
 			log.Printf("Agent: attempt %d failed, retrying in %v: %v", i+1, wait, err)
 			time.Sleep(wait)
 		} else {
-			return fmt.Errorf("agent: failed to register %q after %d retries: %v", hostname, maxRetries, err)
+			return fmt.Errorf("agent: failed to send %s notification for %q after %d retries: %v", action, hostname, maxRetries, err)
 		}
 	}
 	return nil

@@ -9,6 +9,8 @@ type ServeOptions struct {
 type AgentOptions struct {
 	Server   string `arg:"" help:"WOL HTTP server URL (e.g., http://192.168.1.100:8080)."`
 	Hostname string `help:"Hostname to register on boot. Defaults to OS hostname." default:""`
+	Boot     bool   `help:"Notify the server that this machine has booted."`
+	Shutdown bool   `help:"Notify the server that this machine is shutting down."`
 }
 
 type InterfacesOptions struct {
@@ -17,6 +19,6 @@ type InterfacesOptions struct {
 
 type Options struct {
 	Serve      ServeOptions      `cmd:"" name:"serve" help:"Start WOL HTTP server."`
-	Agent      AgentOptions      `cmd:"" name:"agent" help:"Run boot notification agent (send hostname to server on startup)."`
+	Agent      AgentOptions      `cmd:"" name:"agent" help:"Notify the WOL server of boot or shutdown events."`
 	Interfaces InterfacesOptions `cmd:"" name:"interfaces" help:"List available network interfaces."`
 }
