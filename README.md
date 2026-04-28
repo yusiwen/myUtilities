@@ -61,13 +61,13 @@ mu wol interfaces
 mu wol interfaces -v  # verbose output
 
 # Register this machine on the server (stores hostname→MAC mapping)
-mu wol agent --register --server http://192.168.1.100:8080 --hostname nuc12
+mu wol agent --register http://192.168.1.100:8080
 
 # Send boot notification from a remote machine
-mu wol agent --boot --server http://192.168.1.100:8080 --hostname nuc12
+mu wol agent --boot http://192.168.1.100:8080
 
 # Send shutdown notification from a remote machine
-mu wol agent --shutdown --server http://192.168.1.100:8080 --hostname nuc12
+mu wol agent --shutdown http://192.168.1.100:8080
 ```
 
 Flags `--register`, `--boot`, and `--shutdown` are mutually exclusive.
