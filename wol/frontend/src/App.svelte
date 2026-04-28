@@ -361,12 +361,14 @@
     font-size: 1.8em;
     color: #2c3e50;
     display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 8px;
+    margin-bottom: 20px;
   }
 
   h1 .version {
-    font-size: 0.4em;
+    font-size: 0.5em;
+    line-height: 1;
     color: #7f8c8d;
     margin-right: auto;
   }
