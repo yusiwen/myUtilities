@@ -82,6 +82,7 @@ The `core/` directory contains reusable business logic:
 - `core/net/` - Network utilities
   - `SendWOL()` - Wake-on-LAN magic packet sender
   - `GetInterfaceDetails()`, `SelectBestInterfaceForWOL()` - Network interface discovery
+  - `GetOutboundMAC()` - Resolves the MAC address of the interface used to reach a given server via UDP route lookup
   - `ValidHostname()`, `ValidMAC()` - Input validation
 - `core/store/` - BoltDB key-value store
   - `Store` struct with mutex-guarded BoltDB operations
@@ -110,7 +111,7 @@ The `core/` directory contains reusable business logic:
 
 - `wol/` - Wake-on-LAN HTTP server and agent
   - `serve` subcommand: HTTP server with Svelte frontend, alias CRUD, WOL magic packet sending
-  - `agent` subcommand: sends boot/shutdown notifications to the WOL server with retry backoff
+  - `agent` subcommand: sends boot/shutdown/register notifications to the WOL server with retry backoff
   - `interfaces` subcommand: lists available network interfaces with WOL suitability info
   - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `wol/frontend/`)
 
