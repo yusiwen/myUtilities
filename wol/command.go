@@ -223,12 +223,17 @@ func (o *AgentOptions) Run() error {
 		apiPath = "shutdown"
 	}
 
+	server := o.Server
+	if !strings.Contains(server, "://") {
+		server = "http://" + server
+	}
+
 	log.Printf("Agent: sending %s notification for hostname %q to server %s", action, hostname, o.Server)
 
 	// Retry with backoff in case the server is not ready yet
 	maxRetries := 5
 	for i := range maxRetries {
-		url := fmt.Sprintf("%s/api/%s/%s", o.Server, apiPath, hostname)
+		url := fmt.Sprintf("%s/api/%s/%s", server, apiPath, hostname)
 		resp, err := http.Post(url, "application/json", nil)
 		if err == nil {
 			resp.Body.Close()
