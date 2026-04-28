@@ -7,6 +7,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
+TimeoutStartSec=15
 ExecStart=/usr/local/bin/mu wol agent --shutdown --server http://192.168.2.1:18080 --hostname myhost
 
 [Install]
