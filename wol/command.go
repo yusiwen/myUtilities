@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -137,6 +138,11 @@ func (o *ServeOptions) Run() error {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost:
+			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
+				if entry, err := store.Get(hostname); err == nil && entry.Mac != reqMAC {
+					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
+				}
+			}
 			now := time.Now()
 			if err := store.RecordBoot(hostname, now); err != nil {
 				http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
@@ -174,6 +180,11 @@ func (o *ServeOptions) Run() error {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost:
+			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
+				if entry, err := store.Get(hostname); err == nil && entry.Mac != reqMAC {
+					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
+				}
+			}
 			now := time.Now()
 			if err := store.SetStatus(hostname, "shutdown"); err != nil {
 				http.Error(w, fmt.Sprintf(`{"error": "failed to set status: %v"}`, err), http.StatusInternalServerError)
@@ -228,13 +239,26 @@ func (o *AgentOptions) Run() error {
 		server = "http://" + server
 	}
 
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return fmt.Errorf("agent: invalid server URL %q: %v", o.Server, err)
+	}
+
+	mac, err := corenet.GetOutboundMAC(serverURL.Host)
+	if err != nil {
+		log.Printf("Agent: warning: unable to determine outbound MAC: %v", err)
+	}
+
 	log.Printf("Agent: sending %s notification for hostname %q to server %s", action, hostname, o.Server)
 
 	// Retry with backoff in case the server is not ready yet
 	maxRetries := 5
 	for i := range maxRetries {
-		url := fmt.Sprintf("%s/api/%s/%s", server, apiPath, hostname)
-		resp, err := http.Post(url, "application/json", nil)
+		u := fmt.Sprintf("%s/api/%s/%s", server, apiPath, hostname)
+		if len(mac) > 0 {
+			u += "?mac=" + url.QueryEscape(mac.String())
+		}
+		resp, err := http.Post(u, "application/json", nil)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {

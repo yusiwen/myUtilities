@@ -140,3 +140,35 @@ func IPFromInterface(iface string) (*net.UDPAddr, error) {
 	}
 	return nil, fmt.Errorf("no IPv4 address associated with interface %s", ief.Name)
 }
+
+// GetOutboundMAC returns the MAC address of the interface used to route
+// packets to the given server address (host:port).
+func GetOutboundMAC(server string) (net.HardwareAddr, error) {
+	conn, err := net.Dial("udp", server)
+	if err != nil {
+		return nil, fmt.Errorf("failed to route to %s: %v", server, err)
+	}
+	defer conn.Close()
+
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list interfaces: %v", err)
+	}
+
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if ok && ipNet.IP.Equal(localAddr.IP) {
+				return iface.HardwareAddr, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no interface found with source IP %s", localAddr.IP)
+}
