@@ -7,7 +7,7 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 TimeoutStartSec=15
-ExecStart=/usr/local/bin/mu wol agent --boot --server http://192.168.2.1:18080 --hostname myhost
+ExecStart=/usr/local/bin/mu wol agent --boot --hostname myhost http://192.168.2.1:18080
 Restart=on-failure
 RestartSec=5s
 StartLimitBurst=2
