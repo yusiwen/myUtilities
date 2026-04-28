@@ -3,6 +3,7 @@ package wol
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -14,6 +15,19 @@ import (
 	corenet "github.com/yusiwen/myUtilities/core/net"
 	corestore "github.com/yusiwen/myUtilities/core/store"
 )
+
+func (o *ServeOptions) requireToken(w http.ResponseWriter, r *http.Request) bool {
+	if o.Token == "" {
+		return true
+	}
+	if r.Header.Get("X-Auth-Token") == o.Token {
+		return true
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
+	return false
+}
 
 func (o *ServeOptions) Run() error {
 	// Open KV store
@@ -33,6 +47,9 @@ func (o *ServeOptions) Run() error {
 	mux.HandleFunc("/api/wake/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if !o.requireToken(w, r) {
 			return
 		}
 		hostname := r.PathValue("hostname")
@@ -64,6 +81,9 @@ func (o *ServeOptions) Run() error {
 	mux.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		if !o.requireToken(w, r) {
 			return
 		}
 		var req struct {
@@ -109,6 +129,9 @@ func (o *ServeOptions) Run() error {
 			}
 			json.NewEncoder(w).Encode(aliases)
 		case http.MethodPost:
+			if !o.requireToken(w, r) {
+				return
+			}
 			var req struct {
 				Name  string `json:"name"`
 				Mac   string `json:"mac"`
@@ -151,6 +174,9 @@ func (o *ServeOptions) Run() error {
 		}
 		switch r.Method {
 		case http.MethodDelete:
+			if !o.requireToken(w, r) {
+				return
+			}
 			if err := store.Delete(name); err != nil {
 				http.Error(w, fmt.Sprintf(`{"error": "failed to delete alias: %v"}`, err), http.StatusInternalServerError)
 				return
@@ -175,6 +201,9 @@ func (o *ServeOptions) Run() error {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost:
+			if !o.requireToken(w, r) {
+				return
+			}
 			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
 				if entry, err := store.Get(hostname); err == nil && entry.Mac != reqMAC {
 					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
@@ -217,6 +246,9 @@ func (o *ServeOptions) Run() error {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
 		case http.MethodPost:
+			if !o.requireToken(w, r) {
+				return
+			}
 			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
 				if entry, err := store.Get(hostname); err == nil && entry.Mac != reqMAC {
 					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
@@ -247,6 +279,20 @@ func (o *ServeOptions) Run() error {
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
 	return http.ListenAndServe(addr, mux)
+}
+
+func postWithToken(url, token, contentType string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest("POST", url, body)
+	if err != nil {
+		return nil, err
+	}
+	if token != "" {
+		req.Header.Set("X-Auth-Token", token)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	return http.DefaultClient.Do(req)
 }
 
 func (o *AgentOptions) Run() error {
@@ -295,7 +341,7 @@ func (o *AgentOptions) Run() error {
 		body := fmt.Sprintf(`{"name":"%s","mac":"%s"}`, hostname, macStr)
 		maxRetries := 5
 		for i := range maxRetries {
-			resp, err := http.Post(server+"/api/register", "application/json", strings.NewReader(body))
+			resp, err := postWithToken(server+"/api/register", o.Token, "application/json", strings.NewReader(body))
 			if err == nil {
 				if resp.StatusCode == http.StatusCreated {
 					resp.Body.Close()
@@ -337,7 +383,7 @@ func (o *AgentOptions) Run() error {
 		if len(mac) > 0 {
 			u += "?mac=" + url.QueryEscape(mac.String())
 		}
-		resp, err := http.Post(u, "application/json", nil)
+		resp, err := postWithToken(u, o.Token, "application/json", nil)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {

@@ -4,6 +4,7 @@ type ServeOptions struct {
 	Interface string `arg:"" help:"Network interface name (e.g., br-lan on Linux, en0 on macOS, Ethernet0 on Windows). Use 'mu wol interfaces' to list available interfaces."`
 	DBPath    string `help:"Path to BoltDB file storing hostname to MAC mappings." default:"~/.config/go-wol/bolt.db"`
 	Port      int    `help:"HTTP server port." default:"8080"`
+	Token     string `help:"Pre-shared token for API authentication. Agents and frontend must send X-Auth-Token header." default:""`
 }
 
 type AgentOptions struct {
@@ -12,6 +13,7 @@ type AgentOptions struct {
 	Boot     bool   `help:"Notify the server that this machine has booted."`
 	Shutdown bool   `help:"Notify the server that this machine is shutting down."`
 	Register bool   `help:"Register this machine's hostname and MAC on the server."`
+	Token    string `help:"Pre-shared token for API authentication. Sent as X-Auth-Token header." default:""`
 }
 
 type InterfacesOptions struct {

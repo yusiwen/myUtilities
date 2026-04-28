@@ -10,6 +10,20 @@
   let wolTimers = $state({})
   let successTimer = $state(null)
   let appVersion = $state('1.0.0')
+  let tokenInput = $state('')
+  let showTokenModal = $state(false)
+  let token = $state(localStorage.getItem('wol-token') || '')
+
+  async function apiFetch(url, options = {}) {
+    if (token) {
+      options.headers = { ...options.headers, 'X-Auth-Token': token }
+    }
+    const res = await fetch(url, options)
+    if (res.status === 401) {
+      error = 'Unauthorized — check your token in settings'
+    }
+    return res
+  }
 
   async function fetchAliases() {
     try {
@@ -39,7 +53,7 @@
       return
     }
     try {
-      const res = await fetch('/api/aliases', {
+      const res = await apiFetch('/api/aliases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: formName, mac: formMac })
@@ -62,7 +76,7 @@
     error = ''
     if (!confirm(`Delete alias "${name}"?`)) return
     try {
-      const res = await fetch(`/api/aliases/${encodeURIComponent(name)}`, {
+      const res = await apiFetch(`/api/aliases/${encodeURIComponent(name)}`, {
         method: 'DELETE'
       })
       if (res.ok) {
@@ -82,7 +96,7 @@
     
     error = ''
     try {
-      const res = await fetch(`/api/wake/${encodeURIComponent(name)}`, {
+      const res = await apiFetch(`/api/wake/${encodeURIComponent(name)}`, {
         method: 'POST'
       })
       if (res.ok) {
@@ -162,6 +176,29 @@
     }
   }
 
+  function openTokenModal() {
+    tokenInput = token
+    showTokenModal = true
+  }
+
+  function saveToken() {
+    if (tokenInput) {
+      localStorage.setItem('wol-token', tokenInput)
+      token = tokenInput
+    } else {
+      localStorage.removeItem('wol-token')
+      token = ''
+    }
+    showTokenModal = false
+  }
+
+  function clearToken() {
+    tokenInput = ''
+    localStorage.removeItem('wol-token')
+    token = ''
+    showTokenModal = false
+  }
+
   $effect(() => {
     const names = Object.keys(aliases)
     names.forEach(fetchBootTime)
@@ -177,7 +214,11 @@
 </script>
 
 <main>
-  <h1>WOL Manager <span class="version">{appVersion}</span></h1>
+  <h1>WOL Manager <span class="version">{appVersion}</span>
+    <button class="btn-settings" onclick={openTokenModal}>
+      <span class="lock-icon">{token ? '\u{1F512}' : '\u{1F513}'}</span>
+    </button>
+  </h1>
 
   {#if error}
     <div class="error">{error}</div>
@@ -254,6 +295,28 @@
   </section>
 </main>
 
+{#if showTokenModal}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="modal-overlay" role="presentation" onclick={() => showTokenModal = false}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
+      <h2>Settings</h2>
+      <label for="token-input">API Token</label>
+      <input
+        id="token-input"
+        type="text"
+        placeholder="Enter pre-shared token"
+        bind:value={tokenInput}
+      />
+      <div class="modal-actions">
+        <button onclick={saveToken}>Save</button>
+        <button class="btn-clear" onclick={clearToken}>Clear</button>
+        <button class="btn-cancel" onclick={() => showTokenModal = false}>Cancel</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <footer>
   <p>Created by Siwen Yu (yusiwen@gmail.com)</p>
   <p><a href="https://github.com/yusiwen/myUtilities">https://github.com/yusiwen/myUtilities</a></p>
@@ -299,14 +362,14 @@
     margin-bottom: 20px;
     color: #2c3e50;
     display: flex;
-    justify-content: space-between;
     align-items: flex-end;
+    gap: 8px;
   }
 
   h1 .version {
     font-size: 0.4em;
     color: #7f8c8d;
-    margin-right: 10px;
+    margin-right: auto;
   }
 
   h2 {
@@ -480,5 +543,84 @@
   .btn-wol:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .btn-settings {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+  }
+
+  .btn-settings:hover {
+    opacity: 0.7;
+  }
+
+  .lock-icon {
+    font-size: 1em;
+  }
+
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .modal {
+    background: #fff;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    width: 360px;
+    max-width: 90vw;
+  }
+
+  .modal h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+  }
+
+  .modal label {
+    display: block;
+    font-size: 0.85em;
+    color: #555;
+    margin-bottom: 6px;
+  }
+
+  .modal input {
+    width: 100%;
+    margin-bottom: 16px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+  }
+
+  .btn-clear {
+    background: #e74c3c;
+    color: #fff;
+  }
+
+  .btn-clear:hover {
+    background: #c0392b;
+  }
+
+  .btn-cancel {
+    background: #95a5a6;
+    color: #fff;
+  }
+
+  .btn-cancel:hover {
+    background: #7f8c8d;
   }
 </style>
