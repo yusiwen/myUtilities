@@ -60,6 +60,43 @@ func (o *ServeOptions) Run() error {
 		log.Printf("WOL packet sent to %s (%s) via %s", hostname, entry.Mac, o.Interface)
 	})
 
+	// Agent registration endpoint
+	mux.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			Name string `json:"name"`
+			Mac  string `json:"mac"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, `{"error": "invalid JSON"}`, http.StatusBadRequest)
+			return
+		}
+		if req.Name == "" || req.Mac == "" {
+			http.Error(w, `{"error": "name and mac are required"}`, http.StatusBadRequest)
+			return
+		}
+		if !corenet.ValidHostname(req.Name) {
+			http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
+			return
+		}
+		if !corenet.ValidMAC(req.Mac) {
+			http.Error(w, `{"error": "invalid MAC address format (expected aa:bb:cc:dd:ee:ff)"}`, http.StatusBadRequest)
+			return
+		}
+		req.Mac = strings.ToLower(req.Mac)
+		if err := store.Set(req.Name, req.Mac, ""); err != nil {
+			http.Error(w, fmt.Sprintf(`{"error": "failed to register: %v"}`, err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"status": "ok", "name": "%s", "mac": "%s"}`, req.Name, req.Mac)
+		log.Printf("Registered hostname %s with MAC %s", req.Name, req.Mac)
+	})
+
 	// Alias management endpoints
 	mux.HandleFunc("/api/aliases", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -222,16 +259,18 @@ func (o *AgentOptions) Run() error {
 		}
 	}
 
-	if o.Boot && o.Shutdown {
-		return fmt.Errorf("agent: --boot and --shutdown are mutually exclusive")
+	flags := 0
+	if o.Boot {
+		flags++
 	}
-
-	// Default to boot notification if neither flag is specified
-	action := "boot"
-	apiPath := "boot"
 	if o.Shutdown {
-		action = "shutdown"
-		apiPath = "shutdown"
+		flags++
+	}
+	if o.Register {
+		flags++
+	}
+	if flags > 1 {
+		return fmt.Errorf("agent: --boot, --shutdown, and --register are mutually exclusive")
 	}
 
 	server := o.Server
@@ -244,6 +283,47 @@ func (o *AgentOptions) Run() error {
 		return fmt.Errorf("agent: invalid server URL %q: %v", o.Server, err)
 	}
 
+	if o.Register {
+		mac, err := corenet.GetOutboundMAC(serverURL.Host)
+		if err != nil {
+			return fmt.Errorf("agent: unable to determine outbound MAC: %v", err)
+		}
+		macStr := mac.String()
+
+		log.Printf("Agent: registering hostname %q with MAC %s to server %s", hostname, macStr, o.Server)
+
+		body := fmt.Sprintf(`{"name":"%s","mac":"%s"}`, hostname, macStr)
+		maxRetries := 5
+		for i := range maxRetries {
+			resp, err := http.Post(server+"/api/register", "application/json", strings.NewReader(body))
+			if err == nil {
+				if resp.StatusCode == http.StatusCreated {
+					resp.Body.Close()
+					log.Printf("Agent: successfully registered %q (%s) at %s", hostname, macStr, o.Server)
+					return nil
+				}
+				resp.Body.Close()
+				return fmt.Errorf("agent: server returned status %d for registration of %s", resp.StatusCode, hostname)
+			}
+			if i < maxRetries-1 {
+				wait := time.Duration(i+1) * time.Second
+				log.Printf("Agent: attempt %d failed, retrying in %v: %v", i+1, wait, err)
+				time.Sleep(wait)
+			} else {
+				return fmt.Errorf("agent: failed to register %q after %d retries: %v", hostname, maxRetries, err)
+			}
+		}
+		return nil
+	}
+
+	// Boot or shutdown notification
+	action := "boot"
+	apiPath := "boot"
+	if o.Shutdown {
+		action = "shutdown"
+		apiPath = "shutdown"
+	}
+
 	mac, err := corenet.GetOutboundMAC(serverURL.Host)
 	if err != nil {
 		log.Printf("Agent: warning: unable to determine outbound MAC: %v", err)
@@ -251,7 +331,6 @@ func (o *AgentOptions) Run() error {
 
 	log.Printf("Agent: sending %s notification for hostname %q to server %s", action, hostname, o.Server)
 
-	// Retry with backoff in case the server is not ready yet
 	maxRetries := 5
 	for i := range maxRetries {
 		u := fmt.Sprintf("%s/api/%s/%s", server, apiPath, hostname)

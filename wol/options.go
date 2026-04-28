@@ -11,6 +11,7 @@ type AgentOptions struct {
 	Hostname string `help:"Hostname to register on boot. Defaults to OS hostname." default:""`
 	Boot     bool   `help:"Notify the server that this machine has booted."`
 	Shutdown bool   `help:"Notify the server that this machine is shutting down."`
+	Register bool   `help:"Register this machine's hostname and MAC on the server."`
 }
 
 type InterfacesOptions struct {
