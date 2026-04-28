@@ -359,10 +359,9 @@
 
   h1 {
     font-size: 1.8em;
-    margin-bottom: 20px;
     color: #2c3e50;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
   }
 
