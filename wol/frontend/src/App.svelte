@@ -363,7 +363,6 @@
     display: flex;
     align-items: flex-end;
     gap: 8px;
-    margin-bottom: 20px;
   }
 
   h1 .version {
