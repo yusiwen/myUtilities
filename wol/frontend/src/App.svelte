@@ -214,7 +214,7 @@
 </script>
 
 <main>
-  <h1>WOL Manager <span class="version">{appVersion}</span>
+  <h1><span>WOL Manager</span> <span class="version">{appVersion}</span>
     <button class="btn-settings" onclick={openTokenModal}>
       <span class="lock-icon">{token ? '\u{1F512}' : '\u{1F513}'}</span>
     </button>
@@ -362,12 +362,17 @@
     color: #2c3e50;
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  h1 > span {
+    display: inline-flex;
+    align-items: flex-end;
   }
 
   h1 .version {
     font-size: 0.5em;
-    line-height: 1;
     color: #7f8c8d;
     margin-right: auto;
   }
