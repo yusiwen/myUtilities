@@ -28,11 +28,8 @@ trap cleanup EXIT
 
 command_exists curl || fail "curl is required"
 command_exists gunzip || fail "gunzip is required"
-command_exists git || fail "git is required"
 
-remote=$(git remote get-url origin 2>/dev/null) || fail "Not a git repository (no 'origin' remote found)"
-owner_repo=$(echo "$remote" | sed -nE 's#.*[:/]([^/]+)/([^/.]+)(\.git)?$#\1/\2#p')
-[ -n "$owner_repo" ] || fail "Could not extract owner/repo from: $remote"
+owner_repo="yusiwen/myUtilities"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 raw_arch=$(uname -m)
