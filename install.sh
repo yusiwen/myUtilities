@@ -3,6 +3,7 @@ set -eu
 
 NAME="${NAME:-mu}"
 PREFIX="${PREFIX:-/usr/local/bin}"
+VERSION="v1.0.7"
 
 fail() {
     echo "Error: $*" >&2
@@ -27,64 +28,66 @@ cleanup() {
 trap cleanup EXIT
 
 command_exists curl || fail "curl is required"
-command_exists gunzip || fail "gunzip is required"
-
-owner_repo="yusiwen/myUtilities"
 
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 raw_arch=$(uname -m)
 
 case "$os" in
-    linux) os_asset="linux" ;;
-    darwin) os_asset="darwin" ;;
+    linux) os_name="linux" ;;
+    darwin) os_name="darwin" ;;
+    mingw*|cygwin|msys) os_name="windows" ;;
     *) fail "Unsupported OS: $os" ;;
 esac
 
 case "$raw_arch" in
-    x86_64|amd64) arch_asset="amd64" ;;
+    x86_64|amd64) arch_name="amd64" ;;
     aarch64|arm64)
-        if [ "$os_asset" = "darwin" ]; then
-            arch_asset="arm64"
+        if [ "$os_name" = "darwin" ]; then
+            arch_name="arm64"
         else
-            arch_asset="armv8"
+            arch_name="armv8"
         fi
         ;;
     *) fail "Unsupported architecture: $raw_arch" ;;
 esac
 
-api_url="https://api.github.com/repos/$owner_repo/releases/latest"
-echo "Fetching latest release from $owner_repo ..."
+case "$os_name" in
+    windows) ext="zip" ;;
+    *) ext="gz" ;;
+esac
 
-if [ -n "${GITHUB_TOKEN:-}" ]; then
-    release_json=$(curl -sf -H "Authorization: token $GITHUB_TOKEN" "$api_url")
-else
-    release_json=$(curl -sf "$api_url")
-fi
-[ -n "$release_json" ] || fail "GitHub API request failed (try setting GITHUB_TOKEN)"
-
-tag=$(echo "$release_json" | grep -o '"tag_name":"[^"]*"' | head -1 | cut -d'"' -f4) || true
-[ -n "$tag" ] || fail "Could not extract tag from release"
-
-asset_name="${NAME}-${os_asset}-${arch_asset}-${tag}.gz"
-download_url=$(echo "$release_json" | grep -A 3 "\"name\":\"$asset_name\"" | grep "browser_download_url" | sed 's/.*"browser_download_url":"\([^"]*\)".*/\1/') || true
-
-if [ -z "$download_url" ]; then
-    echo "No asset found for $asset_name." >&2
-    echo "Available assets:" >&2
-    echo "$release_json" | grep '"name":' | sed 's/.*"name":"\([^"]*\)".*/\1/' >&2
-    exit 1
-fi
+bin_name="${NAME}-${os_name}-${arch_name}-${VERSION}"
+download_url="https://github.com/yusiwen/myUtilities/releases/download/${VERSION}/${bin_name}.${ext}"
 
 tmpdir=$(mktemp -d) || fail "Failed to create temp directory"
 
-echo "Downloading $asset_name ..."
-(cd "$tmpdir" && curl -fL -O "$download_url") || fail "Download failed"
+echo "Downloading mu ${VERSION} for ${os_name}-${arch_name} ..."
+(cd "$tmpdir" && curl -fL -o "${bin_name}.${ext}" "$download_url") || fail "Download failed"
 
-binary_name="${asset_name%.gz}"
-echo "Installing $binary_name to $PREFIX/ ..."
-gunzip "$tmpdir/$asset_name"
-maybe_sudo install -m 755 "$tmpdir/$binary_name" "$PREFIX/$binary_name"
-maybe_sudo ln -sf "$PREFIX/$binary_name" "$PREFIX/$NAME"
+case "$ext" in
+    gz)
+        command_exists gunzip || fail "gunzip is required"
+        gunzip "$tmpdir/${bin_name}.${ext}"
+        bin_path="$tmpdir/$bin_name"
+        ;;
+    zip)
+        command_exists unzip || fail "unzip is required"
+        unzip -q "$tmpdir/${bin_name}.${ext}" -d "$tmpdir"
+        bin_path="$tmpdir/$bin_name"
+        if [ ! -f "$bin_path" ] && [ -f "${bin_path}.exe" ]; then
+            bin_path="${bin_path}.exe"
+        fi
+        if [ ! -f "$bin_path" ]; then
+            echo "Error: could not find binary in zip archive" >&2
+            ls -la "$tmpdir" >&2
+            exit 1
+        fi
+        ;;
+esac
+
+echo "Installing $bin_name to $PREFIX/ ..."
+maybe_sudo install -m 755 "$bin_path" "$PREFIX/$bin_name"
+maybe_sudo ln -sf "$PREFIX/$bin_name" "$PREFIX/$NAME"
 
 echo "Installation complete."
 maybe_sudo "$PREFIX/$NAME" version 2>/dev/null || echo "Run '$NAME version' to verify."

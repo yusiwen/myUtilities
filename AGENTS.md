@@ -134,6 +134,16 @@ The Makefile injects version info at build time:
 
 Minimal test coverage currently exists. Only `core/watcher/watcher_test.go` contains tests.
 
+## Release Process
+
+When making a new release:
+1. Update `VERSION` in `install.sh` to the new tag (e.g. `v1.0.8`)
+2. Update any version references in `README.md`
+3. Commit with message `chore: bump version to v1.0.8`
+4. Tag the commit: `git tag v1.0.8`
+5. Push: `git push && git push --tags`
+6. Let the CI/CD workflow create the GitHub release with built assets
+
 ### Notes
 
 - The project uses Go 1.24 (see `go.mod`)
