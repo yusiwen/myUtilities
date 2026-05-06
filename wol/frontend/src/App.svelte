@@ -5,6 +5,7 @@
   let editingName = $state(null)
   let error = $state('')
   let bootTimes = $state({})
+  let hoveredCell = $state(null)
   let success = $state('')
   let wolCooldowns = $state({})
   let wolTimers = $state({})
@@ -141,7 +142,6 @@
     const info = bootTimes[name]
     if (!info || !info.events || info.events.length === 0) return '\u26AA'
     const latest = info.events[0]
-    console.log('latest=' + latest)
     const ago = timeAgo(latest.timestamp)
     if (latest.type === 'boot') {
       return ago ? `\u{1F7E2} ${ago}` : '\u{1F7E2}'
@@ -285,7 +285,25 @@
             <tr>
               <td>{name}</td>
               <td class="mono">{entry.Mac}</td>
-              <td class="boot-cell">{bootStatus(name)}</td>
+              <td class="boot-cell"
+                onmouseenter={() => hoveredCell = name}
+                onmouseleave={() => hoveredCell = null}>
+                {bootStatus(name)}
+                {#if hoveredCell === name && bootTimes[name]?.events?.length}
+                  <div class="tooltip">
+                    <div class="tooltip-header">Recent Events</div>
+                    <ul class="tooltip-list">
+                      {#each bootTimes[name].events as event}
+                        <li>
+                          <span class="event-icon">{event.type === 'boot' ? '\u{1F7E2}' : '\u{1F534}'}</span>
+                          <span class="event-type">{event.type}</span>
+                          <span class="event-time">{timeAgo(event.timestamp)}</span>
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/if}
+              </td>
               <td class="actions">
                 <button 
                   class="btn-wol" 
@@ -512,6 +530,55 @@
   .boot-cell {
     font-size: 0.85em;
     color: #666;
+    position: relative;
+    cursor: default;
+  }
+
+  .tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 6px;
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    z-index: 50;
+  }
+
+  .tooltip-header {
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.9em;
+    color: #bdc3c7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .tooltip-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .tooltip-list li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+  }
+
+  .event-type {
+    text-transform: capitalize;
+    min-width: 5em;
+  }
+
+  .event-time {
+    color: #95a5a6;
   }
 
   .actions {

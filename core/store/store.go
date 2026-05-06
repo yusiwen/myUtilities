@@ -15,7 +15,7 @@ import (
 
 // Event represents a boot or shutdown notification event.
 type Event struct {
-	Type      string  `json:"type"`// "boot" or "shutdown"
+	Type      string    `json:"type"`     // "boot" or "shutdown"
 	Timestamp time.Time `json:"timestamp"`
 }
 
