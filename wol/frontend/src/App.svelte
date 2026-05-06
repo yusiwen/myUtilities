@@ -15,6 +15,15 @@
   let showTokenModal = $state(false)
   let token = $state(localStorage.getItem('wol-token') || '')
 
+  function loadFavorites() {
+    try {
+      return JSON.parse(localStorage.getItem('wol-favorites') || '[]')
+    } catch {
+      return []
+    }
+  }
+  let favorites = $state(loadFavorites())
+
   async function apiFetch(url, options = {}) {
     if (token) {
       options.headers = { ...options.headers, 'X-Auth-Token': token }
@@ -132,11 +141,24 @@
     editingName = name
   }
 
-  function cancelEdit() {
-    formName = ''
-    formMac = ''
-    editingName = null
+  function toggleFavorite(name) {
+    const idx = favorites.indexOf(name)
+    if (idx >= 0) {
+      favorites = [...favorites.slice(0, idx), ...favorites.slice(idx + 1)]
+    } else {
+      favorites = [...favorites, name]
+    }
   }
+
+  let sortedEntries = $derived.by(() => {
+    const entries = Object.entries(aliases)
+    entries.sort(([a], [b]) => {
+      const fa = favorites.includes(a) ? 0 : 1
+      const fb = favorites.includes(b) ? 0 : 1
+      return fa - fb
+    })
+    return entries
+  })
 
   function bootStatus(name) {
     const info = bootTimes[name]
@@ -221,9 +243,20 @@
 
   $effect(() => {
     return () => {
-      // 清理所有定时器
       Object.values(wolTimers).forEach(timerId => clearInterval(timerId))
       if (successTimer) clearTimeout(successTimer)
+    }
+  })
+
+  $effect(() => {
+    localStorage.setItem('wol-favorites', JSON.stringify(favorites))
+  })
+
+  $effect(() => {
+    const validNames = new Set(Object.keys(aliases))
+    const toRemove = favorites.filter(n => !validNames.has(n))
+    if (toRemove.length > 0) {
+      favorites = favorites.filter(n => validNames.has(n))
     }
   })
 </script>
@@ -281,9 +314,14 @@
           </tr>
         </thead>
         <tbody>
-          {#each Object.entries(aliases) as [name, entry]}
-            <tr>
-              <td>{name}</td>
+          {#each sortedEntries as [name, entry]}
+            <tr class={favorites.includes(name) ? 'favorite-row' : ''}>
+              <td class="host-cell">
+                <button class="btn-fav" onclick={() => toggleFavorite(name)}>
+                  {favorites.includes(name) ? '\u2B50' : '\u2606'}
+                </button>
+                {name}
+              </td>
               <td class="mono">{entry.Mac}</td>
               <td class="boot-cell"
                 onmouseenter={() => hoveredCell = name}
@@ -520,6 +558,30 @@
     padding: 10px 8px;
     border-bottom: 1px solid #f0f0f0;
     font-size: 0.95em;
+  }
+
+  .favorite-row td {
+    background: #fffde7;
+  }
+
+  .host-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn-fav {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    font-size: 1em;
+    line-height: 1;
+    color: #f1c40f;
+  }
+
+  .btn-fav:hover {
+    transform: scale(1.2);
   }
 
   .mono {
