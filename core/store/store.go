@@ -13,10 +13,15 @@ import (
 	bolt "github.com/coreos/bbolt"
 )
 
+// Event represents a boot or shutdown notification event.
+type Event struct {
+	Type      string  `json:"type"`// "boot" or "shutdown"
+	Timestamp time.Time `json:"timestamp"`
+}
+
 const (
 	bucketName   = "Aliases"
-	bootBucket   = "Boot"
-	statusBucket = "Status"
+	eventsBucket = "Events"
 )
 
 // MacIface holds a MAC Address to wake up, along with an optionally specified
@@ -78,10 +83,7 @@ func OpenStore(dbPath string) (*Store, error) {
 		if _, err := tx.CreateBucketIfNotExists([]byte(bucketName)); err != nil {
 			return err
 		}
-		if _, err := tx.CreateBucketIfNotExists([]byte(bootBucket)); err != nil {
-			return err
-		}
-		_, err := tx.CreateBucketIfNotExists([]byte(statusBucket))
+		_, err := tx.CreateBucketIfNotExists([]byte(eventsBucket))
 		return err
 	}); err != nil {
 		db.Close()
@@ -168,67 +170,67 @@ func (s *Store) List() (map[string]MacIface, error) {
 	return result, err
 }
 
-// RecordBoot stores a boot timestamp for a given hostname.
-func (s *Store) RecordBoot(hostname string, t time.Time) error {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
+// maxEvents is the maximum number of events to keep per hostname.
+const maxEvents = 10
 
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(t.Unix()); err != nil {
-		return err
-	}
-
-	return s.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bootBucket))
-		return bucket.Put([]byte(hostname), buf.Bytes())
-	})
-}
-
-// GetBootTime retrieves the last boot time for a hostname.
-func (s *Store) GetBootTime(hostname string) (time.Time, error) {
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	var ts int64
-	err := s.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(bootBucket))
-		value := bucket.Get([]byte(hostname))
-		if value == nil {
-			return fmt.Errorf("hostname %q not found in boot bucket", hostname)
-		}
-		return gob.NewDecoder(bytes.NewBuffer(value)).Decode(&ts)
-	})
-	if err != nil {
-		return time.Time{}, err
-	}
-	return time.Unix(ts, 0), nil
-}
-
-// SetStatus stores the current status for a hostname (e.g., "boot", "shutdown").
-func (s *Store) SetStatus(hostname, status string) error {
+// RecordEvent appends a boot/shutdown event for a hostname and prunes to maxEvents.
+func (s *Store) RecordEvent(hostname string, eventType string) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	return s.db.Update(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(statusBucket))
-		return bucket.Put([]byte(hostname), []byte(status))
+		bucket := tx.Bucket([]byte(eventsBucket))
+		events := loadEvents(bucket, hostname)
+
+		// Prepend new event
+		events = append([]Event{{Type: eventType, Timestamp: time.Now()}}, events...)
+
+		// Prune to maxEvents
+		if len(events) > maxEvents {
+			events = events[:maxEvents]
+		}
+
+		return saveEvents(bucket, hostname, events)
 	})
 }
 
-// GetStatus retrieves the current status for a hostname.
-// Returns an empty string if no status has been recorded.
-func (s *Store) GetStatus(hostname string) (string, error) {
+// GetEvents returns the latest n events for a hostname (up to maxEvents).
+func (s *Store) GetEvents(hostname string, limit int) ([]Event, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	var status string
+	if limit <= 0 || limit > maxEvents {
+		limit = maxEvents
+	}
+
+	var events []Event
 	err := s.db.View(func(tx *bolt.Tx) error {
-		bucket := tx.Bucket([]byte(statusBucket))
-		value := bucket.Get([]byte(hostname))
-		if value != nil {
-			status = string(value)
-		}
+		bucket := tx.Bucket([]byte(eventsBucket))
+		events = loadEvents(bucket, hostname)
 		return nil
 	})
-	return status, err
+	if len(events) > limit {
+		events = events[:limit]
+	}
+	return events, err
+}
+
+func loadEvents(bucket *bolt.Bucket, hostname string) []Event {
+	value := bucket.Get([]byte(hostname))
+	if value == nil {
+		return nil
+	}
+	var events []Event
+	if err := gob.NewDecoder(bytes.NewBuffer(value)).Decode(&events); err != nil {
+		return nil
+	}
+	return events
+}
+
+func saveEvents(bucket *bolt.Bucket, hostname string, events []Event) error {
+	var buf bytes.Buffer
+	if err := gob.NewEncoder(&buf).Encode(events); err != nil {
+		return err
+	}
+	return bucket.Put([]byte(hostname), buf.Bytes())
 }

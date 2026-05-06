@@ -36,14 +36,26 @@
 
   async function fetchBootTime(name) {
     try {
-      const res = await fetch(`/api/boot/${encodeURIComponent(name)}`)
+      const res = await fetch(`/api/notify/${encodeURIComponent(name)}`)
       if (res.ok) {
         const data = await res.json()
-        bootTimes[name] = data.boot_time || null
+        bootTimes[name] = data
       }
     } catch (e) {
       bootTimes[name] = null
     }
+  }
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return null
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diff = (now - d) / 1000 / 60
+    if (diff < 0) return null
+    if (diff < 5) return 'just now'
+    if (diff < 60) return `${Math.round(diff)}m ago`
+    if (diff < 1440) return `${Math.round(diff / 60)}h ago`
+    return d.toLocaleString()
   }
 
   async function handleSubmit() {
@@ -126,15 +138,18 @@
   }
 
   function bootStatus(name) {
-    const t = bootTimes[name]
-    if (!t) return 'unknown'
-    const d = new Date(t)
-    const now = new Date()
-    const diff = (now - d) / 1000 / 60
-    if (diff < 5) return 'just booted'
-    if (diff < 60) return `${Math.round(diff)}m ago`
-    if (diff < 1440) return `${Math.round(diff / 60)}h ago`
-    return d.toLocaleString()
+    const info = bootTimes[name]
+    if (!info || !info.events || info.events.length === 0) return '\u26AA'
+    const latest = info.events[0]
+    console.log('latest=' + latest)
+    const ago = timeAgo(latest.timestamp)
+    if (latest.type === 'boot') {
+      return ago ? `\u{1F7E2} ${ago}` : '\u{1F7E2}'
+    }
+    if (latest.type === 'shutdown') {
+      return ago ? `\u{1F534} ${ago}` : '\u{1F534}'
+    }
+    return '\u26AA'
   }
 
   // 启动倒计时（10秒）

@@ -187,8 +187,8 @@ func (o *ServeOptions) Run() error {
 		}
 	})
 
-	// Boot notification/query endpoint
-	mux.HandleFunc("/api/boot/{hostname}", func(w http.ResponseWriter, r *http.Request) {
+	// Unified notification endpoint (replaces /api/boot and /api/shutdown)
+	mux.HandleFunc("/api/notify/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		hostname := r.PathValue("hostname")
 		if hostname == "" {
 			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
@@ -204,49 +204,9 @@ func (o *ServeOptions) Run() error {
 			if !o.requireToken(w, r) {
 				return
 			}
-			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
-				if entry, err := store.Get(hostname); err == nil && entry.Mac != reqMAC {
-					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
-				}
-			}
-			now := time.Now()
-			if err := store.RecordBoot(hostname, now); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "failed to record boot: %v"}`, err), http.StatusInternalServerError)
-				return
-			}
-			if err := store.SetStatus(hostname, "boot"); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "failed to set status: %v"}`, err), http.StatusInternalServerError)
-				return
-			}
-			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, now.Format(time.RFC3339))
-			log.Printf("Boot notification received from %s at %s", hostname, now.Format(time.RFC3339))
-		case http.MethodGet:
-			t, err := store.GetBootTime(hostname)
-			if err != nil {
-				http.Error(w, `{"boot_time": ""}`, http.StatusOK)
-				return
-			}
-			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "boot_time": "%s"}`, hostname, t.Format(time.RFC3339))
-		default:
-			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
-		}
-	})
-
-	// Shutdown notification/query endpoint
-	mux.HandleFunc("/api/shutdown/{hostname}", func(w http.ResponseWriter, r *http.Request) {
-		hostname := r.PathValue("hostname")
-		if hostname == "" {
-			http.Error(w, `{"error": "missing hostname"}`, http.StatusBadRequest)
-			return
-		}
-		if !corenet.ValidHostname(hostname) {
-			http.Error(w, `{"error": "invalid hostname format"}`, http.StatusBadRequest)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		switch r.Method {
-		case http.MethodPost:
-			if !o.requireToken(w, r) {
+			eventType := r.URL.Query().Get("type")
+			if eventType != "boot" && eventType != "shutdown" {
+				http.Error(w, `{"error": "type must be 'boot' or 'shutdown'"}`, http.StatusBadRequest)
 				return
 			}
 			if reqMAC := r.URL.Query().Get("mac"); reqMAC != "" {
@@ -254,23 +214,23 @@ func (o *ServeOptions) Run() error {
 					log.Printf("WARN: MAC mismatch for %s: request=%s, stored=%s", hostname, reqMAC, entry.Mac)
 				}
 			}
-			now := time.Now()
-			if err := store.SetStatus(hostname, "shutdown"); err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "failed to set status: %v"}`, err), http.StatusInternalServerError)
+			if err := store.RecordEvent(hostname, eventType); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error": "failed to record event: %v"}`, err), http.StatusInternalServerError)
 				return
 			}
-			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "shutdown_time": "%s"}`, hostname, now.Format(time.RFC3339))
-			log.Printf("Shutdown notification received from %s at %s", hostname, now.Format(time.RFC3339))
+			log.Printf("%s notification received from %s", eventType, hostname)
+			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "event_type": "%s"}`, hostname, eventType)
 		case http.MethodGet:
-			status, err := store.GetStatus(hostname)
-			if err != nil {
-				http.Error(w, fmt.Sprintf(`{"error": "failed to get status: %v"}`, err), http.StatusInternalServerError)
-				return
+			events, _ := store.GetEvents(hostname, 10)
+			status := ""
+			if len(events) > 0 {
+				status = events[0].Type
 			}
-			if status == "" {
-				status = "unknown"
-			}
-			fmt.Fprintf(w, `{"status": "ok", "host": "%s", "state": "%s"}`, hostname, status)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"host":   hostname,
+				"status": status,
+				"events": events,
+			})
 		default:
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		}
@@ -364,10 +324,8 @@ func (o *AgentOptions) Run() error {
 
 	// Boot or shutdown notification
 	action := "boot"
-	apiPath := "boot"
 	if o.Shutdown {
 		action = "shutdown"
-		apiPath = "shutdown"
 	}
 
 	mac, err := corenet.GetOutboundMAC(serverURL.Host)
@@ -379,9 +337,9 @@ func (o *AgentOptions) Run() error {
 
 	maxRetries := 5
 	for i := range maxRetries {
-		u := fmt.Sprintf("%s/api/%s/%s", server, apiPath, hostname)
+		u := fmt.Sprintf("%s/api/notify/%s?type=%s", server, url.PathEscape(hostname), action)
 		if len(mac) > 0 {
-			u += "?mac=" + url.QueryEscape(mac.String())
+			u += "&mac=" + url.QueryEscape(mac.String())
 		}
 		resp, err := postWithToken(u, o.Token, "application/json", nil)
 		if err == nil {
