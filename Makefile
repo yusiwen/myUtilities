@@ -4,6 +4,7 @@ VERSION=$(shell /usr/bin/git --no-pager describe --tags || echo "unknown version
 COMMIT_SHA=$(shell /usr/bin/git --no-pager rev-parse --short HEAD)
 BUILDTIME=$(shell date -u)
 FRONTEND_DIR=wol/frontend
+ES_FRONTEND_DIR=es/frontend
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -15,9 +16,12 @@ PLATFORM_LIST = \
 	linux-armv8
 
 frontend:
-	@echo "Building Svelte frontend..."
+	@echo "Building WOL Svelte frontend..."
 	cd $(FRONTEND_DIR) && npm install --silent && npm run build
 	@echo '{"version": "$(VERSION)"}' > $(FRONTEND_DIR)/dist/version.json
+	@echo "Building ES Svelte frontend..."
+	cd $(ES_FRONTEND_DIR) && npm install --silent && npm run build
+	@echo '{"version": "$(VERSION)"}' > $(ES_FRONTEND_DIR)/dist/version.json
 
 WINDOWS_ARCH_LIST = \
 	windows-amd64
