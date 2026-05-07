@@ -253,7 +253,9 @@
   })
 
   $effect(() => {
-    const validNames = new Set(Object.keys(aliases))
+    const names = Object.keys(aliases)
+    if (names.length === 0) return
+    const validNames = new Set(names)
     const toRemove = favorites.filter(n => !validNames.has(n))
     if (toRemove.length > 0) {
       favorites = favorites.filter(n => validNames.has(n))
