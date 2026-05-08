@@ -30,7 +30,6 @@ func (o *ServeOptions) requireToken(w http.ResponseWriter, r *http.Request) bool
 }
 
 func (o *ServeOptions) Run() error {
-	// Open KV store
 	store, err := corestore.OpenStore(o.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open store: %v", err)
@@ -38,12 +37,16 @@ func (o *ServeOptions) Run() error {
 	defer store.Close()
 	log.Printf("Using KV store at %s", o.DBPath)
 
-	// Start HTTP server
 	mux := http.NewServeMux()
+	RegisterHandlers(mux, store, o)
+	mux.Handle("/", FrontendHandler())
 
-	// Frontend static files (must be registered before API to handle /)
-	mux.Handle("/", frontendHandler())
+	addr := fmt.Sprintf(":%d", o.Port)
+	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
+	return http.ListenAndServe(addr, mux)
+}
 
+func RegisterHandlers(mux *http.ServeMux, store *corestore.Store, o *ServeOptions) {
 	mux.HandleFunc("/api/wake/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
@@ -66,7 +69,6 @@ func (o *ServeOptions) Run() error {
 			http.Error(w, `{"error": "hostname not found"}`, http.StatusNotFound)
 			return
 		}
-		// Send WOL magic packet
 		err = corenet.SendWOL(entry.Mac, o.Interface)
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error": "WOL failed: %v"}`, err), http.StatusInternalServerError)
@@ -77,7 +79,6 @@ func (o *ServeOptions) Run() error {
 		log.Printf("WOL packet sent to %s (%s) via %s", hostname, entry.Mac, o.Interface)
 	})
 
-	// Agent registration endpoint
 	mux.HandleFunc("/api/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, `{"error": "POST method required"}`, http.StatusMethodNotAllowed)
@@ -117,7 +118,6 @@ func (o *ServeOptions) Run() error {
 		log.Printf("Registered hostname %s with MAC %s", req.Name, req.Mac)
 	})
 
-	// Alias management endpoints
 	mux.HandleFunc("/api/aliases", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Method {
@@ -187,7 +187,6 @@ func (o *ServeOptions) Run() error {
 		}
 	})
 
-	// Unified notification endpoint (replaces /api/boot and /api/shutdown)
 	mux.HandleFunc("/api/notify/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		hostname := r.PathValue("hostname")
 		if hostname == "" {
@@ -235,10 +234,6 @@ func (o *ServeOptions) Run() error {
 			http.Error(w, `{"error": "method not allowed"}`, http.StatusMethodNotAllowed)
 		}
 	})
-
-	addr := fmt.Sprintf(":%d", o.Port)
-	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
-	return http.ListenAndServe(addr, mux)
 }
 
 func postWithToken(url, token, contentType string, body io.Reader) (*http.Response, error) {

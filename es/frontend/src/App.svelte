@@ -25,7 +25,7 @@
 
   async function fetchVersion() {
     try {
-      const res = await fetch('/version.json')
+      const res = await fetch('./version.json')
       const data = await res.json()
       appVersion = data.version || '1.0.0'
     } catch (e) {

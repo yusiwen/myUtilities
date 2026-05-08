@@ -12,9 +12,9 @@ import (
 //go:embed frontend/dist/*
 var frontendFS embed.FS
 
-// frontendHandler serves the embedded Svelte frontend.
+// FrontendHandler serves the embedded Svelte frontend.
 // It falls back to index.html for SPA routing.
-func frontendHandler() http.Handler {
+func FrontendHandler() http.Handler {
 	subFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		log.Fatalf("failed to get frontend sub filesystem: %v", err)

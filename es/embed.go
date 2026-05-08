@@ -12,7 +12,7 @@ import (
 //go:embed frontend/dist/*
 var frontendFS embed.FS
 
-func frontendHandler() http.Handler {
+func FrontendHandler() http.Handler {
 	subFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		log.Fatalf("failed to get frontend sub filesystem: %v", err)

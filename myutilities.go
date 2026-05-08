@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/es"
+	"github.com/yusiwen/myUtilities/gateway"
 	"github.com/yusiwen/myUtilities/installer"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/proxy"
@@ -18,4 +19,5 @@ type MyUtilities struct {
 	Runner    runner.CommandRunnerOptions `cmd:"" name:"run" help:"Run commands."`
 	Wol       wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`
 	Es        es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
+	Gateway   gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 }

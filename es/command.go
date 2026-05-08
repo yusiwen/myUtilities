@@ -10,24 +10,24 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
-type serverState struct {
+type ServerState struct {
 	mu         sync.RWMutex
 	cfg        *ESConfig
 	es         *elasticsearch.Client
 	configPath string
 }
 
-func newServerState(configPath string) *serverState {
-	return &serverState{configPath: configPath}
+func NewServerState(configPath string) *ServerState {
+	return &ServerState{configPath: configPath}
 }
 
-func (s *serverState) getClient() *elasticsearch.Client {
+func (s *ServerState) getClient() *elasticsearch.Client {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.es
 }
 
-func (s *serverState) loadConfig() error {
+func (s *ServerState) LoadConfig() error {
 	cfg, err := loadConfig(s.configPath)
 	if err != nil {
 		return err
@@ -46,7 +46,7 @@ func (s *serverState) loadConfig() error {
 	return nil
 }
 
-func (s *serverState) updateConfig(cfg *ESConfig) error {
+func (s *ServerState) updateConfig(cfg *ESConfig) error {
 	if err := saveConfig(s.configPath, cfg); err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (s *serverState) updateConfig(cfg *ESConfig) error {
 	return nil
 }
 
-func (s *serverState) getConfig() *ESConfig {
+func (s *ServerState) getConfig() *ESConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg
@@ -110,14 +110,25 @@ func (o *SetPasswordOptions) Run() error {
 }
 
 func (o *ServeOptions) Run() error {
-	state := newServerState(o.Config)
-	if err := state.loadConfig(); err != nil {
+	state := NewServerState(o.Config)
+	if err := state.LoadConfig(); err != nil {
 		log.Printf("Warning: could not load ES config: %v", err)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/", frontendHandler())
+	RegisterHandlers(mux, state)
+	mux.Handle("/", FrontendHandler())
 
+	host := o.Host
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	addr := fmt.Sprintf("%s:%d", host, o.Port)
+	log.Printf("Starting ES search UI on http://%s", addr)
+	return http.ListenAndServe(addr, mux)
+}
+
+func RegisterHandlers(mux *http.ServeMux, state *ServerState) {
 	writeJSON := func(w http.ResponseWriter, status int, v interface{}) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
@@ -236,12 +247,4 @@ func (o *ServeOptions) Run() error {
 			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
 		}
 	})
-
-	host := o.Host
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	addr := fmt.Sprintf("%s:%d", host, o.Port)
-	log.Printf("Starting ES search UI on http://%s", addr)
-	return http.ListenAndServe(addr, mux)
 }
