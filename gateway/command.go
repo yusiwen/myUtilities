@@ -80,7 +80,11 @@ func (o *Options) Run() error {
 	wol.RegisterHandlers(mux, wolStore, wolOpts)
 	es.RegisterHandlers(mux, esState)
 
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, landingPage)
 	})
