@@ -53,18 +53,24 @@ const landingPage = `<!DOCTYPE html>
 </html>`
 
 func (o *Options) Run() error {
-	wolStore, err := store.OpenStore(o.WolDB)
+	wolCfg, err := wol.LoadConfig(o.WolConfig)
+	if err != nil {
+		return fmt.Errorf("gateway: failed to load WOL config: %v", err)
+	}
+	log.Printf("Gateway: WOL config loaded from %s", o.WolConfig)
+
+	wolStore, err := store.OpenStore(wolCfg.DBPath)
 	if err != nil {
 		return fmt.Errorf("gateway: failed to open WOL store: %v", err)
 	}
 	defer wolStore.Close()
-	log.Printf("Gateway: WOL store at %s", o.WolDB)
+	log.Printf("Gateway: WOL store at %s", wolCfg.DBPath)
 
 	wolOpts := &wol.ServeOptions{
-		Interface: o.WolInterface,
-		DBPath:    o.WolDB,
-		Port:      0,
-		Token:     o.WolToken,
+		Interface: wolCfg.Interface,
+		DBPath:    wolCfg.DBPath,
+		Port:      wolCfg.Port,
+		Token:     wolCfg.Token,
 	}
 
 	esState := es.NewServerState(o.EsConfig)

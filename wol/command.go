@@ -29,7 +29,29 @@ func (o *ServeOptions) requireToken(w http.ResponseWriter, r *http.Request) bool
 	return false
 }
 
+func (o *ServeOptions) resolveConfig() {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		log.Printf("Warning: could not load WOL config: %v", err)
+		return
+	}
+	if o.Interface == "" {
+		o.Interface = cfg.Interface
+	}
+	if o.DBPath == "" {
+		o.DBPath = cfg.DBPath
+	}
+	if o.Port == 0 {
+		o.Port = cfg.Port
+	}
+	if o.Token == "" {
+		o.Token = cfg.Token
+	}
+}
+
 func (o *ServeOptions) Run() error {
+	o.resolveConfig()
+
 	store, err := corestore.OpenStore(o.DBPath)
 	if err != nil {
 		return fmt.Errorf("failed to open store: %v", err)
@@ -44,6 +66,58 @@ func (o *ServeOptions) Run() error {
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
 	return http.ListenAndServe(addr, mux)
+}
+
+func (o *SetDBPathOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.DBPath = o.DBPath
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL DB path set to: %s\n", o.DBPath)
+	return nil
+}
+
+func (o *SetPortOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.Port = o.Port
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL port set to: %d\n", o.Port)
+	return nil
+}
+
+func (o *SetTokenOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.Token = o.Token
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Println("WOL token set")
+	return nil
+}
+
+func (o *SetInterfaceOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.Interface = o.Interface
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL interface set to: %s\n", o.Interface)
+	return nil
 }
 
 func RegisterHandlers(mux *http.ServeMux, store *corestore.Store, o *ServeOptions) {
@@ -250,7 +324,20 @@ func postWithToken(url, token, contentType string, body io.Reader) (*http.Respon
 	return http.DefaultClient.Do(req)
 }
 
+func (o *AgentOptions) resolveConfig() {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		log.Printf("Warning: could not load WOL config: %v", err)
+		return
+	}
+	if o.Token == "" {
+		o.Token = cfg.Token
+	}
+}
+
 func (o *AgentOptions) Run() error {
+	o.resolveConfig()
+
 	hostname := o.Hostname
 	if hostname == "" {
 		var err error
@@ -435,7 +522,7 @@ func (o *InterfacesOptions) Run() error {
 			}
 		}
 
-		fmt.Printf("\n  Use: mu wol serve %s\n", bestIface.Name)
+		fmt.Printf("\n  Use: mu wol serve --interface %s\n", bestIface.Name)
 	}
 
 	return nil
