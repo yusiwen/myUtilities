@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/alecthomas/kong"
+	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/gateway"
 	"github.com/yusiwen/myUtilities/installer"
@@ -20,4 +21,5 @@ type MyUtilities struct {
 	Wol       wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`
 	Es        es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
 	Gateway   gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
+	Crypto    crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 }

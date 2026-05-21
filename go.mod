@@ -5,12 +5,14 @@ go 1.24
 require (
 	github.com/alecthomas/kong v1.12.1
 	github.com/coreos/bbolt v1.3.1-coreos.6.0.20180223184059-4f5275f4ebbf
+	github.com/elastic/go-elasticsearch/v8 v8.19.5
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/morikuni/aec v1.0.0
 	github.com/ryanolee/go-chaff v0.1.1
 	github.com/sabhiram/go-wol v0.0.0-20250815165103-eaddd4c17972
 	github.com/sijms/go-ora/v2 v2.9.0
+	github.com/tjfoc/gmsm v1.4.1
 )
 
 require (
@@ -20,7 +22,6 @@ require (
 	github.com/cloudflare/circl v1.6.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.4.1 // indirect
 	github.com/elastic/elastic-transport-go/v8 v8.9.0 // indirect
-	github.com/elastic/go-elasticsearch/v8 v8.19.5 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/go-faker/faker/v4 v4.6.1 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
