@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/morikuni/aec"
@@ -45,12 +46,19 @@ func bright(s string) string {
 	return aec.Apply(s, aec.WhiteF)
 }
 
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+func stripANSI(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
+
 type Options struct {
-	Model   string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
-	APIKey  string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
-	BaseURL string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
-	DryRun  bool   `help:"Print the generated message without committing." short:"n"`
-	Yes     bool   `help:"Skip confirmation and commit directly." short:"y"`
+	Model        string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
+	APIKey       string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
+	BaseURL      string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
+	DryRun       bool   `help:"Print the generated message without committing." short:"n"`
+	Yes          bool   `help:"Skip confirmation and commit directly." short:"y"`
+	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 }
 
 func (o *Options) Run() error {
@@ -85,14 +93,24 @@ func (o *Options) Run() error {
 		return err
 	}
 
+	strategy := resolveStrategy(o.DiffStrategy, diff.RawLen)
+
+	var nameStatus string
+	if strategy == "summary" || (strategy == "auto" && diff.RawLen > 16000) {
+		nameStatus, err = git.GetStagedNameStatus()
+		if err != nil {
+			return err
+		}
+	}
+
 	fmt.Fprintf(os.Stderr, "%s%s%s\n",
 		faint("Generating commit message from diff ("),
-		bright(fmt.Sprintf("%d", len([]rune(diff.Diff)))),
-		faint(" chars)..."))
+		bright(fmt.Sprintf("%d", diff.RawLen)),
+		faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
 
-	userPrompt := "Generate a conventional commit message for this git diff:\n\n```diff\n" + diff.Diff + "\n```"
+	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
 	result, err := client.ChatCompletion(systemPrompt, userPrompt)
 	if err != nil {
 		return err
@@ -127,6 +145,36 @@ func (o *Options) Run() error {
 	}
 
 	return nil
+}
+
+func resolveStrategy(flag string, diffLen int) string {
+	if flag != "auto" {
+		return flag
+	}
+	switch {
+	case diffLen <= 6000:
+		return "full"
+	case diffLen <= 16000:
+		return "medium"
+	default:
+		return "summary"
+	}
+}
+
+func buildUserPrompt(strategy, diff, stat, nameStatus string) string {
+	switch strategy {
+	case "medium":
+		return "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat) +
+			"\nAnd here are the first lines of the diff:\n\n```diff\n" + git.Truncate(diff, 3000) + "\n```"
+	case "summary":
+		summary := "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat)
+		if nameStatus != "" {
+			summary += "\nChanged files:\n\n" + nameStatus
+		}
+		return summary
+	default: // "full"
+		return "Generate a conventional commit message for this git diff:\n\n```diff\n" + diff + "\n```"
+	}
 }
 
 func confirmAndEdit(msg string) (string, error) {

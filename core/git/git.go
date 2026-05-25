@@ -9,8 +9,9 @@ import (
 const MaxDiffLength = 8000
 
 type DiffResult struct {
-	Stat string
-	Diff string
+	Stat   string
+	Diff   string
+	RawLen int
 }
 
 func CheckPreflight() error {
@@ -46,9 +47,14 @@ func GetStagedDiff() (*DiffResult, error) {
 	}
 
 	return &DiffResult{
-		Stat: statOut,
-		Diff: truncate(diffOut, MaxDiffLength),
+		Stat:   statOut,
+		Diff:   Truncate(diffOut, MaxDiffLength),
+		RawLen: len([]rune(diffOut)),
 	}, nil
+}
+
+func GetStagedNameStatus() (string, error) {
+	return runGit("diff", "--staged", "--name-status")
 }
 
 func runGit(args ...string) (string, error) {
@@ -68,7 +74,7 @@ func runGitColored(args ...string) (string, error) {
 	return runGit(fullArgs...)
 }
 
-func truncate(s string, maxLen int) string {
+func Truncate(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s
