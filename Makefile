@@ -13,7 +13,7 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" 
 PLATFORM_LIST = \
 	darwin-arm64 \
 	linux-amd64 \
-	linux-armv8
+	linux-arm64
 
 default:
 	CGO_ENABLED=0 go build -trimpath -o $(BINDIR)/$(NAME) .
@@ -31,7 +31,7 @@ build: frontend default
 WINDOWS_ARCH_LIST = \
 	windows-amd64
 
-all: frontend linux-amd64 linux-armv8 windows-amd64 darwin-arm64 # Most used
+all: frontend linux-amd64 linux-arm64 windows-amd64 darwin-arm64 # Most used
 
 docker: frontend
 	$(GOBUILD) -o $(BINDIR)/$(NAME)-$@
@@ -57,7 +57,7 @@ linux-armv6: frontend
 linux-armv7: frontend
 	GOARCH=arm GOOS=linux GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
-linux-armv8: frontend
+linux-arm64: frontend
 	GOARCH=arm64 GOOS=linux $(GOBUILD) -o $(BINDIR)/$(NAME)-$@
 
 linux-mips-softfloat: frontend
