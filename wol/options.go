@@ -43,6 +43,7 @@ type AgentOptions struct {
 	Boot     bool   `help:"Notify the server that this machine has booted."`
 	Shutdown bool   `help:"Notify the server that this machine is shutting down."`
 	Register bool   `help:"Register this machine's hostname and MAC on the server."`
+	Nic      string `name:"nic" help:"Network interface for MAC detection during registration (e.g. en0, eth0)."`
 }
 
 type InterfacesOptions struct {

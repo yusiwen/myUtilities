@@ -13,7 +13,7 @@ import (
 	"github.com/yusiwen/myUtilities/core/openai"
 )
 
-const systemPrompt = `You are a commit message generator. Generate a conventional commit message from the git diff provided.
+const baseSystemPrompt = `You are a commit message generator. Generate a conventional commit message from the git diff provided.
 
 Rules:
 - First line: <type>(<scope>): <description>
@@ -52,6 +52,17 @@ func stripANSI(s string) string {
 	return ansiRE.ReplaceAllString(s, "")
 }
 
+func buildSystemPrompt(lang string) string {
+	prompt := baseSystemPrompt
+	switch lang {
+	case "cn":
+		prompt += "\n\nLanguage: Write the commit message description and bullet points in Chinese (Simplified Chinese). Keep the conventional commit type prefix (feat:, fix:, etc.) in English."
+	default:
+		prompt += "\n\nLanguage: Write the commit message in English."
+	}
+	return prompt
+}
+
 type Options struct {
 	Model        string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
 	APIKey       string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
@@ -59,6 +70,7 @@ type Options struct {
 	DryRun       bool   `help:"Print the generated message without committing." short:"n"`
 	Yes          bool   `help:"Skip confirmation and commit directly." short:"y"`
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
+	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
 }
 
 func (o *Options) Run() error {
@@ -111,7 +123,7 @@ func (o *Options) Run() error {
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
 
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
-	result, err := client.ChatCompletion(systemPrompt, userPrompt)
+	result, err := client.ChatCompletion(buildSystemPrompt(o.Lang), userPrompt)
 	if err != nil {
 		return err
 	}

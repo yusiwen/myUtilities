@@ -372,11 +372,23 @@ func (o *AgentOptions) Run() error {
 	}
 
 	if o.Register {
-		mac, err := corenet.GetOutboundMAC(serverURL.Host)
-		if err != nil {
-			return fmt.Errorf("agent: unable to determine outbound MAC: %v", err)
+		var macStr string
+		if o.Nic != "" {
+			iface, err := corenet.GetInterfaceByName(o.Nic)
+			if err != nil {
+				return fmt.Errorf("agent: %v", err)
+			}
+			if iface.HardwareAddr == nil {
+				return fmt.Errorf("agent: interface %s has no MAC address", o.Nic)
+			}
+			macStr = iface.HardwareAddr.String()
+		} else {
+			mac, err := corenet.GetOutboundMAC(serverURL.Host)
+			if err != nil {
+				return fmt.Errorf("agent: unable to determine outbound MAC: %v", err)
+			}
+			macStr = mac.String()
 		}
-		macStr := mac.String()
 
 		log.Printf("Agent: registering hostname %q with MAC %s to server %s", hostname, macStr, o.Server)
 
