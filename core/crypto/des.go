@@ -7,12 +7,12 @@ import (
 type DESCipher struct{}
 type TripleDESCipher struct{}
 
-func (c *DESCipher) Name() string       { return "des" }
-func (c *DESCipher) KeySize() int        { return 8 }
-func (c *DESCipher) BlockSize() int      { return 8 }
+func (c *DESCipher) Name() string   { return "des" }
+func (c *DESCipher) KeySize() int   { return 8 }
+func (c *DESCipher) BlockSize() int { return 8 }
 
-func (c *TripleDESCipher) Name() string  { return "3des" }
-func (c *TripleDESCipher) KeySize() int  { return 24 }
+func (c *TripleDESCipher) Name() string   { return "3des" }
+func (c *TripleDESCipher) KeySize() int   { return 24 }
 func (c *TripleDESCipher) BlockSize() int { return 8 }
 
 func (c *DESCipher) Encrypt(key, iv, data []byte, mode CipherMode) ([]byte, error) {

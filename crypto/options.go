@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	corecrypto "github.com/yusiwen/myUtilities/core/crypto"
 )
@@ -43,11 +44,12 @@ type PasswdOptions struct {
 }
 
 type RsaOptions struct {
-	GenKey     RsaGenKeyOptions     `cmd:"" name:"gen-key" help:"Generate RSA key pair."`
-	EncryptCmd RsaEncryptOptions    `cmd:"" name:"encrypt" help:"RSA encrypt."`
-	DecryptCmd RsaDecryptOptions    `cmd:"" name:"decrypt" help:"RSA decrypt."`
-	SignCmd    RsaSignOptions       `cmd:"" name:"sign" help:"RSA sign."`
-	VerifyCmd  RsaVerifyOptions     `cmd:"" name:"verify" help:"RSA verify signature."`
+	GenKey     RsaGenKeyOptions  `cmd:"" name:"gen-key" help:"Generate RSA key pair."`
+	EncryptCmd RsaEncryptOptions `cmd:"" name:"encrypt" help:"RSA encrypt."`
+	DecryptCmd RsaDecryptOptions `cmd:"" name:"decrypt" help:"RSA decrypt."`
+	SignCmd    RsaSignOptions    `cmd:"" name:"sign" help:"RSA sign."`
+	VerifyCmd  RsaVerifyOptions  `cmd:"" name:"verify" help:"RSA verify signature."`
+	CertCmd    RsaCertOptions    `cmd:"" name:"cert" help:"Generate self-signed RSA certificate."`
 }
 
 type RsaGenKeyOptions struct {
@@ -78,11 +80,22 @@ type RsaSignOptions struct {
 }
 
 type RsaVerifyOptions struct {
-	PubKeyFile      string `name:"pub-key-file" required:"" help:"Path to public key PEM file."`
-	Input           string `name:"input" help:"Input data string." xor:"input"`
-	InputFile       string `name:"input-file" help:"Path to input file." xor:"input"`
-	Signature       string `name:"signature" help:"Hex-encoded signature." xor:"sig"`
-	SignatureFile   string `name:"signature-file" help:"Path to signature file." xor:"sig"`
+	PubKeyFile    string `name:"pub-key-file" required:"" help:"Path to public key PEM file."`
+	Input         string `name:"input" help:"Input data string." xor:"input"`
+	InputFile     string `name:"input-file" help:"Path to input file." xor:"input"`
+	Signature     string `name:"signature" help:"Hex-encoded signature." xor:"sig"`
+	SignatureFile string `name:"signature-file" help:"Path to signature file." xor:"sig"`
+}
+
+type RsaCertOptions struct {
+	CN      string `name:"cn" required:"" help:"Common Name (e.g. localhost, example.com)."`
+	SAN     string `name:"san" help:"Subject Alternative Names, comma-separated (e.g. '*.local,192.168.1.1')."`
+	Org     string `name:"org" help:"Organization name."`
+	Days    int    `name:"days" default:"365" help:"Validity in days."`
+	Bits    int    `name:"bits" default:"2048" help:"Key size in bits (min 1024)."`
+	CA      bool   `name:"ca" help:"Generate a CA certificate instead of a TLS server certificate."`
+	CertOut string `name:"cert-out" default:"cert.pem" help:"Certificate output path."`
+	KeyOut  string `name:"key-out" default:"key.pem" help:"Private key output path."`
 }
 
 func (o *PasswdOptions) Run() error {
@@ -191,6 +204,56 @@ func (o *RsaVerifyOptions) Run() error {
 		return err
 	}
 	fmt.Println("Signature verified OK")
+	return nil
+}
+
+func (o *RsaCertOptions) Run() error {
+	if err := requireNotExist(o.CertOut); err != nil {
+		return err
+	}
+	if err := requireNotExist(o.KeyOut); err != nil {
+		return err
+	}
+
+	var sans []string
+	if o.SAN != "" {
+		sans = strings.Split(o.SAN, ",")
+	}
+
+	params := corecrypto.CertParams{
+		CommonName:   o.CN,
+		Organization: o.Org,
+		SANs:         sans,
+		Bits:         o.Bits,
+		ValidDays:    o.Days,
+		IsCA:         o.CA,
+	}
+
+	certPEM, keyPEM, err := (&corecrypto.RSACipher{}).GenerateSelfSignedCert(params)
+	if err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(o.CertOut, certPEM, 0644); err != nil {
+		return fmt.Errorf("write cert: %w", err)
+	}
+	if err := os.WriteFile(o.KeyOut, keyPEM, 0600); err != nil {
+		return fmt.Errorf("write key: %w", err)
+	}
+
+	certType := "server"
+	if o.CA {
+		certType = "CA"
+	}
+	fmt.Printf("%s certificate generated (%d bits, %d days)\n  cert: %s\n  key:  %s\n",
+		certType, o.Bits, o.Days, o.CertOut, o.KeyOut)
+	return nil
+}
+
+func requireNotExist(path string) error {
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", path)
+	}
 	return nil
 }
 

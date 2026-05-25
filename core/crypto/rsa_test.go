@@ -2,11 +2,14 @@ package crypto
 
 import (
 	"bytes"
-	"testing"
-
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
+	"strings"
+	"testing"
+	"time"
 )
 
 func TestRSAKeyGeneration(t *testing.T) {
@@ -118,6 +121,81 @@ func TestRSAEncryptTooLarge(t *testing.T) {
 	_, err = c.Encrypt(pub, large)
 	if err == nil {
 		t.Fatal("expected error for oversized data")
+	}
+}
+
+func TestRSAGenerateSelfSignedCert(t *testing.T) {
+	c := &RSACipher{}
+	params := CertParams{
+		CommonName: "localhost",
+		Bits:       2048,
+		ValidDays:  1,
+		SANs:       []string{"localhost", "*.local", "127.0.0.1"},
+	}
+
+	certPEM, keyPEM, err := c.GenerateSelfSignedCert(params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(certPEM) == 0 || len(keyPEM) == 0 {
+		t.Fatal("empty cert or key")
+	}
+	if !strings.Contains(string(certPEM), "-----BEGIN CERTIFICATE-----") {
+		t.Fatal("cert PEM header missing")
+	}
+	if !strings.Contains(string(keyPEM), "-----BEGIN PRIVATE KEY-----") {
+		t.Fatal("private key PEM header missing")
+	}
+
+	block, _ := pem.Decode(certPEM)
+	if block == nil || block.Type != "CERTIFICATE" {
+		t.Fatal("invalid cert PEM block")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("parse cert: %v", err)
+	}
+
+	if cert.Subject.CommonName != "localhost" {
+		t.Fatalf("expected CN 'localhost', got %q", cert.Subject.CommonName)
+	}
+	if !cert.NotAfter.After(time.Now()) {
+		t.Fatal("cert expired")
+	}
+	if cert.IsCA {
+		t.Fatal("expected non-CA cert")
+	}
+	if len(cert.DNSNames) < 2 {
+		t.Fatal("expected SAN DNS names")
+	}
+	if len(cert.IPAddresses) < 1 {
+		t.Fatal("expected SAN IP addresses")
+	}
+}
+
+func TestRSAGenerateSelfSignedCACert(t *testing.T) {
+	c := &RSACipher{}
+	certPEM, _, err := c.GenerateSelfSignedCert(CertParams{
+		CommonName: "My CA",
+		Bits:       2048,
+		ValidDays:  7,
+		IsCA:       true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	block, _ := pem.Decode(certPEM)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !cert.IsCA {
+		t.Fatal("expected CA cert")
+	}
+	if cert.BasicConstraintsValid != true {
+		t.Fatal("expected basic constraints")
 	}
 }
 
