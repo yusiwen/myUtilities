@@ -64,8 +64,31 @@ myutilities.go
 ├── Mocker (cmd: mock)          - Mock servers for testing
 ├── Proxy (cmd: proxy)          - Database proxy
 ├── Runner (cmd: run)           - Command runner with display
-└── Wol (cmd: wol)              - Wake-on-LAN HTTP server with agent
+├── Wol (cmd: wol)              - Wake-on-LAN HTTP server with agent
+├── Crypto (cmd: crypto)        - Crypto utilities
+├── Gateway (cmd: gateway)      - Unified gateway server
+├── Es (cmd: es)                - Elasticsearch query tool
+└── Commit (cmd: commit)        - AI-generated conventional commit messages
 ```
+
+### Design Convention
+
+Command packages (`<cmd>/`) are **CLI wrappers only**. They handle:
+
+- CLI flag definitions (Kong struct tags)
+- Configuration loading
+- User interaction (prompts, confirmations, colored output)
+- Delegation to core packages
+
+Business logic, API clients, and platform operations belong in `core/` packages, exposed as
+public functions and structs so they can be reused across commands or tested independently.
+
+Example — `commit/` → `core/openai/` + `core/git/`:
+
+- `commit/command.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
+- `commit/config.go` — CLI-specific config (`CommitConfig`, `~/.config/mu/commit.json`)
+- `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`
+- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetStagedNameStatus()`
 
 ### Core Packages
 
@@ -87,6 +110,13 @@ The `core/` directory contains reusable business logic:
 - `core/store/` - BoltDB key-value store
   - `Store` struct with mutex-guarded BoltDB operations
   - Buckets: `Aliases` (hostname→MAC), `Boot` (boot timestamps), `Status` (boot/shutdown state)
+- `core/openai/` - OpenAI-compatible chat completions API client
+  - `Client` struct with `ChatCompletion(systemPrompt, userPrompt)` → `*ChatResult`
+  - `ChatResult` includes content, prompt tokens, completion tokens, total tokens
+- `core/git/` - Git operations
+  - `CheckPreflight()` — verifies git is installed and in a repository
+  - `GetStagedDiff()` — returns staged diff + stat with truncation
+  - `GetStagedNameStatus()` — returns `git diff --staged --name-status`
 
 ### Command Packages
 
@@ -114,6 +144,13 @@ The `core/` directory contains reusable business logic:
   - `agent` subcommand: sends boot/shutdown/register notifications to the WOL server with retry backoff
   - `interfaces` subcommand: lists available network interfaces with WOL suitability info
   - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `wol/frontend/`)
+
+- `commit/` - AI-generated conventional commit messages
+  - Uses `core/openai` for ChatCompletion API calls
+  - Uses `core/git` for diff gathering and preflight checks
+  - Supports `--diff-strategy` (auto/full/summary) for different diff sizes
+  - Interactive confirmation with editor-based edit support
+  - Colorized output via `github.com/morikuni/aec`
 
 ### Key Dependencies
 
