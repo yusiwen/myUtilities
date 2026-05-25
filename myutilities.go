@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/alecthomas/kong"
+	"github.com/yusiwen/myUtilities/commit"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/gateway"
@@ -22,4 +23,5 @@ type MyUtilities struct {
 	Es        es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
 	Gateway   gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Crypto    crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
+	Commit    commit.Options              `cmd:"" name:"commit" help:"Generate conventional commit message using AI."`
 }

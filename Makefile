@@ -15,6 +15,9 @@ PLATFORM_LIST = \
 	linux-amd64 \
 	linux-armv8
 
+default:
+	CGO_ENABLED=0 go build -trimpath -o $(BINDIR)/$(NAME) .
+
 frontend:
 	@echo "Building WOL Svelte frontend..."
 	cd $(FRONTEND_DIR) && npm install --silent && npm run build
@@ -22,6 +25,8 @@ frontend:
 	@echo "Building ES Svelte frontend..."
 	cd $(ES_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo '{"version": "$(VERSION)"}' > $(ES_FRONTEND_DIR)/dist/version.json
+
+build: frontend default
 
 WINDOWS_ARCH_LIST = \
 	windows-amd64
