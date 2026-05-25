@@ -36,7 +36,7 @@ func GetStagedDiff() (*DiffResult, error) {
 		return nil, err
 	}
 
-	statOut, err := runGit("diff", "--staged", "--stat")
+	statOut, err := runGitColored("diff", "--staged", "--stat")
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +61,11 @@ func runGit(args ...string) (string, error) {
 		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
 	return string(out), nil
+}
+
+func runGitColored(args ...string) (string, error) {
+	fullArgs := append([]string{"-c", "color.ui=always"}, args...)
+	return runGit(fullArgs...)
 }
 
 func truncate(s string, maxLen int) string {

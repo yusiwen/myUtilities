@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/morikuni/aec"
 	"github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
 )
@@ -21,6 +22,28 @@ Rules:
 - Each bullet point should be concise, under 80 characters
 - If the diff involves many files, use a higher-level summary
 - Do not wrap the message in quotes, backticks, or code blocks`
+
+var noColor bool
+
+func init() {
+	if os.Getenv("NO_COLOR") != "" {
+		noColor = true
+	}
+}
+
+func faint(s string) string {
+	if noColor {
+		return s
+	}
+	return aec.Apply(s, aec.Faint)
+}
+
+func bright(s string) string {
+	if noColor {
+		return s
+	}
+	return aec.Apply(s, aec.WhiteF)
+}
 
 type Options struct {
 	Model   string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
@@ -62,7 +85,10 @@ func (o *Options) Run() error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Generating commit message from diff (%d chars)...\n", len([]rune(diff.Diff)))
+	fmt.Fprintf(os.Stderr, "%s%s%s\n",
+		faint("Generating commit message from diff ("),
+		bright(fmt.Sprintf("%d", len([]rune(diff.Diff)))),
+		faint(" chars)..."))
 
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
 
@@ -74,7 +100,8 @@ func (o *Options) Run() error {
 
 	sep := strings.Repeat("─", 50)
 	fmt.Printf("\n%s\n%s\n%s\n\n%s\n", sep, result.Content, sep, diff.Stat)
-	fmt.Printf("Tokens: %d prompt + %d completion = %d total\n", result.PromptTokens, result.CompletionTokens, result.TotalTokens)
+	fmt.Println(bright(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total",
+		result.PromptTokens, result.CompletionTokens, result.TotalTokens)))
 
 	msg := result.Content
 
@@ -106,7 +133,7 @@ func confirmAndEdit(msg string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Print("Commit with this message? (y)es / (e)dit / (n)o: ")
+		fmt.Print(faint("Commit with this message? (y)es / (e)dit / (n)o: "))
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			return "", fmt.Errorf("failed to read input: %w", err)
@@ -115,7 +142,7 @@ func confirmAndEdit(msg string) (string, error) {
 
 		switch {
 		case response == "n" || response == "no":
-			fmt.Println("Aborted.")
+			fmt.Println(faint("Aborted."))
 			return "", nil
 		case response == "e" || response == "edit":
 			edited, err := openEditor(msg)
@@ -124,7 +151,7 @@ func confirmAndEdit(msg string) (string, error) {
 			}
 			edited = strings.TrimSpace(edited)
 			if edited == "" {
-				fmt.Println("Aborted: empty message.")
+				fmt.Println(faint("Aborted: empty message."))
 				return "", nil
 			}
 			if edited == msg {
@@ -136,7 +163,7 @@ func confirmAndEdit(msg string) (string, error) {
 		case response == "y" || response == "yes" || response == "":
 			return msg, nil
 		default:
-			fmt.Println("Invalid response.")
+			fmt.Println(faint("Invalid response."))
 		}
 	}
 }
