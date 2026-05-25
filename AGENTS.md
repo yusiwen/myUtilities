@@ -142,7 +142,7 @@ When making a new release:
 3. Update `VERSION` in `install.sh` to the new tag (e.g. `v1.0.8`)
 4. Update any version references in `README.md`
 5. Commit with message with new version, e.g. `chore: bump version to v1.0.8`
-6. Tag the commit with new version, e.g. `git tag v1.0.8`
+6. Tag the commit with new version, e.g. `git tag -a v1.0.8 -m "v1.0.8"` (use `-a` + `-m` to avoid triggering interactive editor for tag message)
 7. Push: `git push && git push --tags`
 8. Let the CI/CD workflow create the GitHub release with built assets
 
