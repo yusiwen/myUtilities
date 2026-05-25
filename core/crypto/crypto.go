@@ -111,3 +111,62 @@ func padOrTruncate(data []byte, size int) []byte {
 	copy(padded, data)
 	return padded
 }
+
+func RunCipher(c Cipher, opts *CommonOptions, mode CipherMode) error {
+	key, err := opts.ResolveKey(c.KeySize())
+	if err != nil {
+		return err
+	}
+
+	var iv []byte
+	if mode == ModeCBC {
+		iv, err = opts.ResolveIV(c.BlockSize())
+		if err != nil {
+			return err
+		}
+	}
+
+	raw, err := opts.ReadInput()
+	if err != nil {
+		return err
+	}
+
+	data, err := opts.ParseInput(raw)
+	if err != nil {
+		return err
+	}
+
+	var result []byte
+	if opts.Encrypt {
+		result, err = c.Encrypt(key, iv, data, mode)
+	} else if opts.Decrypt {
+		result, err = c.Decrypt(key, iv, data, mode)
+	} else {
+		return fmt.Errorf("either --encrypt or --decrypt is required")
+	}
+	if err != nil {
+		return err
+	}
+
+	formatted, err := opts.FormatOutput(result)
+	if err != nil {
+		return err
+	}
+
+	return opts.WriteOutput(formatted)
+}
+
+func ReadFile(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	return data, nil
+}
+
+func WriteFile(path string, data []byte, perm os.FileMode) error {
+	if err := os.WriteFile(path, data, perm); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
