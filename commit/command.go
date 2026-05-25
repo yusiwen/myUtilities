@@ -67,13 +67,16 @@ func (o *Options) Run() error {
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
 
 	userPrompt := "Generate a conventional commit message for this git diff:\n\n```diff\n" + diff.Diff + "\n```"
-	msg, err := client.ChatCompletion(systemPrompt, userPrompt)
+	result, err := client.ChatCompletion(systemPrompt, userPrompt)
 	if err != nil {
 		return err
 	}
 
 	sep := strings.Repeat("─", 50)
-	fmt.Printf("\n%s\n%s\n%s\n\n%s\n", sep, msg, sep, diff.Stat)
+	fmt.Printf("\n%s\n%s\n%s\n\n%s\n", sep, result.Content, sep, diff.Stat)
+	fmt.Printf("Tokens: %d prompt + %d completion = %d total\n", result.PromptTokens, result.CompletionTokens, result.TotalTokens)
+
+	msg := result.Content
 
 	if o.DryRun {
 		return nil

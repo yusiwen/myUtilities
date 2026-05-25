@@ -17,6 +17,13 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
+type ChatResult struct {
+	Content          string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+}
+
 type chatRequest struct {
 	Model    string        `json:"model"`
 	Messages []chatMessage `json:"messages"`
@@ -37,6 +44,11 @@ type chatResponse struct {
 		Message string `json:"message"`
 		Type    string `json:"type"`
 	} `json:"error,omitempty"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage,omitempty"`
 }
 
 func NewClient(baseURL, apiKey, model string) *Client {
@@ -48,7 +60,7 @@ func NewClient(baseURL, apiKey, model string) *Client {
 	}
 }
 
-func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (string, error) {
+func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, error) {
 	reqBody := chatRequest{
 		Model: c.Model,
 		Messages: []chatMessage{
@@ -59,13 +71,13 @@ func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (string, error)
 
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	url := strings.TrimRight(c.BaseURL, "/") + "/chat/completions"
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -75,30 +87,37 @@ func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (string, error)
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("API request failed: %w", err)
+		return nil, fmt.Errorf("API request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var chatResp chatResponse
 	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
-		return "", fmt.Errorf("failed to parse API response: %w", err)
+		return nil, fmt.Errorf("failed to parse API response: %w", err)
 	}
 
 	if chatResp.Error != nil {
-		return "", fmt.Errorf("API error: %s", chatResp.Error.Message)
+		return nil, fmt.Errorf("API error: %s", chatResp.Error.Message)
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("no response from API")
+		return nil, fmt.Errorf("no response from API")
 	}
 
 	msg := strings.TrimSpace(chatResp.Choices[0].Message.Content)
 	msg = strings.Trim(msg, "\"'`")
 
-	return msg, nil
+	result := &ChatResult{Content: msg}
+	if chatResp.Usage != nil {
+		result.PromptTokens = chatResp.Usage.PromptTokens
+		result.CompletionTokens = chatResp.Usage.CompletionTokens
+		result.TotalTokens = chatResp.Usage.TotalTokens
+	}
+
+	return result, nil
 }
