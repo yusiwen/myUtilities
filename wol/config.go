@@ -13,6 +13,7 @@ type WOLConfig struct {
 	Port      int    `json:"port"`
 	Token     string `json:"token"`
 	Interface string `json:"interface"`
+	Hostname  string `json:"hostname"`
 }
 
 func resolveConfigPath(raw string) (string, error) {

@@ -120,6 +120,19 @@ func (o *SetInterfaceOptions) Run() error {
 	return nil
 }
 
+func (o *SetHostnameOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.Hostname = o.Hostname
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL hostname set to: %s\n", o.Hostname)
+	return nil
+}
+
 func RegisterHandlers(mux *http.ServeMux, store *corestore.Store, o *ServeOptions) {
 	mux.HandleFunc("/api/wake/{hostname}", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -333,6 +346,12 @@ func (o *AgentOptions) resolveConfig() {
 	if o.Token == "" {
 		o.Token = cfg.Token
 	}
+	if o.Hostname == "" {
+		o.Hostname = cfg.Hostname
+	}
+	if o.Interface == "" {
+		o.Interface = cfg.Interface
+	}
 }
 
 func (o *AgentOptions) Run() error {
@@ -373,13 +392,13 @@ func (o *AgentOptions) Run() error {
 
 	if o.Register {
 		var macStr string
-		if o.Nic != "" {
-			iface, err := corenet.GetInterfaceByName(o.Nic)
+		if o.Interface != "" {
+			iface, err := corenet.GetInterfaceByName(o.Interface)
 			if err != nil {
 				return fmt.Errorf("agent: %v", err)
 			}
 			if iface.HardwareAddr == nil {
-				return fmt.Errorf("agent: interface %s has no MAC address", o.Nic)
+				return fmt.Errorf("agent: interface %s has no MAC address", o.Interface)
 			}
 			macStr = iface.HardwareAddr.String()
 		} else {
