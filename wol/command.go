@@ -70,85 +70,55 @@ func (o *ServeOptions) Run() error {
 	return http.ListenAndServe(addr, mux)
 }
 
-func (o *SetDBPathOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.DBPath = o.DBPath
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL DB path set to: %s\n", o.DBPath)
-	return nil
-}
-
-func (o *SetPortOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.Port = o.Port
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL port set to: %d\n", o.Port)
-	return nil
-}
-
-func (o *SetTokenOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.Token = o.Token
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Println("WOL token set")
-	return nil
-}
-
-func (o *SetInterfaceOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.Interface = o.Interface
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL interface set to: %s\n", o.Interface)
-	return nil
-}
-
-func (o *SetHostnameOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.Hostname = o.Hostname
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL hostname set to: %s\n", o.Hostname)
-	return nil
-}
-
-func (o *SetServerOptions) Run() error {
-	cfg, err := LoadConfig(setConfigPath)
-	if err != nil {
-		return err
-	}
-	cfg.Server = o.Server
-	if err := saveConfig(setConfigPath, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL server set to: %s\n", o.Server)
-	return nil
-}
-func (o *SetOptions) AfterApply(args ...any) error {
+func (o *ConfigOptions) AfterApply() error {
 	setConfigPath = o.Config
+	return nil
+}
+
+func (o *ConfigSetOptions) Run() error {
+	cfg, err := LoadConfig(setConfigPath)
+	if err != nil {
+		return err
+	}
+	if err := SetConfigValue(cfg, o.Key, o.Value); err != nil {
+		return err
+	}
+	if err := saveConfig(setConfigPath, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("%s set to: %s\n", o.Key, o.Value)
+	return nil
+}
+
+func (o *ConfigGetOptions) Run() error {
+	cfg, err := LoadConfig(setConfigPath)
+	if err != nil {
+		return err
+	}
+	val, ok := GetConfigValue(cfg, o.Key)
+	if !ok {
+		return fmt.Errorf("unknown config key: %q (valid: server, interface, db-path, port, token, hostname)", o.Key)
+	}
+	fmt.Println(val)
+	return nil
+}
+
+func (o *ConfigListOptions) Run() error {
+	cfg, err := LoadConfig(setConfigPath)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Config: %s\n\n", setConfigPath)
+	fmt.Printf("server    = %s\n", cfg.Server)
+	fmt.Printf("interface = %s\n", cfg.Interface)
+	fmt.Printf("db-path   = %s\n", cfg.DBPath)
+	fmt.Printf("port      = %d\n", cfg.Port)
+	if cfg.Token != "" {
+		fmt.Printf("token     = %s\n", cfg.Token)
+	}
+	if cfg.Hostname != "" {
+		fmt.Printf("hostname  = %s\n", cfg.Hostname)
+	}
 	return nil
 }
 

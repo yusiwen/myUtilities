@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -59,6 +60,49 @@ func LoadConfig(configPath string) (*WOLConfig, error) {
 		cfg.Port = 8080
 	}
 	return &cfg, nil
+}
+
+func SetConfigValue(cfg *WOLConfig, key, value string) error {
+	switch strings.ToLower(key) {
+	case "server":
+		cfg.Server = value
+	case "interface":
+		cfg.Interface = value
+	case "db-path":
+		cfg.DBPath = value
+	case "port":
+		port, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid port %q: %v", value, err)
+		}
+		cfg.Port = port
+	case "token":
+		cfg.Token = value
+	case "hostname":
+		cfg.Hostname = value
+	default:
+		return fmt.Errorf("unknown config key: %q (valid: server, interface, db-path, port, token, hostname)", key)
+	}
+	return nil
+}
+
+func GetConfigValue(cfg *WOLConfig, key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case "server":
+		return cfg.Server, true
+	case "interface":
+		return cfg.Interface, true
+	case "db-path":
+		return cfg.DBPath, true
+	case "port":
+		return strconv.Itoa(cfg.Port), true
+	case "token":
+		return cfg.Token, true
+	case "hostname":
+		return cfg.Hostname, true
+	default:
+		return "", false
+	}
 }
 
 func saveConfig(configPath string, cfg *WOLConfig) error {

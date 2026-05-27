@@ -1,37 +1,21 @@
 package wol
 
-type SetDBPathOptions struct {
-	DBPath string `arg:"" help:"Path to BoltDB file storing hostname to MAC mappings."`
+type ConfigSetOptions struct {
+	Key   string `arg:"" help:"Config key (server, interface, db-path, port, token, hostname)."`
+	Value string `arg:"" help:"Config value."`
 }
 
-type SetPortOptions struct {
-	Port int `arg:"" help:"HTTP server port for the WOL server."`
+type ConfigGetOptions struct {
+	Key string `arg:"" help:"Config key to show."`
 }
 
-type SetTokenOptions struct {
-	Token string `arg:"" help:"Pre-shared token for API authentication. Agents and frontend must send X-Auth-Token header."`
-}
+type ConfigListOptions struct{}
 
-type SetInterfaceOptions struct {
-	Interface string `arg:"" help:"Network interface name for WOL (e.g., br-lan on Linux, en0 on macOS)."`
-}
-
-type SetHostnameOptions struct {
-	Hostname string `arg:"" help:"Hostname used by agent for registration. Defaults to OS hostname if not set."`
-}
-
-type SetServerOptions struct {
-	Server string `arg:"" help:"WOL HTTP server URL for agent (e.g., http://192.168.1.100:8080)."`
-}
-
-type SetOptions struct {
-	Config    string              `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
-	Server    SetServerOptions    `cmd:"" name:"server" help:"Set the WOL server URL for agent."`
-	Interface SetInterfaceOptions `cmd:"" name:"interface" help:"Set the network interface for the WOL server."`
-	DBPath    SetDBPathOptions    `cmd:"" name:"db-path" help:"Set the BoltDB file path for the WOL server."`
-	Port      SetPortOptions      `cmd:"" name:"port" help:"Set the HTTP server port for the WOL server."`
-	Token     SetTokenOptions     `cmd:"" name:"token" help:"Set the pre-shared API token for the WOL server."`
-	Hostname  SetHostnameOptions  `cmd:"" name:"hostname" help:"Set the hostname for agent registration."`
+type ConfigOptions struct {
+	Config string            `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
+	Set    ConfigSetOptions  `cmd:"" name:"set" help:"Set a config value."`
+	Get    ConfigGetOptions  `cmd:"" name:"get" help:"Get a config value."`
+	List   ConfigListOptions `cmd:"" name:"list" help:"List all config values."`
 }
 
 type ServeOptions struct {
@@ -58,7 +42,7 @@ type InterfacesOptions struct {
 }
 
 type Options struct {
-	Set        SetOptions        `cmd:"" name:"set" help:"Configure WOL server settings."`
+	Config     ConfigOptions     `cmd:"" name:"config" help:"Configure WOL server settings."`
 	Serve      ServeOptions      `cmd:"" name:"serve" help:"Start WOL HTTP server."`
 	Agent      AgentOptions      `cmd:"" name:"agent" help:"Notify the WOL server of boot or shutdown events."`
 	Interfaces InterfacesOptions `cmd:"" name:"interfaces" help:"List available network interfaces."`
