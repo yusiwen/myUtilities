@@ -120,6 +120,19 @@ func (o *SetInterfaceOptions) Run() error {
 	return nil
 }
 
+func (o *SetServerOptions) Run() error {
+	cfg, err := LoadConfig(o.Config)
+	if err != nil {
+		return err
+	}
+	cfg.Server = o.Server
+	if err := saveConfig(o.Config, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL server set to: %s\n", o.Server)
+	return nil
+}
+
 func (o *SetHostnameOptions) Run() error {
 	cfg, err := LoadConfig(o.Config)
 	if err != nil {
@@ -343,6 +356,9 @@ func (o *AgentOptions) resolveConfig() {
 		log.Printf("Warning: could not load WOL config: %v", err)
 		return
 	}
+	if o.Server == "" {
+		o.Server = cfg.Server
+	}
 	if o.Token == "" {
 		o.Token = cfg.Token
 	}
@@ -356,6 +372,10 @@ func (o *AgentOptions) resolveConfig() {
 
 func (o *AgentOptions) Run() error {
 	o.resolveConfig()
+
+	if o.Server == "" {
+		return fmt.Errorf("agent: server URL is required either as an argument or in config file (~/.config/mu/wol-config.json)")
+	}
 
 	hostname := o.Hostname
 	if hostname == "" {

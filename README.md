@@ -59,15 +59,48 @@ mu wol serve en0 --port 8080
 # List available network interfaces
 mu wol interfaces
 mu wol interfaces -v  # verbose output
+```
 
-# Register this machine on the server (stores hostname→MAC mapping)
+#### Configuration
+
+WOL settings are persisted in `~/.config/mu/wol-config.json`.
+
+```bash
+# Set agent server URL (used by mu wol agent when no URL is given)
+mu wol set server http://192.168.1.100:8080
+
+# Set network interface for the WOL server
+mu wol set interface br-lan
+
+# Set HTTP server port
+mu wol set port 8080
+
+# Set BoltDB file path
+mu wol set db-path ~/.config/mu/bolt.db
+
+# Set API auth token
+mu wol set token my-secret-token
+
+# Set hostname for agent registration
+mu wol set hostname my-machine
+```
+
+#### Agent Notifications
+
+Send boot/shutdown events or register this machine on the WOL server. The server URL can be given inline or set once via `mu wol set server` and omitted afterwards.
+
+```bash
+# Register this machine (stores hostname→MAC mapping)
 mu wol agent --register http://192.168.1.100:8080
 
-# Send boot notification from a remote machine
+# Same, using server URL from config
+mu wol agent --register
+
+# Send boot notification
 mu wol agent --boot http://192.168.1.100:8080
 
-# Send shutdown notification from a remote machine
-mu wol agent --shutdown http://192.168.1.100:8080
+# Send shutdown notification (from config)
+mu wol agent --shutdown
 ```
 
 Flags `--register`, `--boot`, and `--shutdown` are mutually exclusive.

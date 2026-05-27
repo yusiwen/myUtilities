@@ -9,6 +9,7 @@ import (
 )
 
 type WOLConfig struct {
+	Server    string `json:"server"`
 	DBPath    string `json:"db_path"`
 	Port      int    `json:"port"`
 	Token     string `json:"token"`

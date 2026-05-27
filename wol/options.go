@@ -25,7 +25,13 @@ type SetHostnameOptions struct {
 	Hostname string `arg:"" help:"Hostname used by agent for registration. Defaults to OS hostname if not set."`
 }
 
+type SetServerOptions struct {
+	Config string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
+	Server string `arg:"" help:"WOL HTTP server URL for agent (e.g., http://192.168.1.100:8080)."`
+}
+
 type SetOptions struct {
+	Server    SetServerOptions    `cmd:"" name:"server" help:"Set the WOL server URL for agent."`
 	Interface SetInterfaceOptions `cmd:"" name:"interface" help:"Set the network interface for the WOL server."`
 	DBPath    SetDBPathOptions    `cmd:"" name:"db-path" help:"Set the BoltDB file path for the WOL server."`
 	Port      SetPortOptions      `cmd:"" name:"port" help:"Set the HTTP server port for the WOL server."`
@@ -43,7 +49,7 @@ type ServeOptions struct {
 
 type AgentOptions struct {
 	Config    string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
-	Server    string `arg:"" help:"WOL HTTP server URL (e.g., http://192.168.1.100:8080)."`
+	Server    string `arg:"" optional:"" help:"WOL HTTP server URL (e.g., http://192.168.1.100:8080). If not set, reads from config file."`
 	Hostname  string `help:"Hostname to register on boot. Defaults to OS hostname." default:""`
 	Token     string `help:"Override pre-shared token from config. Sent as X-Auth-Token header." default:""`
 	Boot      bool   `help:"Notify the server that this machine has booted."`
