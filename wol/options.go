@@ -1,36 +1,31 @@
 package wol
 
 type SetDBPathOptions struct {
-	Config string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
 	DBPath string `arg:"" help:"Path to BoltDB file storing hostname to MAC mappings."`
 }
 
 type SetPortOptions struct {
-	Config string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
-	Port   int    `arg:"" help:"HTTP server port for the WOL server."`
+	Port int `arg:"" help:"HTTP server port for the WOL server."`
 }
 
 type SetTokenOptions struct {
-	Config string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
-	Token  string `arg:"" help:"Pre-shared token for API authentication. Agents and frontend must send X-Auth-Token header."`
+	Token string `arg:"" help:"Pre-shared token for API authentication. Agents and frontend must send X-Auth-Token header."`
 }
 
 type SetInterfaceOptions struct {
-	Config    string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
 	Interface string `arg:"" help:"Network interface name for WOL (e.g., br-lan on Linux, en0 on macOS)."`
 }
 
 type SetHostnameOptions struct {
-	Config   string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
 	Hostname string `arg:"" help:"Hostname used by agent for registration. Defaults to OS hostname if not set."`
 }
 
 type SetServerOptions struct {
-	Config string `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
 	Server string `arg:"" help:"WOL HTTP server URL for agent (e.g., http://192.168.1.100:8080)."`
 }
 
 type SetOptions struct {
+	Config    string              `help:"Path to config JSON file." default:"~/.config/mu/wol-config.json"`
 	Server    SetServerOptions    `cmd:"" name:"server" help:"Set the WOL server URL for agent."`
 	Interface SetInterfaceOptions `cmd:"" name:"interface" help:"Set the network interface for the WOL server."`
 	DBPath    SetDBPathOptions    `cmd:"" name:"db-path" help:"Set the BoltDB file path for the WOL server."`

@@ -16,6 +16,8 @@ import (
 	corestore "github.com/yusiwen/myUtilities/core/store"
 )
 
+var setConfigPath string
+
 func (o *ServeOptions) requireToken(w http.ResponseWriter, r *http.Request) bool {
 	if o.Token == "" {
 		return true
@@ -69,12 +71,12 @@ func (o *ServeOptions) Run() error {
 }
 
 func (o *SetDBPathOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := LoadConfig(setConfigPath)
 	if err != nil {
 		return err
 	}
 	cfg.DBPath = o.DBPath
-	if err := saveConfig(o.Config, cfg); err != nil {
+	if err := saveConfig(setConfigPath, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("WOL DB path set to: %s\n", o.DBPath)
@@ -82,12 +84,12 @@ func (o *SetDBPathOptions) Run() error {
 }
 
 func (o *SetPortOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := LoadConfig(setConfigPath)
 	if err != nil {
 		return err
 	}
 	cfg.Port = o.Port
-	if err := saveConfig(o.Config, cfg); err != nil {
+	if err := saveConfig(setConfigPath, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("WOL port set to: %d\n", o.Port)
@@ -95,12 +97,12 @@ func (o *SetPortOptions) Run() error {
 }
 
 func (o *SetTokenOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := LoadConfig(setConfigPath)
 	if err != nil {
 		return err
 	}
 	cfg.Token = o.Token
-	if err := saveConfig(o.Config, cfg); err != nil {
+	if err := saveConfig(setConfigPath, cfg); err != nil {
 		return err
 	}
 	fmt.Println("WOL token set")
@@ -108,41 +110,45 @@ func (o *SetTokenOptions) Run() error {
 }
 
 func (o *SetInterfaceOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := LoadConfig(setConfigPath)
 	if err != nil {
 		return err
 	}
 	cfg.Interface = o.Interface
-	if err := saveConfig(o.Config, cfg); err != nil {
+	if err := saveConfig(setConfigPath, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("WOL interface set to: %s\n", o.Interface)
 	return nil
 }
 
+func (o *SetHostnameOptions) Run() error {
+	cfg, err := LoadConfig(setConfigPath)
+	if err != nil {
+		return err
+	}
+	cfg.Hostname = o.Hostname
+	if err := saveConfig(setConfigPath, cfg); err != nil {
+		return err
+	}
+	fmt.Printf("WOL hostname set to: %s\n", o.Hostname)
+	return nil
+}
+
 func (o *SetServerOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := LoadConfig(setConfigPath)
 	if err != nil {
 		return err
 	}
 	cfg.Server = o.Server
-	if err := saveConfig(o.Config, cfg); err != nil {
+	if err := saveConfig(setConfigPath, cfg); err != nil {
 		return err
 	}
 	fmt.Printf("WOL server set to: %s\n", o.Server)
 	return nil
 }
-
-func (o *SetHostnameOptions) Run() error {
-	cfg, err := LoadConfig(o.Config)
-	if err != nil {
-		return err
-	}
-	cfg.Hostname = o.Hostname
-	if err := saveConfig(o.Config, cfg); err != nil {
-		return err
-	}
-	fmt.Printf("WOL hostname set to: %s\n", o.Hostname)
+func (o *SetOptions) AfterApply(args ...any) error {
+	setConfigPath = o.Config
 	return nil
 }
 
