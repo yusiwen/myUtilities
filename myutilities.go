@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/alecthomas/kong"
-	"github.com/yusiwen/myUtilities/commit"
 	"github.com/yusiwen/myUtilities/completion"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/es"
@@ -26,6 +25,5 @@ type MyUtilities struct {
 	Git        git.Options                 `cmd:"" name:"git" help:"Git-related utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
-	Commit     commit.Options              `cmd:"" name:"commit" help:"Generate conventional commit message using AI."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

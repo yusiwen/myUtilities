@@ -1,4 +1,4 @@
-package commit
+package git
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/morikuni/aec"
-	"github.com/yusiwen/myUtilities/core/git"
+	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
 )
 
@@ -63,7 +63,7 @@ func buildSystemPrompt(lang string) string {
 	return prompt
 }
 
-type Options struct {
+type CommitOptions struct {
 	Model        string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
 	APIKey       string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
 	BaseURL      string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
@@ -73,7 +73,7 @@ type Options struct {
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
 }
 
-func (o *Options) Run() error {
+func (o *CommitOptions) Run() error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -96,11 +96,11 @@ func (o *Options) Run() error {
 			"  - ~/.config/mu/commit.json config file")
 	}
 
-	if err := git.CheckPreflight(); err != nil {
+	if err := coregit.CheckPreflight(); err != nil {
 		return err
 	}
 
-	diff, err := git.GetStagedDiff()
+	diff, err := coregit.GetStagedDiff()
 	if err != nil {
 		return err
 	}
@@ -109,7 +109,7 @@ func (o *Options) Run() error {
 
 	var nameStatus string
 	if strategy == "summary" || (strategy == "auto" && diff.RawLen > 16000) {
-		nameStatus, err = git.GetStagedNameStatus()
+		nameStatus, err = coregit.GetStagedNameStatus()
 		if err != nil {
 			return err
 		}
@@ -177,7 +177,7 @@ func buildUserPrompt(strategy, diff, stat, nameStatus string) string {
 	switch strategy {
 	case "medium":
 		return "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat) +
-			"\nAnd here are the first lines of the diff:\n\n```diff\n" + git.Truncate(diff, 3000) + "\n```"
+			"\nAnd here are the first lines of the diff:\n\n```diff\n" + coregit.Truncate(diff, 3000) + "\n```"
 	case "summary":
 		summary := "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat)
 		if nameStatus != "" {

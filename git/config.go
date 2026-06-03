@@ -1,4 +1,4 @@
-package commit
+package git
 
 import (
 	"encoding/json"
