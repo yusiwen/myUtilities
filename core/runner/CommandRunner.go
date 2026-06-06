@@ -49,12 +49,18 @@ func init() {
 	}
 }
 
-func (r *CommandRunner) Run() {
+func (r *CommandRunner) Run() error {
+	if len(r.Commands) == 0 {
+		return nil
+	}
+
+	r.wg.Add(3)
 	go r.runCommands()
 	go r.d.refreshBuffer()
 	go r.d.update()
 
 	r.wg.Wait()
+	return r.err
 }
 
 func (r *CommandRunner) runCommands() {
@@ -70,6 +76,7 @@ func (r *CommandRunner) runCommands() {
 		<-r.d.clear
 
 		if err != nil {
+			r.err = err
 			fmt.Println(aec.Apply("Error:", errColor))
 			fmt.Printf("%v\n", err)
 			break
@@ -99,6 +106,15 @@ func (r *CommandRunner) runCommand(command Command) error {
 		return err
 	}
 
+	stderrCh := make(chan string, 1)
+	go func() {
+		errMsgBytes, err := io.ReadAll(stderr)
+		if err != nil {
+			log.Printf("Failed to read stderr: %v", err)
+		}
+		stderrCh <- string(errMsgBytes)
+	}()
+
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		r.output <- scanner.Text()
@@ -108,12 +124,7 @@ func (r *CommandRunner) runCommand(command Command) error {
 		log.Printf("Output reading error: %v", err)
 	}
 
-	var errorMsg string
-	if errMsgBytes, err := io.ReadAll(stderr); err == nil {
-		errorMsg = string(errMsgBytes)
-	} else {
-		log.Printf("Failed to read stderr: %v", err)
-	}
+	errorMsg := <-stderrCh
 
 	if err := cmd.Wait(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -141,8 +152,9 @@ type CommandRunner struct {
 
 	Commands []Command
 
-	wg *sync.WaitGroup
-	d  *display
+	err error
+	wg  *sync.WaitGroup
+	d   *display
 }
 
 func NewCommandRunner(commands []Command) *CommandRunner {
@@ -150,7 +162,6 @@ func NewCommandRunner(commands []Command) *CommandRunner {
 	done := make(chan *CmdStatus)
 	clearDone := make(chan struct{})
 	wg := sync.WaitGroup{}
-	wg.Add(3)
 
 	return &CommandRunner{
 		Commands: commands,
