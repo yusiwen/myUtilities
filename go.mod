@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/alecthomas/kong v1.12.1
 	github.com/coreos/bbolt v1.3.1-coreos.6.0.20180223184059-4f5275f4ebbf
-	github.com/elastic/go-elasticsearch/v8 v8.19.5
+	github.com/elastic/go-elasticsearch/v8 v8.19.6
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/morikuni/aec v1.0.0
