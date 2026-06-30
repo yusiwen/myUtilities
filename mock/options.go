@@ -18,10 +18,7 @@ type OAuthServerOptions struct {
 }
 
 type DynamicServerOptions struct {
-	Port   int    `help:"Port to listen on." default:"8084"`
-	Method string `help:"HTTP method to match (GET/POST)." default:"GET"`
-	Path   string `help:"URL path to match." default:"/api/mock/reply"`
-	Resp   string `help:"Path to JSON response file." required:""`
+	Config string `help:"Path to dynamic server config file (JSON)." required:""`
 }
 
 type Options struct {

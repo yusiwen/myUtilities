@@ -32,7 +32,76 @@ mu install owner/repo --move
 mu mock mock-server --port 8081 --size 100
 mu mock file-server --port 8082 --local-dir ./uploads
 mu mock oauth-server --port 8083
+mu mock dynamic-server --config mock-config.json
 ```
+
+#### dynamic-server — Configurable multi-endpoint mock with hot-reload
+
+```bash
+mu mock dynamic-server --config mock-config.json
+```
+
+Define endpoints, response conditions, delays, and templates in a JSON config file:
+
+```jsonc
+{
+  "port": 8084,
+  "endpoints": [
+    {
+      "method": "POST",
+      "path": "/api/users",
+      "response": {
+        "status": 201,
+        "delay": "500ms",
+        "headers": { "X-Request-Id": "{{header.x-request-id}}" },
+        "body": "mock/create-user.json"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id",
+      "response": {
+        "status": 200,
+        "body": { "id": "{{path.id}}", "name": "User {{path.id}}", "page": "{{query.page}}" }
+      },
+      "responses": [
+        { "when": { "path.id": "404" }, "then": { "status": 404, "body": { "error": "not found" } } },
+        { "when": { "header.authorization": "" }, "then": { "status": 401, "body": { "error": "unauthorized" } } }
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "response": {
+        "body": "mock/list-users.json"
+      }
+    }
+  ]
+}
+```
+
+**Features:**
+
+| Feature | Description |
+|---|---|
+| Multi-endpoint | Any number of `method` + `path` combos in one config file |
+| Template variables | `{{path.id}}` `{{query.page}}` `{{header.authorization}}` `{{body.name}}` |
+| Custom status | `"status": 201`, `404`, `500`, etc. |
+| Custom headers | `"headers": {"X-Custom": "value"}` (also supports templates) |
+| Delay simulation | `"delay": "2s"` / `"500ms"` / `"1.5s"` |
+| Conditional responses | Choose different `then` based on `when` conditions matching path, query, header, or body |
+| Inline or file body | Body can be inline JSON or a file path (relative to config directory) |
+| Hot-reload | Config and response files are read on each request — modify without restart |
+
+**Template sources:**
+
+| Source | Syntax | Example |
+|---|---|---|
+| URL path param | `{{path.xxx}}` | `/api/users/:id` → `{{path.id}}` |
+| Query string | `{{query.xxx}}` | `?page=1` → `{{query.page}}` |
+| Request header | `{{header.xxx}}` | `Authorization: Bearer x` → `{{header.authorization}}` |
+| JSON body | `{{body.xxx}}` | `{"name":"alice"}` → `{{body.name}}` |
+| Nested body | `{{body.x.y.z}}` | `{"user":{"name":"alice"}}` → `{{body.user.name}}` |
 
 ### proxy — Database proxy with failover
 
