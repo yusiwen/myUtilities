@@ -17,8 +17,16 @@ type OAuthServerOptions struct {
 	Port int `help:"Port to listen on." default:"8083"`
 }
 
+type DynamicServerOptions struct {
+	Port   int    `help:"Port to listen on." default:"8084"`
+	Method string `help:"HTTP method to match (GET/POST)." default:"GET"`
+	Path   string `help:"URL path to match." default:"/api/mock/reply"`
+	Resp   string `help:"Path to JSON response file." required:""`
+}
+
 type Options struct {
-	FileServer  FileServerOptions  `cmd:"" name:"file-server" help:"Start a mock file server to receive files."`
-	MockServer  MockServerOptions  `cmd:"" name:"mock-server" help:"Start a mock server to receive requests."`
-	OAuthServer OAuthServerOptions `cmd:"" name:"oauth-server" help:"Start a mock oauth server to receive requests."`
+	FileServer    FileServerOptions    `cmd:"" name:"file-server" help:"Start a mock file server to receive files."`
+	MockServer    MockServerOptions    `cmd:"" name:"mock-server" help:"Start a mock server to receive requests."`
+	OAuthServer   OAuthServerOptions   `cmd:"" name:"oauth-server" help:"Start a mock oauth server to receive requests."`
+	DynamicServer DynamicServerOptions `cmd:"" name:"dynamic-server" help:"Start a dynamic mock server with configurable method, path and response."`
 }
