@@ -18,7 +18,8 @@ type OAuthServerOptions struct {
 }
 
 type DynamicServerOptions struct {
-	Config string `help:"Path to dynamic server config file (JSON)." required:""`
+	Config  string `help:"Path to dynamic server config file (JSON)." required:""`
+	Verbose bool   `help:"Print request and response details."`
 }
 
 type Options struct {

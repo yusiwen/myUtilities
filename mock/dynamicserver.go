@@ -61,7 +61,7 @@ func (o *DynamicServerOptions) Run() error {
 		}
 		ep.Method = strings.ToUpper(ep.Method)
 		pattern := toGoPattern(ep.Path)
-		mux.HandleFunc(ep.Method+" "+pattern, makeHandler(ep, configDir))
+		mux.HandleFunc(ep.Method+" "+pattern, makeHandler(ep, configDir, o.Verbose))
 	}
 
 	fmt.Printf("Dynamic mock server listening on :%d\n", config.Port)
@@ -217,10 +217,30 @@ func resolveBody(body interface{}, ctx *requestContext, baseDir string) ([]byte,
 	return []byte(resolved), nil
 }
 
-func makeHandler(ep *EndpointConfig, baseDir string) http.HandlerFunc {
+func makeHandler(ep *EndpointConfig, baseDir string, verbose bool) http.HandlerFunc {
 	pathParams := extractPathParams(ep.Path)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		rawBody, _ := io.ReadAll(r.Body)
+		if len(rawBody) > 0 {
+			r.Body = io.NopCloser(bytes.NewBuffer(rawBody))
+		}
+
+		if verbose {
+			fmt.Printf("---\n→ %s %s\n", r.Method, r.URL.RequestURI())
+			for k, v := range r.Header {
+				fmt.Printf("  %s: %s\n", k, v[0])
+			}
+			if len(rawBody) > 0 {
+				var pretty bytes.Buffer
+				if json.Indent(&pretty, rawBody, "", "  ") == nil {
+					fmt.Printf("  Body:\n%s\n", pretty.Bytes())
+				} else {
+					fmt.Printf("  Body: %s\n", rawBody)
+				}
+			}
+		}
+
 		ctx := buildRequestContext(r, pathParams)
 
 		resp := selectResponse(ep, ctx)
@@ -253,6 +273,23 @@ func makeHandler(ep *EndpointConfig, baseDir string) http.HandlerFunc {
 		if status == 0 {
 			status = http.StatusOK
 		}
+
+		if verbose {
+			delayStr := ""
+			if resp.Delay != "" {
+				delayStr = fmt.Sprintf(" (%s)", resp.Delay)
+			}
+			fmt.Printf("← %d%s\n", status, delayStr)
+			if len(body) > 0 {
+				var pretty bytes.Buffer
+				if json.Indent(&pretty, body, "", "  ") == nil {
+					fmt.Printf("%s\n", pretty.Bytes())
+				} else {
+					fmt.Printf("  %s\n", body)
+				}
+			}
+		}
+
 		w.WriteHeader(status)
 		if len(body) > 0 {
 			w.Write(body)
