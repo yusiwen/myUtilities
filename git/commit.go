@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/morikuni/aec"
 	coregit "github.com/yusiwen/myUtilities/core/git"
@@ -69,6 +70,7 @@ type CommitOptions struct {
 	BaseURL      string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
 	DryRun       bool   `help:"Print the generated message without committing." short:"n"`
 	Yes          bool   `help:"Skip confirmation and commit directly." short:"y"`
+	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
 }
@@ -121,11 +123,28 @@ func (o *CommitOptions) Run() error {
 		faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
+	client.DebugWriter = os.Stderr
 
+	sysPrompt := buildSystemPrompt(o.Lang)
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
-	result, err := client.ChatCompletion(buildSystemPrompt(o.Lang), userPrompt)
+
+	if o.Verbose {
+		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
+		fmt.Fprintln(os.Stderr, sysPrompt)
+		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
+		fmt.Fprintln(os.Stderr, userPrompt)
+	}
+
+	start := time.Now()
+	result, err := client.ChatCompletion(sysPrompt, userPrompt)
+	elapsed := time.Since(start)
 	if err != nil {
 		return err
+	}
+
+	if o.Verbose {
+		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
+		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
 	}
 
 	sep := strings.Repeat("─", 50)

@@ -11,10 +11,12 @@ import (
 )
 
 type Client struct {
-	BaseURL    string
-	APIKey     string
-	Model      string
-	HTTPClient *http.Client
+	BaseURL         string
+	APIKey          string
+	Model           string
+	HTTPClient      *http.Client
+	DebugWriter     io.Writer
+	DisableThinking bool
 }
 
 type ChatResult struct {
@@ -25,8 +27,9 @@ type ChatResult struct {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []chatMessage `json:"messages"`
+	Model    string             `json:"model"`
+	Messages []chatMessage      `json:"messages"`
+	Thinking *map[string]string `json:"thinking,omitempty"`
 }
 
 type chatMessage struct {
@@ -52,12 +55,16 @@ type chatResponse struct {
 }
 
 func NewClient(baseURL, apiKey, model string) *Client {
-	return &Client{
+	c := &Client{
 		BaseURL:    baseURL,
 		APIKey:     apiKey,
 		Model:      model,
 		HTTPClient: &http.Client{Timeout: 60 * time.Second},
 	}
+	if strings.Contains(strings.ToLower(baseURL), "deepseek") {
+		c.DisableThinking = true
+	}
+	return c
 }
 
 func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, error) {
@@ -69,9 +76,19 @@ func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, e
 		},
 	}
 
+	if c.DisableThinking {
+		reqBody.Thinking = &map[string]string{"type": "disabled"}
+	}
+
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	if c.DebugWriter != nil {
+		pretty, _ := json.MarshalIndent(reqBody, "", "  ")
+		fmt.Fprintln(c.DebugWriter, "─── Request JSON ───")
+		fmt.Fprintln(c.DebugWriter, string(pretty))
 	}
 
 	url := strings.TrimRight(c.BaseURL, "/") + "/chat/completions"
@@ -94,6 +111,11 @@ func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, e
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if c.DebugWriter != nil {
+		fmt.Fprintln(c.DebugWriter, "─── Response JSON ───")
+		fmt.Fprintln(c.DebugWriter, string(respBytes))
 	}
 
 	var chatResp chatResponse
