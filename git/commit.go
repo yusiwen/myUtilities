@@ -123,12 +123,12 @@ func (o *CommitOptions) Run() error {
 		faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
 	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
-	client.DebugWriter = os.Stderr
 
 	sysPrompt := buildSystemPrompt(o.Lang)
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
 
 	if o.Verbose {
+		client.DebugWriter = os.Stderr
 		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
 		fmt.Fprintln(os.Stderr, sysPrompt)
 		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
