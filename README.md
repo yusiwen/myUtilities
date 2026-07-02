@@ -117,6 +117,37 @@ mu proxy db --port 1521 \
 mu run --commands "echo hello" --commands "ls -la"
 ```
 
+### git commit — AI-generated conventional commit messages
+
+Generates a conventional commit message from staged changes using an LLM.
+
+```bash
+# Generate and confirm
+mu git commit
+
+# Skip confirmation (auto-commit)
+mu git commit --yes
+
+# Chinese commit message
+mu git commit --lang cn
+
+# Debug: print full prompt, API request/response, timing
+mu git commit --verbose
+
+# Dry run: print message without committing
+mu git commit --dry-run
+```
+
+Configuration at `~/.config/mu/commit.json`:
+
+```json
+{
+  "base_url": "https://api.deepseek.com/v1",
+  "api_key": "sk-xxx",
+  "model": "deepseek-v4-flash"
+}
+```
+
 ### wol — Wake-on-LAN HTTP server
 
 Starts an HTTP server with a Svelte frontend and REST API for managing WOL aliases and tracking host status (boot/shutdown).
