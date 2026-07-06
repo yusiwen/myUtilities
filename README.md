@@ -148,6 +148,31 @@ Configuration at `~/.config/mu/commit.json`:
 }
 ```
 
+### jar info — Analyze JAR files
+
+Parses all `.class` files inside a JAR and determines the minimum required JDK version from the class file version numbers.
+
+```bash
+# Show min JDK version and class count
+mu jar info app.jar
+
+# Show per-version breakdown
+mu jar info --verbose app.jar
+```
+
+```
+$ mu jar info app.jar
+Target JDK: 11
+Classes:    342
+
+$ mu jar info --verbose app.jar
+Target JDK: 11
+Classes:    342
+Version breakdown:
+  Java 8  (52):   10
+  Java 11 (55):   332
+```
+
 ### wol — Wake-on-LAN HTTP server
 
 Starts an HTTP server with a Svelte frontend and REST API for managing WOL aliases and tracking host status (boot/shutdown).
