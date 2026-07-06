@@ -13,6 +13,7 @@ require (
 	github.com/sabhiram/go-wol v0.0.0-20250815165103-eaddd4c17972
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/tjfoc/gmsm v1.4.1
+	golang.org/x/term v0.31.0
 )
 
 require (

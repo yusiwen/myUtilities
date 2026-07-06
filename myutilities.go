@@ -8,6 +8,7 @@ import (
 	"github.com/yusiwen/myUtilities/gateway"
 	"github.com/yusiwen/myUtilities/git"
 	"github.com/yusiwen/myUtilities/installer"
+	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/proxy"
 	"github.com/yusiwen/myUtilities/runner"
@@ -23,6 +24,7 @@ type MyUtilities struct {
 	Wol        wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`
 	Es         es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
 	Git        git.Options                 `cmd:"" name:"git" help:"Git-related utilities."`
+	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
