@@ -2,21 +2,15 @@
 
 Potential features for future consideration, ordered by implementation priority.
 
+## Status
+
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | `mu serve` — Static file server | ✅ Done |
+
 ## Proposed Features
 
-### 1. `mu serve` — Static file server
-
-A Go equivalent of `python -m http.server`. Serves a local directory over HTTP with
-optional CORS headers.
-
-```
-mu serve ./dist --port 3000 --cors
-```
-
-**Depends on:** `net/http` (stdlib)
-**Complexity:** Low (single file, ~50 lines)
-
----
+### 2. `mu encode` — Encoding/decoding toolbox
 
 ### 2. `mu encode` — Encoding/decoding toolbox
 
