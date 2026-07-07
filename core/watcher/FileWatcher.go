@@ -66,8 +66,15 @@ func (w *FileWatcher) Stop() {
 }
 
 func (w *FileWatcher) List() ([]interface{}, error) {
-	// 实际实现需要扫描文件系统
-	return []interface{}{}, nil
+	stateMap, err := scanPath(w.path)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]interface{}, 0, len(stateMap))
+	for path := range stateMap {
+		result = append(result, path)
+	}
+	return result, nil
 }
 
 // getFileState 获取单个文件的状态
