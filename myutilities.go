@@ -11,6 +11,7 @@ import (
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/proxy"
+	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/runner"
 	"github.com/yusiwen/myUtilities/serve"
 	"github.com/yusiwen/myUtilities/wol"
@@ -20,6 +21,7 @@ type MyUtilities struct {
 	Version    kong.VersionFlag            `short:"v" help:"Print the version number"`
 	Installer  installer.Options           `cmd:"" name:"install" help:"Install binary from GitHub release."`
 	Mocker     mock.Options                `cmd:"" name:"mock" help:"Mockers."`
+	Qrcode     qrcode.Options              `cmd:"" name:"qrcode" help:"Generate QR codes."`
 	Serve      serve.Options               `cmd:"" name:"serve" help:"Start a static file server."`
 	Proxy      proxy.Options               `cmd:"" name:"proxy" help:"Proxies."`
 	Runner     runner.CommandRunnerOptions `cmd:"" name:"run" help:"Run commands."`
