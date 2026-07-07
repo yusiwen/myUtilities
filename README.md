@@ -148,6 +148,34 @@ Configuration at `~/.config/mu/commit.json`:
 }
 ```
 
+### qrcode — Generate QR codes
+
+Encode text or file content as a QR code. Output to terminal (Unicode) or save as PNG.
+
+```bash
+# Terminal output
+mu qrcode "https://example.com"
+
+# Pipe from stdin
+cat xxxx.conf | mu qrcode
+mu qrcode < xxxx.conf
+
+# Save as PNG
+mu qrcode -o qrcode.png "https://example.com"
+
+# Error correction level
+mu qrcode --level high "data"
+```
+
+Verify decoded content:
+
+```bash
+sudo apt install zbar-tools
+mu qrcode -o /tmp/qr.png "https://example.com"
+zbarimg /tmp/qr.png
+# QR-Code:https://example.com
+```
+
 ### serve — Static file server
 
 Start an HTTP static file server for a local directory. Useful for previewing static sites or sharing files over LAN.
