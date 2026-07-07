@@ -14,6 +14,7 @@ import (
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/runner"
 	"github.com/yusiwen/myUtilities/serve"
+	"github.com/yusiwen/myUtilities/watch"
 	"github.com/yusiwen/myUtilities/wol"
 )
 
@@ -28,6 +29,7 @@ type MyUtilities struct {
 	Wol        wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`
 	Es         es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
 	Git        git.Options                 `cmd:"" name:"git" help:"Git-related utilities."`
+	Watch      watch.Options               `cmd:"" name:"watch" help:"Watch resources for changes."`
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
