@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -31,21 +32,58 @@ func landingPage(hasMock bool) string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mu Gateway</title>
 <style>
+  :root {
+    --bg: #1a1a2e;
+    --surface: #16213e;
+    --surface2: #0f3460;
+    --text: #e0e0e0;
+    --text2: #a0a0b0;
+    --text-title: #ffffff;
+    --border: #0f3460;
+    --border-hover: #4a9eff;
+  }
+  :root.light {
+    --bg: #f5f5f5;
+    --surface: #ffffff;
+    --surface2: #e0e0e0;
+    --text: #333333;
+    --text2: #888888;
+    --text-title: #222222;
+    --border: #dddddd;
+    --border-hover: #4a9eff;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #e0e0e0; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .container { text-align: center; padding: 2rem; }
-  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #ffffff; }
-  .subtitle { color: #888; margin-bottom: 2rem; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { text-align: center; padding: 2rem; position: relative; }
+  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-title); }
+  .subtitle { color: var(--text2); margin-bottom: 2rem; }
   .apps { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
-  .app-card { background: #16213e; border: 1px solid #0f3460; border-radius: 12px; padding: 2rem; width: 220px; text-decoration: none; color: #e0e0e0; transition: transform 0.2s, border-color 0.2s; }
-  .app-card:hover { transform: translateY(-4px); border-color: #4a9eff; }
+  .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 220px; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
+  .app-card:hover { transform: translateY(-4px); border-color: var(--border-hover); }
   .app-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-  .app-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: #ffffff; }
-  .app-desc { font-size: 0.85rem; color: #888; }
-  .footer { margin-top: 2.5rem; font-size: 0.75rem; color: #555; }
+  .app-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-title); }
+  .app-desc { font-size: 0.85rem; color: var(--text2); }
+  .footer { margin-top: 2.5rem; font-size: 0.75rem; color: var(--text2); }
+  .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
+  .toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
 </style>
+<script>
+(function(){
+  var k = 'mu-theme', btn = document.getElementById('theme-btn');
+  function setTheme(t) {
+    document.documentElement.className = t === 'light' ? 'light' : '';
+    localStorage.setItem(k, t);
+    if (btn) btn.textContent = t === 'light' ? '\u263E' : '\u2600';
+  }
+  function toggleTheme() { setTheme(document.documentElement.className === 'light' ? 'dark' : 'light'); }
+  var saved = localStorage.getItem(k);
+  if (saved) setTheme(saved);
+  window.toggleTheme = toggleTheme;
+})()
+</script>
 </head>
 <body>
+<button class="toggle-btn" id="theme-btn" onclick="toggleTheme()">☀</button>
 <div class="container">
   <h1>mu Gateway</h1>
   <p class="subtitle">Unified access to all mu services</p>
@@ -65,6 +103,40 @@ func landingPage(hasMock bool) string {
 </div>
 </body>
 </html>`
+}
+
+// injectGatewayFlag returns a middleware that injects <script>window.__MU_GATEWAY__=true</script>
+// before </head> in HTML responses, so Svelte frontends can detect they are behind the gateway.
+func injectGatewayFlag() func(http.Handler) http.Handler {
+	script := []byte("<script>window.__MU_GATEWAY__=true</script>")
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			iw := &injectWriter{ResponseWriter: w}
+			next.ServeHTTP(iw, r)
+			if iw.buf.Len() == 0 {
+				return
+			}
+			body := iw.buf.Bytes()
+			if isHTML(body) {
+				body = bytes.Replace(body, []byte("</head>"), append(script, []byte("</head>")...), 1)
+			}
+			w.Write(body)
+		})
+	}
+}
+
+func isHTML(data []byte) bool {
+	return bytes.HasPrefix(data, []byte("<!DOCTYPE html>")) ||
+		bytes.HasPrefix(data, []byte("<html"))
+}
+
+type injectWriter struct {
+	http.ResponseWriter
+	buf bytes.Buffer
+}
+
+func (w *injectWriter) Write(data []byte) (int, error) {
+	return w.buf.Write(data)
 }
 
 func (o *Options) Run() error {
@@ -95,8 +167,10 @@ func (o *Options) Run() error {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("/wol/", http.StripPrefix("/wol", wol.FrontendHandler()))
-	mux.Handle("/es/", http.StripPrefix("/es", es.FrontendHandler()))
+	withGateway := injectGatewayFlag()
+
+	mux.Handle("/wol/", http.StripPrefix("/wol", withGateway(wol.FrontendHandler())))
+	mux.Handle("/es/", http.StripPrefix("/es", withGateway(es.FrontendHandler())))
 
 	wol.RegisterHandlers(mux, wolStore, wolOpts)
 	es.RegisterHandlers(mux, esState)
@@ -130,7 +204,7 @@ func (o *Options) Run() error {
 	if adminErr != nil {
 		log.Printf("Gateway: warning: could not load mock config: %v", adminErr)
 	} else {
-		mux.Handle("/mock/", http.StripPrefix("/mock", mockAdmin))
+		mux.Handle("/mock/", http.StripPrefix("/mock", withGateway(mockAdmin)))
 		log.Printf("Gateway:   /mock/* -> Mock Dynamic admin")
 		hasMock = true
 	}

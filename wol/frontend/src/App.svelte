@@ -1,4 +1,5 @@
 <script>
+  let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
   let aliases = $state({})
   let formName = $state('')
   let formMac = $state('')
@@ -264,7 +265,11 @@
 </script>
 
 <main>
-  <h1><span>WOL Manager</span> <span class="version">{appVersion}</span>
+  <h1>
+    {#if inGateway}
+      <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
+    {/if}
+    <span>WOL Manager</span> <span class="version">{appVersion}</span>
     <button class="btn-settings" onclick={openTokenModal}>
       <span class="lock-icon">{token ? '\u{1F512}' : '\u{1F513}'}</span>
     </button>
@@ -404,24 +409,24 @@
 
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f5f5f5;
-    color: #333;
+    background: var(--bg);
+    color: var(--text);
     line-height: 1.6;
   }
 
   footer {
     text-align: center;
-    color: #bdc3c7;
+    color: var(--text3);
     padding: 20px;
     font-size: 0.85em;
   }
 
   footer a {
-    color: #bdc3c7;
+    color: var(--text3);
   }
 
   footer a:hover {
-    color: #95a5a6;
+    color: var(--text2);
   }
 
   main {
@@ -432,7 +437,7 @@
 
   h1 {
     font-size: 1.8em;
-    color: #2c3e50;
+    color: var(--text);
     display: flex;
     align-items: flex-end;
     gap: 4px;
@@ -446,14 +451,14 @@
 
   h1 .version {
     font-size: 0.5em;
-    color: #7f8c8d;
+    color: var(--text2);
     margin-right: auto;
   }
 
   h2 {
     font-size: 1.2em;
     margin-bottom: 12px;
-    color: #34495e;
+    color: var(--text);
   }
 
   .error {
@@ -466,7 +471,7 @@
   }
 
   .form-section {
-    background: #fff;
+    background: var(--surface);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -481,7 +486,7 @@
 
   input {
     padding: 10px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.95em;
     outline: none;
@@ -494,8 +499,8 @@
   }
 
   input:disabled {
-    background: #f0f0f0;
-    color: #666;
+    background: var(--surface2);
+    color: var(--text2);
   }
 
   .form-actions {
@@ -531,14 +536,14 @@
   }
 
   .list-section {
-    background: #fff;
+    background: var(--surface);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   }
 
   .empty {
-    color: #999;
+    color: var(--text2);
     font-style: italic;
   }
 
@@ -550,15 +555,15 @@
   th {
     text-align: left;
     padding: 10px 8px;
-    border-bottom: 2px solid #eee;
+    border-bottom: 2px solid var(--border2);
     font-size: 0.85em;
     text-transform: uppercase;
-    color: #7f8c8d;
+    color: var(--text2);
   }
 
   td {
     padding: 10px 8px;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--border2);
     font-size: 0.95em;
   }
 
@@ -593,7 +598,7 @@
 
   .boot-cell {
     font-size: 0.85em;
-    color: #666;
+    color: var(--text2);
     position: relative;
     cursor: default;
   }
@@ -618,7 +623,7 @@
     font-weight: 600;
     margin-bottom: 6px;
     font-size: 0.9em;
-    color: #bdc3c7;
+    color: var(--text3);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -642,7 +647,7 @@
   }
 
   .event-time {
-    color: #95a5a6;
+    color: var(--text2);
   }
 
   .actions {
@@ -713,6 +718,9 @@
     font-size: 1em;
   }
 
+  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
+  .home-link:hover { border-color: #e94560; color: var(--text); }
+
   .modal-overlay {
     position: fixed;
     top: 0;
@@ -727,7 +735,7 @@
   }
 
   .modal {
-    background: #fff;
+    background: var(--surface);
     padding: 24px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -743,7 +751,7 @@
   .modal label {
     display: block;
     font-size: 0.85em;
-    color: #555;
+    color: var(--text2);
     margin-bottom: 6px;
   }
 

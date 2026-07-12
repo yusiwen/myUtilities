@@ -3,6 +3,7 @@
   import { listEndpoints, createEndpoint, updateEndpoint, deleteEndpoint, saveToConfig } from './lib/api.js'
   import JsonEditor from './components/JsonEditor.svelte'
 
+  let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
   let endpoints = $state([])
   let error = $state('')
   let success = $state('')
@@ -113,7 +114,12 @@
 
 <div class="app">
   <header class="header">
-    <h1>Dynamic Mock Server</h1>
+    <h1>
+      {#if inGateway}
+        <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
+      {/if}
+      Dynamic Mock Server
+    </h1>
     <div class="header-actions">
       <button class="btn primary" onclick={startAdd}>+ Add Endpoint</button>
       <button class="btn" onclick={handleSaveConfig} disabled={saving}>
@@ -224,6 +230,8 @@
   .app { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
   .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
   .header h1 { font-size: 22px; font-weight: 600; }
+  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
+  .home-link:hover { border-color: var(--primary); color: var(--text); }
   .header-actions { display: flex; gap: 8px; }
 
   .btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }

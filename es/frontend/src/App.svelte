@@ -1,4 +1,5 @@
 <script>
+  let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
   let connected = $state(false)
   let connectionError = $state('')
   let esHost = $state('')
@@ -174,7 +175,12 @@
 
 <main>
   <header>
-    <h1><span>ES Search</span> <span class="version">{appVersion}</span></h1>
+    <h1>
+      {#if inGateway}
+        <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
+      {/if}
+      <span>ES Search</span> <span class="version">{appVersion}</span>
+    </h1>
     <div class="conn-bar">
       <span class="conn-dot" class:connected class:disconnected={!connected}></span>
       {#if connected}
@@ -276,8 +282,8 @@
 
   :global(body) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: #f5f5f5;
-    color: #333;
+    background: var(--bg);
+    color: var(--text);
     line-height: 1.6;
   }
 
@@ -298,7 +304,7 @@
 
   h1 {
     font-size: 1.6em;
-    color: #2c3e50;
+    color: var(--text);
     display: flex;
     align-items: flex-end;
     gap: 4px;
@@ -309,16 +315,18 @@
     align-items: flex-end;
   }
 
+  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
+  .home-link:hover { border-color: #e94560; color: var(--text); }
   h1 .version {
     font-size: 0.5em;
-    color: #7f8c8d;
+    color: var(--text2);
   }
 
   .conn-bar {
     display: flex;
     align-items: center;
     gap: 8px;
-    background: #fff;
+    background: var(--surface);
     padding: 6px 14px;
     border-radius: 20px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -341,7 +349,7 @@
 
   .conn-info {
     font-size: 0.85em;
-    color: #555;
+    color: var(--text2);
   }
 
   .btn-settings {
@@ -350,11 +358,11 @@
     font-size: 1.3em;
     cursor: pointer;
     padding: 2px 4px;
-    color: #555;
+    color: var(--text2);
   }
 
   .btn-settings:hover {
-    color: #222;
+    color: var(--text);
   }
 
   .error {
@@ -376,7 +384,7 @@
   }
 
   .search-section {
-    background: #fff;
+    background: var(--surface);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -394,7 +402,7 @@
   .field label {
     display: block;
     font-size: 0.85em;
-    color: #555;
+    color: var(--text2);
     margin-bottom: 6px;
     font-weight: 500;
   }
@@ -407,11 +415,11 @@
   select {
     flex: 1;
     padding: 10px 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.95em;
     outline: none;
-    background: #fff;
+    background: var(--surface);
     transition: border-color 0.2s;
     cursor: pointer;
   }
@@ -438,7 +446,7 @@
   textarea {
     width: 100%;
     padding: 12px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
     font-size: 0.9em;
@@ -479,7 +487,7 @@
   }
 
   .results-section {
-    background: #fff;
+    background: var(--surface);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
@@ -487,19 +495,19 @@
 
   .results-section h2 {
     font-size: 1.2em;
-    color: #2c3e50;
+    color: var(--text);
     margin-bottom: 12px;
   }
 
   .hits-count {
     font-size: 0.8em;
-    color: #7f8c8d;
+    color: var(--text2);
     font-weight: normal;
   }
 
   .results-json {
-    background: #2c3e50;
-    color: #ecf0f1;
+    background: var(--surface2);
+    color: var(--text);
     padding: 16px;
     border-radius: 6px;
     overflow-x: auto;
@@ -524,7 +532,7 @@
   }
 
   .modal {
-    background: #fff;
+    background: var(--surface);
     padding: 24px;
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -535,13 +543,13 @@
   .modal h2 {
     margin-bottom: 16px;
     font-size: 1.2em;
-    color: #2c3e50;
+    color: var(--text);
   }
 
   .modal label {
     display: block;
     font-size: 0.85em;
-    color: #555;
+    color: var(--text2);
     margin-bottom: 4px;
     margin-top: 10px;
   }
@@ -553,7 +561,7 @@
   .modal input {
     width: 100%;
     padding: 8px 10px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.9em;
     outline: none;
@@ -599,16 +607,16 @@
 
   footer {
     text-align: center;
-    color: #bdc3c7;
+    color: var(--text3);
     padding: 20px;
     font-size: 0.85em;
   }
 
   footer a {
-    color: #bdc3c7;
+    color: var(--text3);
   }
 
   footer a:hover {
-    color: #95a5a6;
+    color: var(--text2);
   }
 </style>
