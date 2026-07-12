@@ -4,13 +4,27 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/es"
+	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/wol"
 )
 
-const landingPage = `<!DOCTYPE html>
+func landingPage(hasMock bool) string {
+	mockCard := ""
+	if hasMock {
+		mockCard = `
+    <a href="/mock/__admin/" class="app-card">
+      <div class="app-icon">&#128521;</div>
+      <div class="app-name">Mock Server</div>
+      <div class="app-desc">Dynamic mock endpoints management</div>
+    </a>`
+	}
+	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -45,12 +59,13 @@ const landingPage = `<!DOCTYPE html>
       <div class="app-icon">&#128269;</div>
       <div class="app-name">Elasticsearch</div>
       <div class="app-desc">Query indices, browse documents, manage ES connections</div>
-    </a>
+    </a>` + mockCard + `
   </div>
   <p class="footer">mu &copy; 2025</p>
 </div>
 </body>
 </html>`
+}
 
 func (o *Options) Run() error {
 	wolCfg, err := wol.LoadConfig(o.WolConfig)
@@ -86,13 +101,47 @@ func (o *Options) Run() error {
 	wol.RegisterHandlers(mux, wolStore, wolOpts)
 	es.RegisterHandlers(mux, esState)
 
+	hasMock := false
+	mockConfigPath := o.MockConfig
+	if strings.HasPrefix(mockConfigPath, "~/") {
+		home, ere := os.UserHomeDir()
+		if ere == nil {
+			mockConfigPath = filepath.Join(home, mockConfigPath[2:])
+		}
+	}
+	if _, err := os.Stat(mockConfigPath); os.IsNotExist(err) {
+		defaultCfg := `{
+  "port": 8084,
+  "endpoints": [
+    {
+      "id": "default",
+      "method": "GET",
+      "path": "/api/hello",
+      "status": 200,
+      "body": "{\"message\": \"Hello from Mock Dynamic Server!\", \"docs\": \"Edit or add endpoints at /__admin/\"}"
+    }
+  ]
+}`
+		if we := os.WriteFile(mockConfigPath, []byte(defaultCfg), 0644); we == nil {
+			log.Printf("Gateway: created default mock config at %s", mockConfigPath)
+		}
+	}
+	mockAdmin, adminErr := mock.NewMockAdminHandler(mockConfigPath)
+	if adminErr != nil {
+		log.Printf("Gateway: warning: could not load mock config: %v", adminErr)
+	} else {
+		mux.Handle("/mock/", http.StripPrefix("/mock", mockAdmin))
+		log.Printf("Gateway:   /mock/* -> Mock Dynamic admin")
+		hasMock = true
+	}
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, landingPage)
+		fmt.Fprint(w, landingPage(hasMock))
 	})
 
 	addr := fmt.Sprintf(":%d", o.Port)

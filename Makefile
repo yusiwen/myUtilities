@@ -5,6 +5,7 @@ COMMIT_SHA=$(shell /usr/bin/git --no-pager rev-parse --short HEAD)
 BUILDTIME=$(shell date -u)
 FRONTEND_DIR=wol/frontend
 ES_FRONTEND_DIR=es/frontend
+MOCK_FRONTEND_DIR=mock/frontend
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -25,6 +26,8 @@ frontend:
 	@echo "Building ES Svelte frontend..."
 	cd $(ES_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo '{"version": "$(VERSION)"}' > $(ES_FRONTEND_DIR)/dist/version.json
+	@echo "Building Mock Dynamic Svelte frontend..."
+	cd $(MOCK_FRONTEND_DIR) && npm install --silent && npm run build
 
 build: frontend default
 

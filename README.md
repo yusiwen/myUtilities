@@ -5,7 +5,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 ## Build
 
 ```bash
-# Build for current platform (automatically builds Svelte frontend for WOL)
+# Build for current platform (automatically builds all Svelte frontends)
 make darwin-arm64
 
 # Build all common platforms
@@ -13,6 +13,9 @@ make all
 
 # Build output is in bin/ directory
 ```
+
+> **Note:** The build automatically compiles three Svelte frontends: WOL, ES, and Mock Dynamic.
+> Ensure `npm` is installed before building.
 
 ## Usage
 
@@ -35,63 +38,67 @@ mu mock oauth-server --port 8083
 mu mock dynamic-server --config mock-config.json
 ```
 
-#### dynamic-server — Configurable multi-endpoint mock with hot-reload
+#### dynamic-server — Configurable multi-endpoint mock with hot-reload and admin UI
 
 ```bash
 mu mock dynamic-server --config mock-config.json
 ```
 
-Define endpoints, response conditions, delays, and templates in a JSON config file:
+Starts a mock server with a **web admin UI** at `http://localhost:8084/__admin/` where you can
+add, edit, delete, and save endpoints in real time — no restart needed.
 
-```jsonc
+##### Admin UI
+
+Open `http://localhost:8084/__admin/` in your browser:
+
+- **Table** of all endpoints (method, path, status, delay)
+- **Add Endpoint** button to create new endpoints
+- **Edit** / **Del** actions per endpoint
+- **Save to Config** button persists all current endpoints to the config file
+
+Endpoints created or modified via the UI take effect immediately on the next matching request.
+
+##### Config file format
+
+```json
 {
   "port": 8084,
   "endpoints": [
     {
+      "id": "a1b2c3",
       "method": "POST",
       "path": "/api/users",
-      "response": {
-        "status": 201,
-        "delay": "500ms",
-        "headers": { "X-Request-Id": "{{header.x-request-id}}" },
-        "body": "mock/create-user.json"
-      }
+      "status": 201,
+      "delay": "500ms",
+      "headers": { "X-Request-Id": "{{header.x-request-id}}" },
+      "body": "{\"created\": true, \"name\": \"{{body.name}}\"}"
     },
     {
+      "id": "d4e5f6",
       "method": "GET",
       "path": "/api/users/:id",
-      "response": {
-        "status": 200,
-        "body": { "id": "{{path.id}}", "name": "User {{path.id}}", "page": "{{query.page}}" }
-      },
-      "responses": [
-        { "when": { "path.id": "404" }, "then": { "status": 404, "body": { "error": "not found" } } },
-        { "when": { "header.authorization": "" }, "then": { "status": 401, "body": { "error": "unauthorized" } } }
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/users",
-      "response": {
-        "body": "mock/list-users.json"
-      }
+      "status": 200,
+      "body": "{\"id\": \"{{path.id}}\", \"name\": \"User {{path.id}}\", \"page\": \"{{query.page}}\"}"
     }
   ]
 }
 ```
 
+The `body` field is always a raw response string (JSON or plain text).
+
 **Features:**
 
 | Feature | Description |
 |---|---|
-| Multi-endpoint | Any number of `method` + `path` combos in one config file |
+| Admin web UI | `GET /__admin/` — browser-based endpoint management |
+| Hot-reload | Add/edit/delete endpoints at runtime without restart |
 | Template variables | `{{path.id}}` `{{query.page}}` `{{header.authorization}}` `{{body.name}}` |
-| Custom status | `"status": 201`, `404`, `500`, etc. |
-| Custom headers | `"headers": {"X-Custom": "value"}` (also supports templates) |
+| Custom status code | Per-endpoint `"status": 201`, `404`, `500`, etc. |
+| Custom headers | `"headers": {"X-Custom": "value"}` (supports template variables) |
 | Delay simulation | `"delay": "2s"` / `"500ms"` / `"1.5s"` |
-| Conditional responses | Choose different `then` based on `when` conditions matching path, query, header, or body |
-| Inline or file body | Body can be inline JSON or a file path (relative to config directory) |
-| Hot-reload | Config and response files are read on each request — modify without restart |
+| Path parameters | `/api/users/:id` matches `/api/users/42`, param available as `{{path.id}}` |
+| Persistence | "Save to Config" button writes all endpoints back to the config file |
+| Verbose logging | `--verbose` flag prints request/response details to stdout |
 
 **Template sources:**
 
@@ -102,6 +109,36 @@ Define endpoints, response conditions, delays, and templates in a JSON config fi
 | Request header | `{{header.xxx}}` | `Authorization: Bearer x` → `{{header.authorization}}` |
 | JSON body | `{{body.xxx}}` | `{"name":"alice"}` → `{{body.name}}` |
 | Nested body | `{{body.x.y.z}}` | `{"user":{"name":"alice"}}` → `{{body.user.name}}` |
+
+> **Note:** Conditional responses (`"responses"` array with `when`/`then`) are not yet
+> supported via the admin UI but can still be added by editing the JSON config file
+> manually (they will be preserved through save operations).
+
+### gateway — Unified service portal
+
+Serves multiple mu services under a single HTTP server with a landing page.
+
+```bash
+mu gateway --port 8080
+```
+
+By default, WOL and ES are loaded from `~/.config/mu/wol-config.json` and `~/.config/mu/es-config.json`.
+Mock Dynamic can be added by creating `~/.config/mu/mock-config.json`:
+
+```bash
+echo '{"port":8084,"endpoints":[]}' > ~/.config/mu/mock-config.json
+mu gateway --port 8080
+```
+
+| Route | Service | Description |
+|---|---|---|
+| `/` | Landing page | Card-based navigation to all services |
+| `/wol/*` | Wake-on-LAN | WOL management frontend and API |
+| `/es/*` | Elasticsearch | ES query frontend and API |
+| `/mock/__admin/*` | Mock Dynamic | Dynamic mock endpoint management |
+
+All services are optional — if a config file is missing, the corresponding route is
+skipped with a warning and the rest of the gateway starts normally.
 
 ### proxy — Database proxy with failover
 

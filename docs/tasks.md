@@ -56,12 +56,12 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 32. [ ] Implement support for more package formats (deb, rpm, etc.)
 33. [ ] Add progress reporting during installations
 34. [ ] Implement a configuration file for persistent settings
-35. [ ] Add more mock services beyond the file server
+35. [x] Add more mock services beyond the file server (dynamic-server with admin UI)
 
 ## Build and Deployment
 
 36. [ ] Update the Makefile to support all target platforms
-37. [ ] Implement semantic versioning
+37. [x] Implement semantic versioning
 38. [ ] Automate the release process completely
 39. [ ] Add containerization support (Docker)
 40. [ ] Create installation packages for different package managers (apt, brew, etc.)
@@ -71,5 +71,12 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 41. [ ] Improve command-line help messages and documentation
 42. [ ] Add color and formatting to terminal output
 43. [ ] Implement interactive mode for complex operations
-44. [ ] Add command completion for shells
-45. [ ] Create a web UI for the mock services
+44. [x] Add command completion for shells
+45. [x] Create a web UI for the mock services
+
+## Recently Completed
+
+- **Mock Dynamic Server** — Configurable multi-endpoint mock with template engine, conditional responses, delay simulation, and verbose logging
+- **Admin Web UI** — Svelte 5 frontend with CodeMirror 6 JSON editor, endpoint CRUD, and config persistence
+- **Custom DynamicRouter** — Thread-safe runtime endpoint registry with path parameter matching, replaces static `http.ServeMux`
+- **Gateway Integration** — Mock admin available at `/mock/` via `mu gateway`, auto-discovered from `~/.config/mu/mock-config.json`

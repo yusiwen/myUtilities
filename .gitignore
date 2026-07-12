@@ -33,3 +33,5 @@ wol/frontend/node_modules/
 wol/frontend/dist/
 es/frontend/node_modules/
 es/frontend/dist/
+mock/frontend/node_modules/
+mock/frontend/dist/
