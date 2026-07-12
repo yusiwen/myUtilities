@@ -3,7 +3,7 @@ set -eu
 
 NAME="${NAME:-mu}"
 PREFIX="${PREFIX:-/usr/local/bin}"
-VERSION="v1.1.5"
+VERSION="v1.1.6"
 
 fail() {
     echo "Error: $*" >&2
