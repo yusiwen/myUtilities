@@ -1,20 +1,29 @@
 package jarinfo
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/yusiwen/myUtilities/core/jarinfo"
 	"golang.org/x/term"
 )
 
 type Options struct {
-	Info InfoOptions `cmd:"" name:"info" help:"Analyze a JAR file."`
+	Info  InfoOptions  `cmd:"" name:"info" help:"Analyze a JAR file."`
+	Serve ServeOptions `cmd:"" name:"serve" help:"Start JAR analyzer HTTP server."`
 }
 
 type InfoOptions struct {
 	File string `arg:"" name:"file" help:"Path to JAR file."`
+}
+
+type ServeOptions struct {
+	Port int `help:"Port to listen on." default:"8086"`
 }
 
 func (o *InfoOptions) Run() error {
@@ -53,7 +62,7 @@ func (o *InfoOptions) Run() error {
 	if info.UncompressedSize > 0 {
 		ratio = info.CompressedSize * 100 / info.UncompressedSize
 	}
-	fmt.Printf("Compressed:     %s → %s (%d%%)\n",
+	fmt.Printf("Compressed:     %s \u2192 %s (%d%%)\n",
 		humanSize(info.CompressedSize),
 		humanSize(info.UncompressedSize), ratio)
 
@@ -96,6 +105,81 @@ func (o *InfoOptions) Run() error {
 	}
 
 	return nil
+}
+
+func (o *ServeOptions) Run() error {
+	mux := http.NewServeMux()
+	mux.Handle("/", FrontendHandler())
+	RegisterHandlers(mux)
+	fmt.Printf("JAR analyzer server listening on :%d\n", o.Port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+}
+
+func RegisterHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/api/jarinfo/analyze", handleAnalyze)
+}
+
+func handleAnalyze(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
+
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, fmt.Sprintf("parse form: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("read file: %v", err), http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	if !strings.HasSuffix(strings.ToLower(header.Filename), ".jar") {
+		http.Error(w, "only .jar files are accepted", http.StatusBadRequest)
+		return
+	}
+
+	tmpFile, err := os.CreateTemp("", "jar-*.jar")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("create temp: %v", err), http.StatusInternalServerError)
+		return
+	}
+	tmpName := tmpFile.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := io.Copy(tmpFile, file); err != nil {
+		tmpFile.Close()
+		http.Error(w, fmt.Sprintf("write temp: %v", err), http.StatusInternalServerError)
+		return
+	}
+	tmpFile.Close()
+
+	f, err := os.Open(tmpName)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("open temp: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("stat temp: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	info, err := jarinfo.ParseJar(f, fi.Size(), nil)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("parse jar: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
 }
 
 func orDash(s string) string {

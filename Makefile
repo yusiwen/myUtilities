@@ -7,6 +7,7 @@ FRONTEND_DIR=wol/frontend
 ES_FRONTEND_DIR=es/frontend
 MOCK_FRONTEND_DIR=mock/frontend
 QRCODE_FRONTEND_DIR=qrcode/frontend
+JARINFO_FRONTEND_DIR=jarinfo/frontend
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -31,6 +32,8 @@ frontend:
 	cd $(MOCK_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo "Building QR Code Svelte frontend..."
 	cd $(QRCODE_FRONTEND_DIR) && npm install --silent && npm run build
+	@echo "Building JAR Info Svelte frontend..."
+	cd $(JARINFO_FRONTEND_DIR) && npm install --silent && npm run build
 
 build: frontend default
 

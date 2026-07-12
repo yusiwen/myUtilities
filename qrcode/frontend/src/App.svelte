@@ -17,9 +17,6 @@
     loading = false
   }
 
-  function handleKeydown(e) {
-    if (e.key === 'Enter') generate()
-  }
 </script>
 
 <div class="app">
@@ -35,7 +32,7 @@
   <div class="card">
     <div class="field">
       <label for="text-input">Text to encode</label>
-      <input id="text-input" type="text" bind:value={text} onkeydown={handleKeydown} placeholder="https://example.com or any text" />
+      <textarea id="text-input" bind:value={text} rows="4" placeholder="https://example.com or any text"></textarea>
     </div>
 
     <div class="field">
@@ -71,8 +68,10 @@
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; text-align: left; }
   .field { margin-bottom: 16px; }
   .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
-  .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; outline: none; }
-  .field input:focus, .field select:focus { border-color: var(--primary); }
+  .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; resize: vertical; }
+  .field textarea:focus { border-color: var(--primary); }
+  .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; outline: none; }
+  .field select:focus { border-color: var(--primary); }
 
   .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; text-decoration: none; }
   .btn:hover { background: var(--surface2); }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/es"
+	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
@@ -103,6 +104,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128208;</div>
       <div class="app-name">QR Code</div>
       <div class="app-desc">Generate QR codes from text</div>
+    </a>
+    <a href="/jarinfo/" class="app-card">
+      <div class="app-icon">&#128230;</div>
+      <div class="app-name">JAR Analyzer</div>
+      <div class="app-desc">Analyze JAR file structure and metadata</div>
     </a>` + mockCard + `
   </div>
   <p class="footer">mu &copy; 2025</p>
@@ -218,6 +224,10 @@ func (o *Options) Run() error {
 	mux.Handle("/qrcode/", http.StripPrefix("/qrcode", withGateway(qrcode.FrontendHandler())))
 	qrcode.RegisterHandlers(mux)
 	log.Printf("Gateway:   /qrcode/* -> QR Code frontend")
+
+	mux.Handle("/jarinfo/", http.StripPrefix("/jarinfo", withGateway(jarinfo.FrontendHandler())))
+	jarinfo.RegisterHandlers(mux)
+	log.Printf("Gateway:   /jarinfo/* -> JAR Analyzer frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

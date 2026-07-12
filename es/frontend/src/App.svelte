@@ -419,14 +419,16 @@
     border-radius: 6px;
     font-size: 0.95em;
     outline: none;
-    background: var(--surface);
+    background: var(--bg);
+    color: var(--text);
     transition: border-color 0.2s;
     cursor: pointer;
   }
+  select option { background: var(--bg); color: var(--text); }
 
   select:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
   }
 
   .btn-refresh {
@@ -452,12 +454,14 @@
     font-size: 0.9em;
     outline: none;
     resize: vertical;
+    background: var(--bg);
+    color: var(--text);
     transition: border-color 0.2s;
   }
 
   textarea:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
   }
 
   .field-error {
@@ -568,8 +572,8 @@
   }
 
   .modal input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
   }
 
   .modal-actions {

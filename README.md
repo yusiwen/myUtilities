@@ -14,8 +14,8 @@ make all
 # Build output is in bin/ directory
 ```
 
-> **Note:** The build automatically compiles three Svelte frontends: WOL, ES, and Mock Dynamic.
-> Ensure `npm` is installed before building.
+> **Note:** The build automatically compiles five Svelte frontends: WOL, ES, Mock Dynamic, QR Code,
+> and JAR Analyzer. Ensure `npm` is installed before building.
 
 ## Usage
 
@@ -131,13 +131,15 @@ mu gateway --port 8080
 ```
 
 | Route | Service | Description |
-|---|---|---|
+|---|---|---|---|
 | `/` | Landing page | Card-based navigation to all services |
 | `/wol/*` | Wake-on-LAN | WOL management frontend and API |
 | `/es/*` | Elasticsearch | ES query frontend and API |
 | `/mock/__admin/*` | Mock Dynamic | Dynamic mock endpoint management |
+| `/qrcode/` | QR Code | QR code generator web UI |
+| `/jarinfo/` | JAR Analyzer | JAR file analysis web UI |
 
-All services are optional — if a config file is missing, the corresponding route is
+All services are optional — if a config file is missing (mock), the corresponding route is
 skipped with a warning and the rest of the gateway starts normally.
 
 ### proxy — Database proxy with failover
@@ -229,28 +231,32 @@ Or configure in `~/.config/mu/watch.json`:
 
 ### qrcode — Generate QR codes
 
-Encode text or file content as a QR code. Output to terminal (Unicode) or save as PNG.
+Encode text or file content as a QR code. Output to terminal (Unicode), save as PNG, or
+serve via web UI.
 
 ```bash
 # Terminal output
-mu qrcode "https://example.com"
+mu qrcode gen "https://example.com"
 
 # Pipe from stdin
-cat xxxx.conf | mu qrcode
-mu qrcode < xxxx.conf
+cat xxxx.conf | mu qrcode gen
+mu qrcode gen < xxxx.conf
 
 # Save as PNG
-mu qrcode -o qrcode.png "https://example.com"
+mu qrcode gen -o qrcode.png "https://example.com"
 
 # Error correction level
-mu qrcode --level high "data"
+mu qrcode gen --level high "data"
+
+# Serve web UI (standalone)
+mu qrcode serve --port 8085
 ```
 
 Verify decoded content:
 
 ```bash
 sudo apt install zbar-tools
-mu qrcode -o /tmp/qr.png "https://example.com"
+mu qrcode gen -o /tmp/qr.png "https://example.com"
 zbarimg /tmp/qr.png
 # QR-Code:https://example.com
 ```
@@ -281,9 +287,14 @@ Serving /home/user/project/dist on http://localhost:3000
 ### jar info — Analyze JAR files
 
 Parse class file versions, MANIFEST.MF, Maven coordinates, and multi-release info from a JAR.
+Supports CLI output and web UI (file upload).
 
 ```bash
+# CLI analysis
 mu jar info app.jar
+
+# Serve web UI (standalone)
+mu jar info serve --port 8086
 ```
 
 ```

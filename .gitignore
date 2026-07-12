@@ -37,3 +37,5 @@ mock/frontend/node_modules/
 mock/frontend/dist/
 qrcode/frontend/node_modules/
 qrcode/frontend/dist/
+jarinfo/frontend/node_modules/
+jarinfo/frontend/dist/

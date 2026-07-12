@@ -68,7 +68,7 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 
 ## User Experience
 
-41. [ ] Improve command-line help messages and documentation
+41. [x] Improve command-line help messages and documentation
 42. [ ] Add color and formatting to terminal output
 43. [ ] Implement interactive mode for complex operations
 44. [x] Add command completion for shells
@@ -80,3 +80,6 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 - **Admin Web UI** — Svelte 5 frontend with CodeMirror 6 JSON editor, endpoint CRUD, and config persistence
 - **Custom DynamicRouter** — Thread-safe runtime endpoint registry with path parameter matching, replaces static `http.ServeMux`
 - **Gateway Integration** — Mock admin available at `/mock/` via `mu gateway`, auto-discovered from `~/.config/mu/mock-config.json`
+- **Unified Dark/Light Theme** — All frontends (gateway, mock, WOL, ES) share CSS variables and localStorage-based theme toggle with `mu-theme` key
+- **QR Code Web UI** — Svelte 5 frontend with text input, level selector, PNG generation via `/api/qrcode`, and gateway integration at `/qrcode/`
+- **JAR Analyzer Web UI** — Svelte 5 frontend with file upload, detailed analysis display, `/api/jarinfo/analyze` API, and gateway integration at `/jarinfo/`

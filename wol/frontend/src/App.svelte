@@ -489,13 +489,16 @@
     border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.95em;
+    font-family: inherit;
+    background: var(--bg);
+    color: var(--text);
     outline: none;
     transition: border-color 0.2s;
   }
 
   input:focus {
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52,152,219,0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
   }
 
   input:disabled {

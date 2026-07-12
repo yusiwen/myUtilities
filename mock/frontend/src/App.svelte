@@ -256,16 +256,16 @@
   .form-row { display: flex; gap: 12px; }
   .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text2); flex: 1; }
   .form-row label.grow { flex: 2; }
-  .form-row input, .form-row select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: #0d1117; color: var(--text); font-size: 14px; }
+  .form-row input, .form-row select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 14px; }
   .form-row select { cursor: pointer; }
 
   .headers-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
   .hr { display: flex; align-items: center; gap: 6px; }
-  .hr input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: #0d1117; color: var(--text); font-size: 13px; }
+  .hr input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; }
   .sep { color: var(--text2); font-size: 13px; }
 
   .body-editor { margin-top: 4px; }
-  .body-editor textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; background: #0d1117; color: var(--text); font-size: 13px; font-family: 'Menlo', 'Consolas', monospace; resize: vertical; line-height: 1.5; }
+  .body-editor textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-family: 'Menlo', 'Consolas', monospace; resize: vertical; line-height: 1.5; }
 
   .edit-actions { display: flex; gap: 8px; margin-top: 16px; }
 

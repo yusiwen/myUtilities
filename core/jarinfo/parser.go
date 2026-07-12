@@ -11,33 +11,32 @@ import (
 )
 
 type JarInfo struct {
-	MinJDKVersion    string
-	MinMajorVersion  int
-	ClassCount       int
-	VersionHistogram map[int]int
-
-	Manifest         *ManifestInfo
-	Maven            *MavenInfo
-	Signed           bool
-	VersionedClasses map[int]int
-	TotalEntries     int
-	CompressedSize   uint64
-	UncompressedSize uint64
+	MinJDKVersion    string         `json:"minJDKVersion"`
+	MinMajorVersion  int            `json:"minMajorVersion"`
+	ClassCount       int            `json:"classCount"`
+	VersionHistogram map[int]int    `json:"versionHistogram"`
+	Manifest         *ManifestInfo  `json:"manifest,omitempty"`
+	Maven            *MavenInfo     `json:"maven,omitempty"`
+	Signed           bool           `json:"signed"`
+	VersionedClasses map[int]int    `json:"versionedClasses,omitempty"`
+	TotalEntries     int            `json:"totalEntries"`
+	CompressedSize   uint64         `json:"compressedSize"`
+	UncompressedSize uint64         `json:"uncompressedSize"`
 }
 
 type ManifestInfo struct {
-	MainClass           string
-	CreatedBy           string
-	BuildJDK            string
-	ImplVersion         string
-	AutomaticModuleName string
-	MultiRelease        bool
+	MainClass           string `json:"mainClass"`
+	CreatedBy           string `json:"createdBy"`
+	BuildJDK            string `json:"buildJDK"`
+	ImplVersion         string `json:"implVersion"`
+	AutomaticModuleName string `json:"automaticModuleName"`
+	MultiRelease        bool   `json:"multiRelease"`
 }
 
 type MavenInfo struct {
-	GroupID    string
-	ArtifactID string
-	Version    string
+	GroupID    string `json:"groupId"`
+	ArtifactID string `json:"artifactId"`
+	Version    string `json:"version"`
 }
 
 var jdkVersions = map[int]string{
