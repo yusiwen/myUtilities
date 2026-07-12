@@ -60,7 +60,7 @@ func landingPage(hasMock bool) string {
   .container { text-align: center; padding: 2rem; position: relative; }
   h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-title); }
   .subtitle { color: var(--text2); margin-bottom: 2rem; }
-  .apps { display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap; }
+  .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 780px; margin: 0 auto; }
   .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 220px; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
   .app-card:hover { transform: translateY(-4px); border-color: var(--border-hover); }
   .app-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
