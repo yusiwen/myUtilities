@@ -2,8 +2,10 @@ package crypto
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 
@@ -17,6 +19,11 @@ type Options struct {
 	TripleDes TripleDesOptions `cmd:"" name:"3des" help:"Triple DES encrypt/decrypt."`
 	Aes       AesOptions       `cmd:"" name:"aes" help:"AES encrypt/decrypt."`
 	Rsa       RsaOptions       `cmd:"" name:"rsa" help:"RSA key generation, encrypt/decrypt, sign/verify."`
+	Serve     ServeOptions     `cmd:"" name:"serve" help:"Start crypto toolkit HTTP server."`
+}
+
+type ServeOptions struct {
+	Port int `help:"Port to listen on." default:"8087"`
 }
 
 type Sm4Options struct {
@@ -279,6 +286,124 @@ func resolveHexOrFile(hexStr, file string) ([]byte, error) {
 		return corecrypto.ReadFile(file)
 	}
 	return nil, fmt.Errorf("either --signature or --signature-file is required")
+}
+
+func (o *ServeOptions) Run() error {
+	mux := http.NewServeMux()
+	mux.Handle("/", FrontendHandler())
+	RegisterHandlers(mux)
+	fmt.Printf("Crypto toolkit server listening on :%d\n", o.Port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+}
+
+func RegisterHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/api/crypto/passwd", handlePasswd)
+	mux.HandleFunc("/api/crypto/cipher", handleCipher)
+}
+
+func handlePasswd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Length int `json:"length"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	if req.Length < 8 {
+		req.Length = 8
+	}
+	pw, err := corecrypto.GeneratePassword(req.Length)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("generate password: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"password": pw})
+}
+
+func handleCipher(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Cipher    string `json:"cipher"`
+		Mode      string `json:"mode"`
+		Op        string `json:"op"`
+		Key       string `json:"key"`
+		IV        string `json:"iv"`
+		Input     string `json:"input"`
+		InputHex  bool   `json:"inputHex"`
+		OutputHex bool   `json:"outputHex"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	var c corecrypto.Cipher
+	switch req.Cipher {
+	case "aes":
+		c = &corecrypto.AESCipher{}
+	case "des":
+		c = &corecrypto.DESCipher{}
+	case "3des":
+		c = &corecrypto.TripleDESCipher{}
+	case "sm4":
+		c = &corecrypto.SM4Cipher{}
+	default:
+		http.Error(w, "unsupported cipher", http.StatusBadRequest)
+		return
+	}
+
+	key := padOrTruncate([]byte(req.Key), c.KeySize())
+	var iv []byte
+	if req.Mode == "cbc" {
+		iv = padOrTruncate([]byte(req.IV), c.BlockSize())
+	}
+
+	data := []byte(req.Input)
+	if req.InputHex {
+		d, err := hex.DecodeString(req.Input)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("invalid hex input: %v", err), http.StatusBadRequest)
+			return
+		}
+		data = d
+	}
+
+	mode := corecrypto.CipherMode(req.Mode)
+	var result []byte
+	var err error
+	if req.Op == "encrypt" {
+		result, err = c.Encrypt(key, iv, data, mode)
+	} else {
+		result, err = c.Decrypt(key, iv, data, mode)
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf("%s operation failed: %v", req.Op, err), http.StatusBadRequest)
+		return
+	}
+
+	out := string(result)
+	if req.OutputHex {
+		out = hex.EncodeToString(result)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"result": out})
+}
+
+func padOrTruncate(data []byte, size int) []byte {
+	if len(data) < size {
+		padded := make([]byte, size)
+		copy(padded, data)
+		return padded
+	}
+	return data[:size]
 }
 
 func writeOutput(data []byte, file string) error {

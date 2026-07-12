@@ -39,3 +39,5 @@ qrcode/frontend/node_modules/
 qrcode/frontend/dist/
 jarinfo/frontend/node_modules/
 jarinfo/frontend/dist/
+crypto/frontend/node_modules/
+crypto/frontend/dist/

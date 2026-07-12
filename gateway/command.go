@@ -11,6 +11,7 @@ import (
 
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/es"
+	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/qrcode"
@@ -66,6 +67,8 @@ func landingPage(hasMock bool) string {
   .app-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-title); }
   .app-desc { font-size: 0.85rem; color: var(--text2); }
   .footer { margin-top: 2.5rem; font-size: 0.75rem; color: var(--text2); }
+  .footer a { color: var(--primary); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
   .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
   .toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
 </style>
@@ -109,10 +112,16 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128230;</div>
       <div class="app-name">JAR Analyzer</div>
       <div class="app-desc">Analyze JAR file structure and metadata</div>
+    </a>
+    <a href="/crypto/" class="app-card">
+      <div class="app-icon">&#128274;</div>
+      <div class="app-name">Crypto</div>
+      <div class="app-desc">Encrypt, decrypt, and generate passwords</div>
     </a>` + mockCard + `
   </div>
-  <p class="footer">mu &copy; 2025</p>
+  <p class="footer">mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
 </div>
+<script>document.getElementById('copyright-year').textContent=new Date().getFullYear()</script>
 </body>
 </html>`
 }
@@ -228,6 +237,10 @@ func (o *Options) Run() error {
 	mux.Handle("/jarinfo/", http.StripPrefix("/jarinfo", withGateway(jarinfo.FrontendHandler())))
 	jarinfo.RegisterHandlers(mux)
 	log.Printf("Gateway:   /jarinfo/* -> JAR Analyzer frontend")
+
+	mux.Handle("/crypto/", http.StripPrefix("/crypto", withGateway(crypto.FrontendHandler())))
+	crypto.RegisterHandlers(mux)
+	log.Printf("Gateway:   /crypto/* -> Crypto Toolkit frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
