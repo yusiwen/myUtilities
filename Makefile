@@ -6,6 +6,7 @@ BUILDTIME=$(shell date -u)
 FRONTEND_DIR=wol/frontend
 ES_FRONTEND_DIR=es/frontend
 MOCK_FRONTEND_DIR=mock/frontend
+QRCODE_FRONTEND_DIR=qrcode/frontend
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -28,6 +29,8 @@ frontend:
 	@echo '{"version": "$(VERSION)"}' > $(ES_FRONTEND_DIR)/dist/version.json
 	@echo "Building Mock Dynamic Svelte frontend..."
 	cd $(MOCK_FRONTEND_DIR) && npm install --silent && npm run build
+	@echo "Building QR Code Svelte frontend..."
+	cd $(QRCODE_FRONTEND_DIR) && npm install --silent && npm run build
 
 build: frontend default
 

@@ -12,6 +12,7 @@ import (
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/mock"
+	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
 )
 
@@ -93,10 +94,15 @@ func landingPage(hasMock bool) string {
       <div class="app-name">Wake-on-LAN</div>
       <div class="app-desc">Manage devices, send WOL magic packets, track boot events</div>
     </a>
-    <a href="/es/" class="app-card">
+		<a href="/es/" class="app-card">
       <div class="app-icon">&#128269;</div>
       <div class="app-name">Elasticsearch</div>
       <div class="app-desc">Query indices, browse documents, manage ES connections</div>
+    </a>
+    <a href="/qrcode/" class="app-card">
+      <div class="app-icon">&#128208;</div>
+      <div class="app-name">QR Code</div>
+      <div class="app-desc">Generate QR codes from text</div>
     </a>` + mockCard + `
   </div>
   <p class="footer">mu &copy; 2025</p>
@@ -209,6 +215,10 @@ func (o *Options) Run() error {
 		hasMock = true
 	}
 
+	mux.Handle("/qrcode/", http.StripPrefix("/qrcode", withGateway(qrcode.FrontendHandler())))
+	qrcode.RegisterHandlers(mux)
+	log.Printf("Gateway:   /qrcode/* -> QR Code frontend")
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -220,8 +230,9 @@ func (o *Options) Run() error {
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Gateway: starting on http://localhost%s", addr)
-	log.Printf("Gateway:   /      -> landing page")
-	log.Printf("Gateway:   /wol/* -> WOL frontend")
-	log.Printf("Gateway:   /es/*  -> ES frontend")
+	log.Printf("Gateway:   /        -> landing page")
+	log.Printf("Gateway:   /wol/*   -> WOL frontend")
+	log.Printf("Gateway:   /es/*    -> ES frontend")
+	log.Printf("Gateway:   /qrcode/ -> QR Code frontend")
 	return http.ListenAndServe(addr, mux)
 }
