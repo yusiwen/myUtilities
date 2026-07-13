@@ -718,9 +718,6 @@
     font-size: 1em;
   }
 
-  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
-  .home-link:hover { border-color: #e94560; color: var(--text); }
-
   .modal-overlay {
     position: fixed;
     top: 0;

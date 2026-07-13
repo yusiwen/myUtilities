@@ -200,15 +200,13 @@
 <style>
   .app { max-width: 600px; margin: 0 auto; padding: 40px 16px; }
   h1 { font-size: 24px; margin-bottom: 16px; }
-  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; float: left; }
-  .home-link:hover { border-color: var(--primary); color: var(--text); }
+  .home-link { float: left; }
 
   .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
   .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
   .tab.active { color: var(--text); border-bottom-color: var(--primary); }
   .tab:hover { color: var(--text); }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
   .field { margin-bottom: 14px; }
   .field label, .field-label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
   .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
@@ -222,15 +220,10 @@
   .radio-group label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
   .radio-group input { width: auto; }
 
-  .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-  .btn:hover { background: var(--surface2); }
-  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; width: 100%; text-align: center; }
-  .btn.primary:hover { opacity: .85; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.xs { font-size: 11px; padding: 2px 8px; flex-shrink: 0; }
+  .btn.primary { width: 100%; text-align: center; }
+  .btn.xs { flex-shrink: 0; }
 
-  .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
-  .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; }
+  .msg { margin-bottom: 10px; }
 
   .result-box { display: flex; align-items: center; gap: 8px; margin-top: 14px; background: var(--bg); padding: 12px; border-radius: 8px; }
   .result-text { flex: 1; font-size: 14px; word-break: break-all; }

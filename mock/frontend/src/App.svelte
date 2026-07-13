@@ -230,19 +230,12 @@
   .app { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
   .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
   .header h1 { font-size: 22px; font-weight: 600; }
-  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
-  .home-link:hover { border-color: var(--primary); color: var(--text); }
   .header-actions { display: flex; gap: 8px; }
 
-  .btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-  .btn:hover { background: var(--surface2); }
-  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-  .btn.primary:hover { opacity: .85; }
+  .btn { padding: 8px 16px; }
   .btn.danger { border-color: var(--danger); color: var(--danger); }
   .btn.danger:hover { background: var(--danger); color: #fff; }
   .btn.sm { font-size: 12px; padding: 4px 10px; }
-  .btn.xs { font-size: 11px; padding: 2px 8px; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
 
   .toast { padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; cursor: pointer; }
   .toast.error { background: #3d1f2a; border: 1px solid var(--danger); color: var(--danger); }
