@@ -12,6 +12,7 @@ import (
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/crypto"
+	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/qrcode"
@@ -117,6 +118,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128274;</div>
       <div class="app-name">Crypto</div>
       <div class="app-desc">Encrypt, decrypt, and generate passwords</div>
+    </a>
+    <a href="/diff/" class="app-card">
+      <div class="app-icon">&#128196;</div>
+      <div class="app-name">Diff</div>
+      <div class="app-desc">Compare text and files side by side</div>
     </a>` + mockCard + `
   </div>
   <p class="footer">mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
@@ -241,6 +247,10 @@ func (o *Options) Run() error {
 	mux.Handle("/crypto/", http.StripPrefix("/crypto", withGateway(crypto.FrontendHandler())))
 	crypto.RegisterHandlers(mux)
 	log.Printf("Gateway:   /crypto/* -> Crypto Toolkit frontend")
+
+	mux.Handle("/diff/", http.StripPrefix("/diff", withGateway(diff.FrontendHandler())))
+	diff.RegisterHandlers(mux)
+	log.Printf("Gateway:   /diff/* -> Diff Tool frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

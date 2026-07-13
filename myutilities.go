@@ -4,6 +4,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/completion"
 	"github.com/yusiwen/myUtilities/crypto"
+	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/gateway"
 	"github.com/yusiwen/myUtilities/git"
@@ -32,6 +33,7 @@ type MyUtilities struct {
 	Watch      watch.Options               `cmd:"" name:"watch" help:"Watch resources for changes."`
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
+	Diff       diff.Options                `cmd:"" name:"diff" help:"Text diff tool."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

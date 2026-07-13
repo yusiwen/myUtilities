@@ -4,6 +4,8 @@
 
   // Password generator
   let pwLength = $state(32)
+  let pwDigits = $state(true)
+  let pwSpecial = $state(false)
   let password = $state('')
   let pwError = $state('')
 
@@ -32,6 +34,61 @@
   let encError = $state('')
   let encLabelResult = $state('Copy')
 
+  // JWT
+  let jwtToken = $state('')
+  let jwtAlg = $state('HS256')
+  let jwtKey = $state('')
+  let jwtKeyB64 = $state(false)
+  let jwtHeader = $state('')
+  let jwtPayload = $state('')
+  let jwtVerified = $state(null)
+  let jwtError = $state('')
+
+  async function doJwtDecode() {
+    if (!jwtToken.trim()) { jwtError = 'Token is required'; return }
+    jwtError = ''
+    jwtHeader = ''
+    jwtPayload = ''
+    jwtVerified = null
+    try {
+      const r = await fetch('/api/crypto/jwt/decode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: jwtToken.trim() }),
+      })
+      if (!r.ok) throw new Error((await r.text()) || 'request failed')
+      const d = await r.json()
+      jwtHeader = JSON.stringify(d.header, null, 2)
+      jwtPayload = JSON.stringify(d.payload, null, 2)
+      if (d.header && d.header.alg) jwtAlg = d.header.alg
+    } catch (e) {
+      jwtError = e.message
+    }
+  }
+
+  async function doJwtVerify() {
+    if (!jwtToken.trim()) { jwtError = 'Token is required'; return }
+    if (!jwtKey) { jwtError = 'Secret key is required for verification'; return }
+    jwtError = ''
+    jwtHeader = ''
+    jwtPayload = ''
+    jwtVerified = null
+    try {
+      const r = await fetch('/api/crypto/jwt/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: jwtToken.trim(), key: jwtKey, keyB64: jwtKeyB64, alg: jwtAlg }),
+      })
+      if (!r.ok) throw new Error((await r.text()) || 'request failed')
+      const d = await r.json()
+      jwtHeader = JSON.stringify(d.header, null, 2)
+      jwtPayload = JSON.stringify(d.payload, null, 2)
+      jwtVerified = d.valid
+    } catch (e) {
+      jwtError = e.message
+    }
+  }
+
   async function genPasswd() {
     pwError = ''
     password = ''
@@ -39,7 +96,7 @@
       const r = await fetch('/api/crypto/passwd', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ length: pwLength }),
+        body: JSON.stringify({ length: pwLength, digits: pwDigits, special: pwSpecial }),
       })
       if (!r.ok) throw new Error((await r.text()) || 'request failed')
       const d = await r.json()
@@ -138,6 +195,7 @@
     <button class="tab" class:active={tab === 'passwd'} onclick={() => tab = 'passwd'}>Password Generator</button>
     <button class="tab" class:active={tab === 'cipher'} onclick={() => tab = 'cipher'}>Encrypt / Decrypt</button>
     <button class="tab" class:active={tab === 'encode'} onclick={() => tab = 'encode'}>Encode / Decode</button>
+    <button class="tab" class:active={tab === 'jwt'} onclick={() => tab = 'jwt'}>JWT</button>
   </div>
 
   {#if tab === 'passwd'}
@@ -145,6 +203,16 @@
       <div class="field">
         <label for="pw-length">Length</label>
         <input id="pw-length" type="number" bind:value={pwLength} min="8" max="128" />
+      </div>
+      <div class="field-row toggles">
+        <label class="toggle">
+          <input type="checkbox" bind:checked={pwDigits} />
+          <span class="toggle-label">Digits</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" bind:checked={pwSpecial} />
+          <span class="toggle-label">Special chars</span>
+        </label>
       </div>
       <button class="btn primary" onclick={genPasswd}>Generate</button>
 
@@ -272,6 +340,62 @@
         </div>
       {/if}
     </div>
+  {:else if tab === 'jwt'}
+    <div class="card">
+      <div class="field">
+        <label for="jwt-token">JWT Token</label>
+        <textarea id="jwt-token" bind:value={jwtToken} rows="5" placeholder="Paste a JWT token here"></textarea>
+      </div>
+
+      <div class="field-row">
+        <button class="btn primary" onclick={doJwtDecode}>Decode</button>
+        {#if jwtVerified !== null}
+          <span class="jwt-badge" class:jwt-valid={jwtVerified} class:jwt-invalid={!jwtVerified}>
+            {jwtVerified ? '✅ Valid signature' : '❌ Invalid signature'}
+          </span>
+        {/if}
+      </div>
+
+      {#if jwtError}
+        <div class="msg error">{jwtError}</div>
+      {/if}
+
+      {#if jwtHeader}
+        <div class="jwt-section">
+          <div class="jwt-label">Header</div>
+          <pre class="jwt-json">{jwtHeader}</pre>
+        </div>
+        <div class="jwt-section">
+          <div class="jwt-label">Payload</div>
+          <pre class="jwt-json">{jwtPayload}</pre>
+        </div>
+      {/if}
+
+      <details class="verify-section">
+        <summary>Verify signature</summary>
+        <div class="field-row">
+          <div class="field">
+            <label for="jwt-alg">Algorithm</label>
+            <select id="jwt-alg" bind:value={jwtAlg}>
+              <option value="HS256">HS256</option>
+              <option value="HS384">HS384</option>
+              <option value="HS512">HS512</option>
+            </select>
+          </div>
+          <div class="field" style="flex:2">
+            <label for="jwt-key">Secret key</label>
+            <div class="field-row" style="align-items:center">
+              <input id="jwt-key" type="text" bind:value={jwtKey} placeholder="HMAC secret key" style="flex:1" />
+              <label class="toggle" style="white-space:nowrap;flex-shrink:0">
+                <input type="checkbox" bind:checked={jwtKeyB64} />
+                <span class="toggle-label">Base64</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <button class="btn primary" onclick={doJwtVerify}>Verify</button>
+      </details>
+    </div>
   {/if}
 </div>
 
@@ -298,6 +422,10 @@
   .radio-group label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
   .radio-group input { width: auto; }
 
+  .toggles { display: flex; gap: 20px; margin-bottom: 14px; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
+  .toggle input { width: auto; }
+
   .btn.primary { width: 100%; text-align: center; }
   .btn.xs { flex-shrink: 0; }
 
@@ -306,4 +434,14 @@
   .result-box { display: flex; align-items: center; gap: 8px; margin-top: 14px; background: var(--bg); padding: 12px; border-radius: 8px; }
   .result-text { flex: 1; font-size: 14px; word-break: break-all; }
   .result-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
+
+  .jwt-section { margin-bottom: 14px; }
+  .jwt-label { font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
+  .jwt-json { background: var(--bg); padding: 12px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; margin: 0; }
+  .jwt-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
+  .jwt-valid { color: #4caf50; }
+  .jwt-invalid { color: #e94560; }
+  .verify-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .verify-section summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text2); margin-bottom: 12px; }
+  .verify-section summary:hover { color: var(--text); }
 </style>

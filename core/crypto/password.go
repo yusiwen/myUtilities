@@ -8,21 +8,46 @@ import (
 const (
 	DefaultPasswordLength = 32
 	MinPasswordLength     = 8
-	passwordCharset       = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	letterCharset         = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	digitsCharset         = "0123456789"
+	specialCharset        = "!@#$%^&*()-_=+[]{}|;:,.<>?/~"
+	passwordCharset       = letterCharset + digitsCharset
 )
 
+type PasswordOptions struct {
+	Length         int
+	IncludeDigits  bool
+	IncludeSpecial bool
+}
+
 func GeneratePassword(length int) (string, error) {
-	if length < MinPasswordLength {
-		length = MinPasswordLength
+	return GeneratePasswordWithOpts(PasswordOptions{
+		Length:         length,
+		IncludeDigits:  true,
+		IncludeSpecial: false,
+	})
+}
+
+func GeneratePasswordWithOpts(opts PasswordOptions) (string, error) {
+	if opts.Length < MinPasswordLength {
+		opts.Length = MinPasswordLength
 	}
 
-	result := make([]byte, length)
+	charset := letterCharset
+	if opts.IncludeDigits {
+		charset += digitsCharset
+	}
+	if opts.IncludeSpecial {
+		charset += specialCharset
+	}
+
+	result := make([]byte, opts.Length)
 	for i := range result {
-		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(passwordCharset))))
+		idx, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
 		if err != nil {
 			return "", err
 		}
-		result[i] = passwordCharset[idx.Int64()]
+		result[i] = charset[idx.Int64()]
 	}
 	return string(result), nil
 }
