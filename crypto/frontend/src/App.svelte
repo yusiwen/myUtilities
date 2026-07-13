@@ -24,6 +24,14 @@
   let cipherError = $state('')
   let loading = $state(false)
 
+  // Encode/Decode
+  let encType = $state('base64')
+  let encOp = $state('encode')
+  let encInput = $state('')
+  let encResult = $state('')
+  let encError = $state('')
+  let encLabelResult = $state('Copy')
+
   async function genPasswd() {
     pwError = ''
     password = ''
@@ -81,11 +89,42 @@
     setTimeout(() => setLabel('Copy'), 2000)
   }
 
+  async function doEnc() {
+    if (!encInput) { encError = 'Input is required'; return }
+    encError = ''
+    encResult = ''
+    try {
+      const r = await fetch(`/api/crypto/${encOp}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: encType, input: encInput }),
+      })
+      if (!r.ok) throw new Error((await r.text()) || 'request failed')
+      const d = await r.json()
+      encResult = d.result
+    } catch (e) {
+      encError = e.message
+    }
+  }
+
+  function switchOp(op) {
+    encOp = op
+    encResult = ''
+    encError = ''
+  }
+
   const ciphers = [
     { value: 'aes', label: 'AES' },
     { value: 'des', label: 'DES' },
     { value: '3des', label: '3DES' },
     { value: 'sm4', label: 'SM4' },
+  ]
+
+  const encTypes = [
+    { value: 'base64', label: 'Base64' },
+    { value: 'base64url', label: 'Base64 (URL-safe)' },
+    { value: 'hex', label: 'Hex' },
+    { value: 'url', label: 'URL' },
   ]
 </script>
 
@@ -98,6 +137,7 @@
   <div class="tabs">
     <button class="tab" class:active={tab === 'passwd'} onclick={() => tab = 'passwd'}>Password Generator</button>
     <button class="tab" class:active={tab === 'cipher'} onclick={() => tab = 'cipher'}>Encrypt / Decrypt</button>
+    <button class="tab" class:active={tab === 'encode'} onclick={() => tab = 'encode'}>Encode / Decode</button>
   </div>
 
   {#if tab === 'passwd'}
@@ -118,7 +158,7 @@
         </div>
       {/if}
     </div>
-  {:else}
+  {:else if tab === 'cipher'}
     <div class="card">
       <div class="field-row">
         <div class="field">
@@ -191,6 +231,44 @@
         <div class="result-box">
           <code class="result-text result-mono">{result}</code>
           <button class="btn xs" onclick={() => copy(result, v => copyLabelResult = v)}>{copyLabelResult}</button>
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <div class="card">
+      <div class="field">
+        <label for="enc-type">Type</label>
+        <select id="enc-type" bind:value={encType}>
+          {#each encTypes as t}
+            <option value={t.value}>{t.label}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Operation</div>
+        <div class="radio-group">
+          <label><input type="radio" name="enc-op" bind:group={encOp} value="encode" onchange={() => switchOp('encode')} /> Encode</label>
+          <label><input type="radio" name="enc-op" bind:group={encOp} value="decode" onchange={() => switchOp('decode')} /> Decode</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="enc-input">Input</label>
+        <textarea id="enc-input" bind:value={encInput} rows="4" placeholder="Text to encode or decode"></textarea>
+      </div>
+
+      <button class="btn primary" onclick={doEnc}>
+        {encOp === 'encode' ? 'Encode' : 'Decode'}
+      </button>
+
+      {#if encError}
+        <div class="msg error">{encError}</div>
+      {/if}
+      {#if encResult}
+        <div class="result-box">
+          <code class="result-text result-mono">{encResult}</code>
+          <button class="btn xs" onclick={() => copy(encResult, v => encLabelResult = v)}>{encLabelResult}</button>
         </div>
       {/if}
     </div>

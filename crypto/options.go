@@ -1,13 +1,17 @@
 package crypto
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
+
+	"golang.org/x/term"
 
 	corecrypto "github.com/yusiwen/myUtilities/core/crypto"
 )
@@ -19,6 +23,8 @@ type Options struct {
 	TripleDes TripleDesOptions `cmd:"" name:"3des" help:"Triple DES encrypt/decrypt."`
 	Aes       AesOptions       `cmd:"" name:"aes" help:"AES encrypt/decrypt."`
 	Rsa       RsaOptions       `cmd:"" name:"rsa" help:"RSA key generation, encrypt/decrypt, sign/verify."`
+	Encode    EncodeOptions    `cmd:"" name:"encode" help:"Encode data (base64/hex/url)."`
+	Decode    DecodeOptions    `cmd:"" name:"decode" help:"Decode data (base64/hex/url)."`
 	Serve     ServeOptions     `cmd:"" name:"serve" help:"Start crypto toolkit HTTP server."`
 }
 
@@ -105,6 +111,16 @@ type RsaCertOptions struct {
 	KeyOut  string `name:"key-out" default:"key.pem" help:"Private key output path."`
 }
 
+type EncodeOptions struct {
+	Type  string `enum:"base64,base64url,hex,url" default:"base64" help:"Encoding type."`
+	Input string `arg:"" optional:"" name:"input" help:"Text to encode (or pipe from stdin)."`
+}
+
+type DecodeOptions struct {
+	Type  string `enum:"base64,base64url,hex,url" default:"base64" help:"Encoding type."`
+	Input string `arg:"" optional:"" name:"input" help:"Text to decode (or pipe from stdin)."`
+}
+
 func (o *PasswdOptions) Run() error {
 	pw, err := corecrypto.GeneratePassword(o.Length)
 	if err != nil {
@@ -128,6 +144,32 @@ func (o *TripleDesOptions) Run() error {
 
 func (o *AesOptions) Run() error {
 	return corecrypto.RunCipher(&corecrypto.AESCipher{}, &o.CommonOptions, corecrypto.CipherMode(o.Mode))
+}
+
+func (o *EncodeOptions) Run() error {
+	input, err := resolveInput(o.Input)
+	if err != nil {
+		return err
+	}
+	result, err := encode(o.Type, input)
+	if err != nil {
+		return fmt.Errorf("encode: %w", err)
+	}
+	fmt.Print(result)
+	return nil
+}
+
+func (o *DecodeOptions) Run() error {
+	input, err := resolveInput(o.Input)
+	if err != nil {
+		return err
+	}
+	result, err := decode(o.Type, input)
+	if err != nil {
+		return fmt.Errorf("decode: %w", err)
+	}
+	fmt.Print(result)
+	return nil
 }
 
 func (o *RsaGenKeyOptions) Run() error {
@@ -299,6 +341,8 @@ func (o *ServeOptions) Run() error {
 func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/crypto/passwd", handlePasswd)
 	mux.HandleFunc("/api/crypto/cipher", handleCipher)
+	mux.HandleFunc("/api/crypto/encode", handleEncode)
+	mux.HandleFunc("/api/crypto/decode", handleDecode)
 }
 
 func handlePasswd(w http.ResponseWriter, r *http.Request) {
@@ -395,6 +439,104 @@ func handleCipher(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"result": out})
+}
+
+func resolveInput(text string) ([]byte, error) {
+	if text != "" {
+		return []byte(text), nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return io.ReadAll(os.Stdin)
+	}
+	return nil, fmt.Errorf("input required; pipe input or provide as argument")
+}
+
+func encode(typ string, data []byte) (string, error) {
+	switch typ {
+	case "base64":
+		return base64.StdEncoding.EncodeToString(data), nil
+	case "base64url":
+		return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(data), nil
+	case "hex":
+		return hex.EncodeToString(data), nil
+	case "url":
+		return url.QueryEscape(string(data)), nil
+	}
+	return "", fmt.Errorf("unknown encoding type: %s", typ)
+}
+
+func decode(typ string, data []byte) (string, error) {
+	switch typ {
+	case "base64":
+		d, err := base64.StdEncoding.DecodeString(string(data))
+		if err != nil {
+			return "", err
+		}
+		return string(d), nil
+	case "base64url":
+		d, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(string(data))
+		if err != nil {
+			return "", err
+		}
+		return string(d), nil
+	case "hex":
+		d, err := hex.DecodeString(string(data))
+		if err != nil {
+			return "", err
+		}
+		return string(d), nil
+	case "url":
+		d, err := url.QueryUnescape(string(data))
+		if err != nil {
+			return "", err
+		}
+		return d, nil
+	}
+	return "", fmt.Errorf("unknown encoding type: %s", typ)
+}
+
+func handleEncode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Type  string `json:"type"`
+		Input string `json:"input"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	result, err := encode(req.Type, []byte(req.Input))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("encode: %v", err), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"result": result})
+}
+
+func handleDecode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Type  string `json:"type"`
+		Input string `json:"input"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	result, err := decode(req.Type, []byte(req.Input))
+	if err != nil {
+		http.Error(w, fmt.Sprintf("decode: %v", err), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"result": result})
 }
 
 func padOrTruncate(data []byte, size int) []byte {

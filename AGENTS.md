@@ -152,6 +152,113 @@ The `core/` directory contains reusable business logic:
   - Interactive confirmation with editor-based edit support
   - Colorized output via `github.com/morikuni/aec`
 
+## Web Frontend Architecture
+
+Modules with a web UI (served through the gateway or standalone) must follow these conventions.
+
+### File Structure
+
+```
+<module>/
+├── embed.go                #go:embed frontend/dist + FrontendHandler()
+├── frontend/
+│   ├── package.json        svelte + vite
+│   ├── vite.config.js      base: './'
+│   ├── index.html          <!-- inject:theme --> + <!-- inject:common --> placeholders
+│   └── src/
+│       ├── main.js         mount Svelte app
+│       └── App.svelte      main component
+```
+
+### Shared Partials
+
+All frontends inject shared CSS/JS via placeholders at build time (handled by `make frontend`):
+
+| File | Placeholder | Contents |
+|---|---|---|
+| `shared/frontend/theme-partial.html` | `<!-- inject:theme -->` | CSS variables (`--bg`, `--surface`, `--primary`, etc.), theme toggle JS, `.toggle-btn` styles |
+| `shared/frontend/common-partial.html` | `<!-- inject:common -->` | Shared class styles (`.home-link`, `.btn`, `.card`, `.msg`) |
+
+**Rules:**
+- Every `index.html` MUST contain both `<!-- inject:theme -->` and `<!-- inject:common -->` placeholders.
+- CSS variables in theme-partial are the single source of truth for all colors.
+- Modifying shared styles in these partials affects all 6+ frontends simultaneously.
+- Per-module style overrides belong in `App.svelte`'s `<style>` block (Svelte-scoped).
+
+### Required Go Exports
+
+Each module's Go package must export:
+
+```go
+// FrontendHandler serves the embedded Svelte frontend (SPA with index.html fallback).
+func FrontendHandler() http.Handler
+
+// RegisterHandlers registers all API routes on the given mux.
+// Routes are typically under /api/<module>/... (root-level, not prefixed).
+func RegisterHandlers(mux *http.ServeMux)
+```
+
+`embed.go` follows this pattern (same as `wol/embed.go`, `mock/dynamic_admin.go`, etc.):
+
+```go
+//go:embed frontend/dist
+var frontendFS embed.FS
+
+func FrontendHandler() http.Handler { /* ... */ }
+```
+
+### Serve Subcommand
+
+Every web-enabled module MUST provide a standalone serve subcommand:
+
+```go
+type ServeOptions struct {
+    Port int `help:"Port to listen on." default:"808x"`
+}
+
+func (o *ServeOptions) Run() error {
+    mux := http.NewServeMux()
+    mux.Handle("/", FrontendHandler())
+    RegisterHandlers(mux)
+    return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+}
+```
+
+This allows running independently: `mu <module> serve --port <port>`.
+
+### Required Frontend Features
+
+Every `App.svelte` MUST include:
+
+- **Theme toggle** — Uses `window.__MU_GATEWAY__` detection (server-side injected by gateway) and shared `toggleTheme()` JS for dark/light switching.
+- **`← Home` button** — Conditionally shown via `{#if inGateway}` (reads `window.__MU_GATEWAY__`).
+- **CSS variable theming** — All colors use `var(--bg)`, `var(--surface)`, `var(--text)`, etc. from the shared partials.
+- **Copy button with fallback** — Uses `navigator.clipboard.writeText` with `execCommand('copy')` fallback for non-HTTPS environments.
+
+### Gateway Integration
+
+In `gateway/command.go`, register the module following this pattern:
+
+```go
+import "github.com/yusiwen/myUtilities/<module>"
+
+// In Run():
+mux.Handle("/<module>/", http.StripPrefix("/<module>", withGateway(<module>.FrontendHandler())))
+<module>.RegisterHandlers(mux)
+```
+
+Also add a landing page card in the `landingPage()` function and a log entry listing the route.
+
+### Registration Checklist
+
+When adding a new module with a web UI:
+
+1. `Makefile` — Add `<MODULE>_FRONTEND_DIR` variable and build step in `frontend` target.
+2. `.gitignore` — Add `frontend/node_modules/` and `frontend/dist/`.
+3. `gateway/command.go` — Import package, register frontend + API, add landing card, add log entry.
+4. `README.md` — Document CLI usage + `serve` subcommand + gateway route.
+5. `shared/frontend/` partials — No changes needed unless new CSS variables or shared classes are required.
+
 ### Key Dependencies
 
 - `github.com/alecthomas/kong` - CLI framework

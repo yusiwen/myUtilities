@@ -74,6 +74,25 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 44. [x] Add command completion for shells
 45. [x] Create a web UI for the mock services
 
+## Web UI Candidates (New Feature Ideas)
+
+Simple tools that would benefit from a web UI and gateway integration:
+
+| Priority | Module | Description | Backend Effort | Frontend Effort |
+|---|---|---|---|---|
+| 🥇 | **encode/decode** | Base64, URL, Hex encoding/decoding with dual-pane UI | ⭐ ~15 lines | ⭐ ~80 lines |
+| 🥇 | **JSON Tool** | Format, validate, compress, and query JSON (reuse CodeMirror) | ⭐ ~10 lines | ⭐ ~100 lines |
+| 🥇 | **UUID** | Generate UUID v1/v4/v7, single or batch | ⭐ ~20 lines | ⭐ ~50 lines |
+| 🥈 | **Timestamp** | Unix timestamp ↔ human date/time, auto-detect format | ⭐ ~30 lines | ⭐ ~60 lines |
+| 🥈 | **JWT** | Decode JWT tokens (header + payload), no secret validation | ⭐ ~30 lines | ⭐ ~80 lines |
+| 🥉 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines |
+| 🥉 | **Diff** | Side-by-side text diff with line highlighting | ⭐⭐ ~30 lines | ⭐⭐ ~120 lines |
+| 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines |
+| 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines |
+| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines |
+| — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (core/watcher ready) | ⭐⭐⭐ ~200 lines |
+| — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (core/git + openai ready) | ⭐⭐⭐ ~200 lines |
+
 ## Recently Completed
 
 - **Mock Dynamic Server** — Configurable multi-endpoint mock with template engine, conditional responses, delay simulation, and verbose logging

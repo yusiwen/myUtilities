@@ -4,8 +4,66 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ES Search</title>
-  <!-- inject:theme -->
-  <!-- inject:common -->
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #0f3460;
+      --primary: #e94560;
+      --text: #e0e0e0;
+      --text2: #a0a0b0;
+      --text3: #888888;
+      --border: #2a2a4a;
+      --border2: #0f3460;
+      --highlight: #2a2a20;
+    }
+    :root.light {
+      --bg: #f5f5f5;
+      --surface: #ffffff;
+      --surface2: #f0f0f0;
+      --primary: #e94560;
+      --text: #333333;
+      --text2: #555555;
+      --text3: #7f8c8d;
+      --border: #dddddd;
+      --border2: #eeeeee;
+      --highlight: #fffde7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
+    .toggle-btn:hover { border-color: var(--primary); color: var(--text); }
+  </style>
+  <script>
+    (function(){
+      var k = 'mu-theme', btn = document.getElementById('theme-btn');
+      function setTheme(t) {
+        document.documentElement.className = t === 'light' ? 'light' : '';
+        localStorage.setItem(k, t);
+        if (btn) btn.textContent = t === 'light' ? '\u263E' : '\u2600';
+      }
+      function toggleTheme() { setTheme(document.documentElement.className === 'light' ? 'dark' : 'light'); }
+      var saved = localStorage.getItem(k);
+      if (saved) setTheme(saved);
+      window.toggleTheme = toggleTheme;
+    })()
+  </script>
+  <style>
+    .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
+    .home-link:hover { border-color: var(--primary); color: var(--text); }
+
+    .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
+    .btn:hover { background: var(--surface2); }
+    .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .btn.primary:hover { opacity: .85; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.xs { font-size: 11px; padding: 2px 8px; }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+
+    .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+    .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; }
+  </style>
 </head>
 <body>
   <button class="toggle-btn" id="theme-btn" onclick="toggleTheme()">☀</button>
