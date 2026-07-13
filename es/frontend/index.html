@@ -4,44 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ES Search</title>
-  <style>
-    :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --surface2: #0f3460;
-      --text: #e0e0e0;
-      --text2: #a0a0b0;
-      --text3: #888888;
-      --border: #2a2a4a;
-      --border2: #0f3460;
-    }
-    :root.light {
-      --bg: #f5f5f5;
-      --surface: #ffffff;
-      --surface2: #f0f0f0;
-      --text: #333333;
-      --text2: #555555;
-      --text3: #7f8c8d;
-      --border: #dddddd;
-      --border2: #eeeeee;
-    }
-    .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; border-color: #2a2a4a; }
-    .toggle-btn:hover { border-color: #e94560; color: var(--text); }
-  </style>
-  <script>
-    (function(){
-      var k = 'mu-theme', btn = document.getElementById('theme-btn');
-      function setTheme(t) {
-        document.documentElement.className = t === 'light' ? 'light' : '';
-        localStorage.setItem(k, t);
-        if (btn) btn.textContent = t === 'light' ? '\u263E' : '\u2600';
-      }
-      function toggleTheme() { setTheme(document.documentElement.className === 'light' ? 'dark' : 'light'); }
-      var saved = localStorage.getItem(k);
-      if (saved) setTheme(saved);
-      window.toggleTheme = toggleTheme;
-    })()
-  </script>
+  <!-- inject:theme -->
 </head>
 <body>
   <button class="toggle-btn" id="theme-btn" onclick="toggleTheme()">☀</button>

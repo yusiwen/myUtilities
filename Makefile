@@ -9,6 +9,8 @@ MOCK_FRONTEND_DIR=mock/frontend
 QRCODE_FRONTEND_DIR=qrcode/frontend
 JARINFO_FRONTEND_DIR=jarinfo/frontend
 CRYPTO_FRONTEND_DIR=crypto/frontend
+THEME_PARTIAL=shared/frontend/theme-partial.html
+FRONTEND_DIRS=wol es mock qrcode jarinfo crypto
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -22,7 +24,21 @@ PLATFORM_LIST = \
 default:
 	CGO_ENABLED=0 go build -trimpath -o $(BINDIR)/$(NAME) .
 
-frontend:
+.PHONY: inject-theme restore-theme
+
+inject-theme:
+	@for dir in $(FRONTEND_DIRS); do \
+	  html="$$dir/frontend/index.html"; \
+	  sed -i '/<!-- inject:theme -->/r $(THEME_PARTIAL)' "$$html"; \
+	  sed -i '/<!-- inject:theme -->/d' "$$html"; \
+	done
+	@echo "Theme partial injected into all frontends"
+
+restore-theme:
+	git checkout -- $(foreach dir,$(FRONTEND_DIRS),$(dir)/frontend/index.html)
+	@echo "Frontend index.html restored"
+
+frontend: inject-theme
 	@echo "Building WOL Svelte frontend..."
 	cd $(FRONTEND_DIR) && npm install --silent && npm run build
 	@echo '{"version": "$(VERSION)"}' > $(FRONTEND_DIR)/dist/version.json
@@ -37,6 +53,7 @@ frontend:
 	cd $(JARINFO_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo "Building Crypto Svelte frontend..."
 	cd $(CRYPTO_FRONTEND_DIR) && npm install --silent && npm run build
+	$(MAKE) restore-theme
 
 build: frontend default
 

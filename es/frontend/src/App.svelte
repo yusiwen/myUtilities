@@ -274,16 +274,7 @@
 {/if}
 
 <style>
-  :global(*) {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
   :global(body) {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
     line-height: 1.6;
   }
 
