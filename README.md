@@ -29,6 +29,30 @@ mu <command> [subcommand] [flags]
 mu install owner/repo --move
 ```
 
+### crypto — Cryptographic tools
+
+Encrypt and decrypt data with various algorithms (AES, DES, 3DES, SM4), and generate
+secure random passwords. Supports both CLI and web UI.
+
+```bash
+# Generate a random password
+mu crypto passwd -l 32
+
+# AES encrypt
+mu crypto aes -e --plain-key "mykey" --input "hello" --output-format hex
+
+# AES decrypt
+mu crypto aes -d --plain-key "mykey" --input "hex-encoded-data" --input-format hex
+
+# Serve web UI (standalone)
+mu crypto serve --port 8087
+```
+
+The web UI provides:
+- **Password Generator** tab — configurable length, one-click copy with clipboard fallback
+- **Encrypt / Decrypt** tab — cipher selection (AES/DES/3DES/SM4), ECB/CBC mode, key/IV input,
+  raw or hex input/output formats
+
 ### mock — Mock servers for testing
 
 ```bash
@@ -138,6 +162,7 @@ mu gateway --port 8080
 | `/mock/__admin/*` | Mock Dynamic | Dynamic mock endpoint management |
 | `/qrcode/` | QR Code | QR code generator web UI |
 | `/jarinfo/` | JAR Analyzer | JAR file analysis web UI |
+| `/crypto/` | Crypto | Encrypt, decrypt, and generate passwords |
 
 All services are optional — if a config file is missing (mock), the corresponding route is
 skipped with a warning and the rest of the gateway starts normally.

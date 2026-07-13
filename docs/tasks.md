@@ -83,3 +83,4 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 - **Unified Dark/Light Theme** — All frontends (gateway, mock, WOL, ES) share CSS variables and localStorage-based theme toggle with `mu-theme` key
 - **QR Code Web UI** — Svelte 5 frontend with text input, level selector, PNG generation via `/api/qrcode`, and gateway integration at `/qrcode/`
 - **JAR Analyzer Web UI** — Svelte 5 frontend with file upload, detailed analysis display, `/api/jarinfo/analyze` API, and gateway integration at `/jarinfo/`
+- **Crypto Web UI** — Svelte 5 frontend with password generator, AES/DES/3DES/SM4 encrypt/decrypt, clipboard fallback, and gateway integration at `/crypto/`
