@@ -35,7 +35,9 @@ inject-theme:
 	@echo "Theme partial injected into all frontends"
 
 restore-theme:
-	git checkout -- $(foreach dir,$(FRONTEND_DIRS),$(dir)/frontend/index.html)
+	@for dir in $(FRONTEND_DIRS); do \
+	  git checkout -- "$$dir/frontend/index.html" 2>/dev/null || true; \
+	done
 	@echo "Frontend index.html restored"
 
 frontend: inject-theme
@@ -53,7 +55,10 @@ frontend: inject-theme
 	cd $(JARINFO_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo "Building Crypto Svelte frontend..."
 	cd $(CRYPTO_FRONTEND_DIR) && npm install --silent && npm run build
-	$(MAKE) restore-theme
+	@for dir in $(FRONTEND_DIRS); do \
+	  git checkout -- "$$dir/frontend/index.html" 2>/dev/null || true; \
+	done
+	@echo "Frontend index.html restored"
 
 build: frontend default
 
