@@ -7,6 +7,10 @@
   let password = $state('')
   let pwError = $state('')
 
+  // Copy feedback
+  let copyLabel = $state('Copy')
+  let copyLabelResult = $state('Copy')
+
   // Cipher
   let cipher = $state('aes')
   let mode = $state('ecb')
@@ -60,8 +64,21 @@
     }
   }
 
-  async function copy(text) {
-    try { await navigator.clipboard.writeText(text) } catch {}
+  async function copy(text, setLabel) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    setLabel('Copied!')
+    setTimeout(() => setLabel('Copy'), 2000)
   }
 
   const ciphers = [
@@ -97,7 +114,7 @@
       {#if password}
         <div class="result-box">
           <code class="result-text">{password}</code>
-          <button class="btn xs" onclick={() => copy(password)}>Copy</button>
+          <button class="btn xs" onclick={() => copy(password, v => copyLabel = v)}>{copyLabel}</button>
         </div>
       {/if}
     </div>
@@ -173,7 +190,7 @@
       {#if result}
         <div class="result-box">
           <code class="result-text result-mono">{result}</code>
-          <button class="btn xs" onclick={() => copy(result)}>Copy</button>
+          <button class="btn xs" onclick={() => copy(result, v => copyLabelResult = v)}>{copyLabelResult}</button>
         </div>
       {/if}
     </div>

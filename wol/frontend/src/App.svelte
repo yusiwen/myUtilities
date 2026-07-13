@@ -142,6 +142,12 @@
     editingName = name
   }
 
+  function cancelEdit() {
+    formName = ''
+    formMac = ''
+    editingName = null
+  }
+
   function toggleFavorite(name) {
     const idx = favorites.indexOf(name)
     if (idx >= 0) {
@@ -571,7 +577,7 @@
   }
 
   .favorite-row td {
-    background: #fffde7;
+    background: var(--highlight);
   }
 
   .host-cell {

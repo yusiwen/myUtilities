@@ -60,7 +60,7 @@
 </div>
 
 <style>
-  .app { max-width: 500px; margin: 0 auto; padding: 40px 16px; text-align: center; }
+  .app { max-width: 640px; margin: 0 auto; padding: 40px 16px; text-align: center; }
   h1 { font-size: 24px; margin-bottom: 24px; }
   .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; float: left; }
   .home-link:hover { border-color: var(--primary); color: var(--text); }
