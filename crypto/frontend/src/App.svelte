@@ -302,44 +302,6 @@
         </div>
       {/if}
     </div>
-  {:else}
-    <div class="card">
-      <div class="field">
-        <label for="enc-type">Type</label>
-        <select id="enc-type" bind:value={encType}>
-          {#each encTypes as t}
-            <option value={t.value}>{t.label}</option>
-          {/each}
-        </select>
-      </div>
-
-      <div class="field">
-        <div class="field-label">Operation</div>
-        <div class="radio-group">
-          <label><input type="radio" name="enc-op" bind:group={encOp} value="encode" onchange={() => switchOp('encode')} /> Encode</label>
-          <label><input type="radio" name="enc-op" bind:group={encOp} value="decode" onchange={() => switchOp('decode')} /> Decode</label>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="enc-input">Input</label>
-        <textarea id="enc-input" bind:value={encInput} rows="4" placeholder="Text to encode or decode"></textarea>
-      </div>
-
-      <button class="btn primary" onclick={doEnc}>
-        {encOp === 'encode' ? 'Encode' : 'Decode'}
-      </button>
-
-      {#if encError}
-        <div class="msg error">{encError}</div>
-      {/if}
-      {#if encResult}
-        <div class="result-box">
-          <code class="result-text result-mono">{encResult}</code>
-          <button class="btn xs" onclick={() => copy(encResult, v => encLabelResult = v)}>{encLabelResult}</button>
-        </div>
-      {/if}
-    </div>
   {:else if tab === 'jwt'}
     <div class="card">
       <div class="field">
@@ -395,6 +357,44 @@
         </div>
         <button class="btn primary" onclick={doJwtVerify}>Verify</button>
       </details>
+    </div>
+  {:else}
+    <div class="card">
+      <div class="field">
+        <label for="enc-type">Type</label>
+        <select id="enc-type" bind:value={encType}>
+          {#each encTypes as t}
+            <option value={t.value}>{t.label}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="field-label">Operation</div>
+        <div class="radio-group">
+          <label><input type="radio" name="enc-op" bind:group={encOp} value="encode" onchange={() => switchOp('encode')} /> Encode</label>
+          <label><input type="radio" name="enc-op" bind:group={encOp} value="decode" onchange={() => switchOp('decode')} /> Decode</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="enc-input">Input</label>
+        <textarea id="enc-input" bind:value={encInput} rows="4" placeholder="Text to encode or decode"></textarea>
+      </div>
+
+      <button class="btn primary" onclick={doEnc}>
+        {encOp === 'encode' ? 'Encode' : 'Decode'}
+      </button>
+
+      {#if encError}
+        <div class="msg error">{encError}</div>
+      {/if}
+      {#if encResult}
+        <div class="result-box">
+          <code class="result-text result-mono">{encResult}</code>
+          <button class="btn xs" onclick={() => copy(encResult, v => encLabelResult = v)}>{encLabelResult}</button>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
