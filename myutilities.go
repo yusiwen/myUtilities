@@ -10,6 +10,7 @@ import (
 	"github.com/yusiwen/myUtilities/git"
 	"github.com/yusiwen/myUtilities/installer"
 	"github.com/yusiwen/myUtilities/jarinfo"
+	"github.com/yusiwen/myUtilities/k8s"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/proxy"
 	"github.com/yusiwen/myUtilities/qrcode"
@@ -31,6 +32,7 @@ type MyUtilities struct {
 	Es         es.Options                  `cmd:"" name:"es" help:"Elasticsearch query tool."`
 	Git        git.Options                 `cmd:"" name:"git" help:"Git-related utilities."`
 	Watch      watch.Options               `cmd:"" name:"watch" help:"Watch resources for changes."`
+	K8s        k8s.Options                 `cmd:"" name:"k8s" help:"Kubernetes utilities."`
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Diff       diff.Options                `cmd:"" name:"diff" help:"Text diff tool."`
