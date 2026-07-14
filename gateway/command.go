@@ -35,6 +35,7 @@ func landingPage(hasMock bool) string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>mu Gateway</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
 <style>
   :root {
     --bg: #1a1a2e;
@@ -201,6 +202,8 @@ func (o *Options) Run() error {
 
 	wol.RegisterHandlers(mux, wolStore, wolOpts)
 	es.RegisterHandlers(mux, esState)
+	log.Printf("Gateway:   /wol/* -> WOL frontend")
+	log.Printf("Gateway:   /es/* -> ES frontend")
 
 	hasMock := false
 	mockConfigPath := o.MockConfig
@@ -260,12 +263,9 @@ func (o *Options) Run() error {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, landingPage(hasMock))
 	})
+	log.Printf("Gateway:   / -> landing page")
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Gateway: starting on http://localhost%s", addr)
-	log.Printf("Gateway:   /        -> landing page")
-	log.Printf("Gateway:   /wol/*   -> WOL frontend")
-	log.Printf("Gateway:   /es/*    -> ES frontend")
-	log.Printf("Gateway:   /qrcode/ -> QR Code frontend")
 	return http.ListenAndServe(addr, mux)
 }
