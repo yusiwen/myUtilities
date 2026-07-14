@@ -2,8 +2,10 @@ package k8s
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"strings"
 	"text/template"
@@ -13,6 +15,7 @@ import (
 
 type Options struct {
 	Secret SecretOptions `cmd:"" name:"secret" aliases:"s" help:"Generate or decode a Kubernetes Secret YAML."`
+	Serve  ServeOptions  `cmd:"" name:"serve" help:"Start Kubernetes tools HTTP server."`
 }
 
 type SecretOptions struct {
@@ -21,6 +24,10 @@ type SecretOptions struct {
 	FromEnv string   `short:"f" name:"from-env" help:"Read key=value pairs from .env file."`
 	Output  string   `short:"o" name:"output" help:"Output file path."`
 	Decode  bool     `short:"d" name:"decode" help:"Decode an existing Secret YAML back to plaintext key=value."`
+}
+
+type ServeOptions struct {
+	Port int `help:"Port to listen on." default:"8089"`
 }
 
 const secretTmpl = `apiVersion: v1
@@ -49,6 +56,109 @@ func (o *SecretOptions) Run() error {
 		return o.decode()
 	}
 	return o.encode()
+}
+
+func (o *ServeOptions) Run() error {
+	mux := http.NewServeMux()
+	mux.Handle("/", FrontendHandler())
+	RegisterHandlers(mux)
+	fmt.Printf("Kubernetes tools server listening on :%d\n", o.Port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+}
+
+func RegisterHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("/api/k8s/secret", handleSecret)
+	mux.HandleFunc("/api/k8s/secret/decode", handleSecretDecode)
+}
+
+func handleSecret(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Name string            `json:"name"`
+		Data map[string]string `json:"data"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if len(req.Data) == 0 {
+		http.Error(w, "data is required", http.StatusBadRequest)
+		return
+	}
+
+	var entries []entry
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(req.Data))
+	for k := range req.Data {
+		keys = append(keys, k)
+	}
+	for _, k := range keys {
+		entries = append(entries, entry{
+			Key:   k,
+			Value: base64.StdEncoding.EncodeToString([]byte(req.Data[k])),
+		})
+	}
+
+	tmpl, err := template.New("secret").Parse(secretTmpl)
+	if err != nil {
+		http.Error(w, "template error", http.StatusInternalServerError)
+		return
+	}
+
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, templateData{Name: req.Name, Entries: entries}); err != nil {
+		http.Error(w, "render error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"yaml": buf.String()})
+}
+
+func handleSecretDecode(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		YAML string `json:"yaml"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	var secret struct {
+		Data map[string]string `yaml:"data"`
+	}
+	if err := yaml.Unmarshal([]byte(req.YAML), &secret); err != nil {
+		http.Error(w, fmt.Sprintf("parse YAML: %v", err), http.StatusBadRequest)
+		return
+	}
+	if secret.Data == nil {
+		http.Error(w, "no data field found in YAML", http.StatusBadRequest)
+		return
+	}
+
+	result := make(map[string]string)
+	for k, v := range secret.Data {
+		decoded, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			result[k] = v // not base64, return as-is
+		} else {
+			result[k] = string(decoded)
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"data": result})
 }
 
 func (o *SecretOptions) decode() error {

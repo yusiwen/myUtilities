@@ -105,3 +105,4 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Password Options** — `--no-digits` and `--special` flags for password generator
 - **Diff Web UI** — Full-page CodeMirror merge view with real-time diff, synchronized scrolling, file upload, localStorage persistence, and gateway integration at `/diff/`
 - **k8s Secret Tool** — CLI tool to generate and decode Kubernetes Opaque Secret YAML from key=value pairs, env files, or stdin
+- **k8s Web UI** — Svelte 5 frontend with Secret Generator, Decode Secret tabs, .env file loading, and gateway integration at `/k8s/`

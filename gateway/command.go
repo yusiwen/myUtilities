@@ -14,6 +14,7 @@ import (
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/jarinfo"
+	"github.com/yusiwen/myUtilities/k8s"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
@@ -124,6 +125,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128196;</div>
       <div class="app-name">Diff</div>
       <div class="app-desc">Compare text and files side by side</div>
+    </a>
+    <a href="/k8s/" class="app-card">
+      <div class="app-icon">&#128736;</div>
+      <div class="app-name">K8s</div>
+      <div class="app-desc">Kubernetes Secret YAML generator and decoder</div>
     </a>` + mockCard + `
   </div>
   <p class="footer">mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
@@ -254,6 +260,10 @@ func (o *Options) Run() error {
 	mux.Handle("/diff/", http.StripPrefix("/diff", withGateway(diff.FrontendHandler())))
 	diff.RegisterHandlers(mux)
 	log.Printf("Gateway:   /diff/* -> Diff Tool frontend")
+
+	mux.Handle("/k8s/", http.StripPrefix("/k8s", withGateway(k8s.FrontendHandler())))
+	k8s.RegisterHandlers(mux)
+	log.Printf("Gateway:   /k8s/* -> Kubernetes Tools frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

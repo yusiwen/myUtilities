@@ -43,3 +43,5 @@ crypto/frontend/node_modules/
 crypto/frontend/dist/
 diff/frontend/node_modules/
 diff/frontend/dist/
+k8s/frontend/node_modules/
+k8s/frontend/dist/

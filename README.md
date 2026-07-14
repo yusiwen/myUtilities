@@ -106,6 +106,16 @@ mu k8s secret my-app KEY=val -o secret.yaml
 mu k8s secret secret.yaml --decode
 ```
 
+```bash
+# Serve web UI (standalone)
+mu k8s serve --port 8089
+```
+
+The web UI provides:
+- **Secret Generator** tab — enter secret name and key-value pairs, generate base64-encoded YAML, copy or download
+- **Decode Secret** tab — paste or upload an existing Secret YAML, decode back to plaintext key-value list
+- Supports loading `.env` files and adding/removing rows dynamically
+
 Supports `key=value` format with `#` comments and blank lines in env files.
 
 ### mock — Mock servers for testing
@@ -219,6 +229,7 @@ mu gateway --port 8080
 | `/jarinfo/` | JAR Analyzer | JAR file analysis web UI |
 | `/crypto/` | Crypto | Encrypt, decrypt, passwords, JWT, encode/decode |
 | `/diff/` | Diff | Side-by-side text comparison |
+| `/k8s/` | K8s | Kubernetes Secret YAML generator and decoder |
 
 All services are optional — if a config file is missing (mock), the corresponding route is
 skipped with a warning and the rest of the gateway starts normally.
