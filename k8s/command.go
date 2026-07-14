@@ -1,14 +1,20 @@
 package k8s
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 
 	"gopkg.in/yaml.v3"
 )
@@ -28,7 +34,8 @@ type SecretOptions struct {
 }
 
 type ServeOptions struct {
-	Port int `help:"Port to listen on." default:"8089"`
+	Port       int    `help:"Port to listen on." default:"8089"`
+	Kubeconfig string `name:"kubeconfig" help:"Path to kubeconfig file."`
 }
 
 const secretTmpl = `apiVersion: v1
@@ -59,17 +66,351 @@ func (o *SecretOptions) Run() error {
 	return o.encode()
 }
 
+func kubeconfigPath() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".config", "mu", "kubeconfig.yaml")
+}
+
 func (o *ServeOptions) Run() error {
+	if o.Kubeconfig != "" {
+		data, err := os.ReadFile(o.Kubeconfig)
+		if err != nil {
+			return fmt.Errorf("read kubeconfig: %w", err)
+		}
+		os.WriteFile(kubeconfigPath(), data, 0644)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("Kubernetes tools server listening on :%d\n", o.Port)
+	if _, err := os.Stat(kubeconfigPath()); err == nil {
+		fmt.Printf("  Kubeconfig: %s (loaded)\n", kubeconfigPath())
+	} else {
+		fmt.Printf("  Kubeconfig: not configured\n")
+	}
 	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/k8s/secret", handleSecret)
 	mux.HandleFunc("/api/k8s/secret/decode", handleSecretDecode)
+	mux.HandleFunc("/api/k8s/resources", handleResources)
+	mux.HandleFunc("/api/k8s/config", handleConfig)
+}
+
+func kubeconfigFromStore() (string, error) {
+	data, err := os.ReadFile(kubeconfigPath())
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func kubeconfigToStore(data string) error {
+	return os.WriteFile(kubeconfigPath(), []byte(data), 0644)
+}
+
+func kubeconfigDelete() {
+	os.Remove(kubeconfigPath())
+}
+
+func loadK8sClient(kubeconfigContent string) (*kubernetes.Clientset, *clientcmd.ConfigOverrides, error) {
+	config, err := clientcmd.NewClientConfigFromBytes([]byte(kubeconfigContent))
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse kubeconfig: %w", err)
+	}
+	restConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("create rest config: %w", err)
+	}
+	clientset, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("create kubernetes client: %w", err)
+	}
+	return clientset, nil, nil
+}
+
+func handleConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		data, err := kubeconfigFromStore()
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+			return
+		}
+		// Parse to get contexts
+		rawCfg, err := clientcmd.NewClientConfigFromBytes([]byte(data))
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+			return
+		}
+		cfg, err := rawCfg.RawConfig()
+		activeContext := cfg.CurrentContext
+		if err != nil {
+			activeContext = ""
+		}
+		var contexts []string
+		for name := range cfg.Contexts {
+			contexts = append(contexts, name)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active":         true,
+			"kubeconfig":     data,
+			"contexts":       contexts,
+			"currentContext": activeContext,
+		})
+
+	case http.MethodPost:
+		var req struct {
+			Kubeconfig    string `json:"kubeconfig"`
+			Clear         bool   `json:"clear"`
+			SwitchContext string `json:"switchContext"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+			return
+		}
+		if req.Clear {
+			kubeconfigDelete()
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+			return
+		}
+		if req.SwitchContext != "" {
+			data, err := kubeconfigFromStore()
+			if err != nil {
+				http.Error(w, "no kubeconfig configured", http.StatusBadRequest)
+				return
+			}
+			var cfg map[string]interface{}
+			if err := yaml.Unmarshal([]byte(data), &cfg); err != nil {
+				http.Error(w, "parse kubeconfig: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			// Navigate to contexts and set current-context
+			if contexts, ok := cfg["contexts"].([]interface{}); ok {
+				found := false
+				for _, c := range contexts {
+					if ctx, ok := c.(map[string]interface{}); ok {
+						if name, _ := ctx["name"].(string); name == req.SwitchContext {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					http.Error(w, "context not found", http.StatusBadRequest)
+					return
+				}
+			}
+			cfg["current-context"] = req.SwitchContext
+			updated, _ := yaml.Marshal(cfg)
+			if err := kubeconfigToStore(string(updated)); err != nil {
+				http.Error(w, "save config: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"active":         true,
+				"currentContext": req.SwitchContext,
+			})
+			return
+		}
+		if err := kubeconfigToStore(req.Kubeconfig); err != nil {
+			http.Error(w, fmt.Sprintf("save config: %v", err), http.StatusInternalServerError)
+			return
+		}
+		// Parse and return context info
+		rawCfg, err := clientcmd.NewClientConfigFromBytes([]byte(req.Kubeconfig))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("parse kubeconfig: %v", err), http.StatusBadRequest)
+			return
+		}
+		cfg, err := rawCfg.RawConfig()
+		var contexts []string
+		activeContext := cfg.CurrentContext
+		if err == nil {
+			for name := range cfg.Contexts {
+				contexts = append(contexts, name)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active":         true,
+			"contexts":       contexts,
+			"currentContext": activeContext,
+		})
+
+	default:
+		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+	}
+}
+
+func handleResources(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST required", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Type       string `json:"type"`
+		Namespace  string `json:"namespace"`
+		Kubeconfig string `json:"kubeconfig"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	kc := req.Kubeconfig
+	if kc == "" {
+		stored, err := kubeconfigFromStore()
+		if err != nil {
+			http.Error(w, "kubeconfig not configured; upload or paste your config first", http.StatusBadRequest)
+			return
+		}
+		kc = stored
+	}
+
+	cs, _, err := loadK8sClient(kc)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("kubeconfig error: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	switch strings.ToLower(req.Type) {
+	case "pods":
+		listPodsJSON(ctx, cs, req.Namespace, w)
+	case "nodes":
+		listNodesJSON(ctx, cs, w)
+	case "deployments":
+		listDeploymentsJSON(ctx, cs, req.Namespace, w)
+	case "services":
+		listServicesJSON(ctx, cs, req.Namespace, w)
+	default:
+		http.Error(w, "unsupported resource type", http.StatusBadRequest)
+	}
+}
+
+func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list pods: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"}
+	var rows [][]string
+	for _, pod := range pods.Items {
+		ready := 0
+		for _, s := range pod.Status.ContainerStatuses {
+			if s.Ready {
+				ready++
+			}
+		}
+		restarts := int32(0)
+		for _, s := range pod.Status.ContainerStatuses {
+			restarts += s.RestartCount
+		}
+		rows = append(rows, []string{
+			pod.Namespace, pod.Name,
+			fmt.Sprintf("%d/%d", ready, len(pod.Status.ContainerStatuses)),
+			string(pod.Status.Phase),
+			fmt.Sprintf("%d", restarts),
+			humanAge(pod.CreationTimestamp.Time),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listNodesJSON(ctx context.Context, cs *kubernetes.Clientset, w http.ResponseWriter) {
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list nodes: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAME", "STATUS", "ROLES", "VERSION", "AGE"}
+	var rows [][]string
+	for _, node := range nodes.Items {
+		status := "Ready"
+		for _, c := range node.Status.Conditions {
+			if c.Type == "Ready" {
+				if c.Status != "True" {
+					status = string(c.Status)
+				}
+				break
+			}
+		}
+		var roles []string
+		for k, v := range node.Labels {
+			if strings.HasPrefix(k, "node-role.kubernetes.io/") && v != "false" {
+				roles = append(roles, strings.TrimPrefix(k, "node-role.kubernetes.io/"))
+			}
+		}
+		roleStr := strings.Join(roles, ",")
+		if roleStr == "" {
+			roleStr = "<none>"
+		}
+		rows = append(rows, []string{
+			node.Name, status, roleStr,
+			node.Status.NodeInfo.KubeletVersion,
+			humanAge(node.CreationTimestamp.Time),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listDeploymentsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	deployments, err := cs.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list deployments: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "READY", "UP-TO-DATE", "AVAILABLE", "AGE"}
+	var rows [][]string
+	for _, dep := range deployments.Items {
+		rows = append(rows, []string{
+			dep.Namespace, dep.Name,
+			fmt.Sprintf("%d/%d", dep.Status.ReadyReplicas, dep.Status.Replicas),
+			fmt.Sprintf("%d", dep.Status.UpdatedReplicas),
+			fmt.Sprintf("%d", dep.Status.AvailableReplicas),
+			humanAge(dep.CreationTimestamp.Time),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listServicesJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	svcs, err := cs.CoreV1().Services(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list services: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "TYPE", "CLUSTER-IP", "PORT(S)", "AGE"}
+	var rows [][]string
+	for _, svc := range svcs.Items {
+		var ports []string
+		for _, p := range svc.Spec.Ports {
+			if p.NodePort > 0 {
+				ports = append(ports, fmt.Sprintf("%d:%d/%s", p.Port, p.NodePort, p.Protocol))
+			} else {
+				ports = append(ports, fmt.Sprintf("%d/%s", p.Port, p.Protocol))
+			}
+		}
+		rows = append(rows, []string{
+			svc.Namespace, svc.Name, string(svc.Spec.Type),
+			svc.Spec.ClusterIP, strings.Join(ports, ","),
+			humanAge(svc.CreationTimestamp.Time),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
 }
 
 func handleSecret(w http.ResponseWriter, r *http.Request) {

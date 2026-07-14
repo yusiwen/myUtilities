@@ -119,10 +119,16 @@ mu k8s get pods --kubeconfig /path/to/config
 mu k8s serve --port 8089
 ```
 
+```bash
+# Serve web UI with pre-loaded kubeconfig
+mu k8s serve --port 8089 --kubeconfig ~/.kube/config
+```
+
 The web UI provides:
-- **Secret Generator** tab — enter secret name and key-value pairs, generate base64-encoded YAML, copy or download
-- **Decode Secret** tab — paste or upload an existing Secret YAML, decode back to plaintext key-value list
-- Supports loading `.env` files and adding/removing rows dynamically
+- **Secret** tab — encode/decode Secret YAML in one place, with mode switch, .env file loading, copy/download
+- **Resources** tab — connect to a Kubernetes cluster by uploading or pasting your kubeconfig,
+  list pods, nodes, deployments, and services with namespace filtering and context switching
+  (kubeconfig is persisted at `~/.config/mu/kubeconfig.yaml`)
 
 Supports `key=value` format with `#` comments and blank lines in env files.
 
