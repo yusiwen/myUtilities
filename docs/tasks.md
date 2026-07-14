@@ -80,13 +80,10 @@ Simple tools that would benefit from a web UI and gateway integration:
 
 | Priority | Module | Description | Backend Effort | Frontend Effort |
 |---|---|---|---|---|
-| 🥇 | **encode/decode** | Base64, URL, Hex encoding/decoding with dual-pane UI | ⭐ ~15 lines | ⭐ ~80 lines |
 | 🥇 | **JSON Tool** | Format, validate, compress, and query JSON (reuse CodeMirror) | ⭐ ~10 lines | ⭐ ~100 lines |
 | 🥇 | **UUID** | Generate UUID v1/v4/v7, single or batch | ⭐ ~20 lines | ⭐ ~50 lines |
 | 🥈 | **Timestamp** | Unix timestamp ↔ human date/time, auto-detect format | ⭐ ~30 lines | ⭐ ~60 lines |
-| 🥈 | **JWT** | Decode JWT tokens (header + payload), no secret validation | ⭐ ~30 lines | ⭐ ~80 lines |
-| 🥉 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines |
-| 🥉 | **Diff** | Side-by-side text diff with line highlighting | ⭐⭐ ~30 lines | ⭐⭐ ~120 lines |
+| 🥈 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines |
 | 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines |
 | 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines |
 | — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines |
@@ -103,3 +100,8 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **QR Code Web UI** — Svelte 5 frontend with text input, level selector, PNG generation via `/api/qrcode`, and gateway integration at `/qrcode/`
 - **JAR Analyzer Web UI** — Svelte 5 frontend with file upload, detailed analysis display, `/api/jarinfo/analyze` API, and gateway integration at `/jarinfo/`
 - **Crypto Web UI** — Svelte 5 frontend with password generator, AES/DES/3DES/SM4 encrypt/decrypt, clipboard fallback, and gateway integration at `/crypto/`
+- **JWT Decode/Verify** — CLI and web UI for JWT token decoding and HMAC signature verification with auto-detected algorithm and base64 key support
+- **Encode/Decode** — CLI and web tab for base64, base64url, hex, URL encode/decode
+- **Password Options** — `--no-digits` and `--special` flags for password generator
+- **Diff Web UI** — Full-page CodeMirror merge view with real-time diff, synchronized scrolling, file upload, localStorage persistence, and gateway integration at `/diff/`
+- **k8s Secret Tool** — CLI tool to generate and decode Kubernetes Opaque Secret YAML from key=value pairs, env files, or stdin

@@ -31,12 +31,13 @@ mu install owner/repo --move
 
 ### crypto — Cryptographic tools
 
-Encrypt and decrypt data with various algorithms (AES, DES, 3DES, SM4), and generate
-secure random passwords. Supports both CLI and web UI.
+Encrypt and decrypt data with various algorithms (AES, DES, 3DES, SM4), generate
+secure random passwords, decode JWT tokens, and encode/decode data. Supports both CLI and web UI.
 
 ```bash
-# Generate a random password
+# Generate a random password (with options)
 mu crypto passwd -l 32
+mu crypto passwd -l 16 --no-digits --special
 
 # AES encrypt
 mu crypto aes -e --plain-key "mykey" --input "hello" --output-format hex
@@ -44,14 +45,68 @@ mu crypto aes -e --plain-key "mykey" --input "hello" --output-format hex
 # AES decrypt
 mu crypto aes -d --plain-key "mykey" --input "hex-encoded-data" --input-format hex
 
+# Encode / decode (base64, hex, URL)
+mu crypto encode --type base64 "hello"
+mu crypto decode --type hex "68656c6c6f"
+
+# JWT decode and verify
+mu crypto jwt decode <token>
+mu crypto jwt verify --key secret <token>
+
 # Serve web UI (standalone)
 mu crypto serve --port 8087
 ```
 
 The web UI provides:
-- **Password Generator** tab — configurable length, one-click copy with clipboard fallback
-- **Encrypt / Decrypt** tab — cipher selection (AES/DES/3DES/SM4), ECB/CBC mode, key/IV input,
-  raw or hex input/output formats
+- **Password Generator** tab — configurable length, digits/special char toggles, one-click copy
+- **Encrypt / Decrypt** tab — cipher selection (AES/DES/3DES/SM4), ECB/CBC mode, key/IV input
+- **Encode / Decode** tab — base64, base64url, hex, URL encode/decode
+- **JWT** tab — decode JWT tokens, verify HMAC signatures with auto-detected algorithm
+
+### diff — Text comparison tool
+
+Compare two files or text strings with a side-by-side diff viewer. Supports both CLI and web UI.
+
+```bash
+# Compare two files
+mu diff file a.txt b.txt
+
+# Compare text strings
+mu diff text "old text" "new text"
+
+# Serve web UI (standalone)
+mu diff serve --port 8088
+```
+
+The web UI provides a full-page CodeMirror-based merge view with:
+- Side-by-side editors with real-time diff highlighting
+- File upload for both sides
+- Synchronized scrolling between panes
+- Auto-save to localStorage (content persists across page reloads)
+
+### k8s — Kubernetes utilities
+
+Generate and decode Kubernetes Opaque Secret YAML files. Values are automatically
+base64-encoded for the `data` section.
+
+```bash
+# Generate a Secret YAML from CLI arguments
+mu k8s secret my-app DB_HOST=localhost DB_PASSWORD=s3cret
+
+# Read key=value pairs from a .env file
+mu k8s secret my-app --from-env .env
+
+# Pipe key=value pairs from stdin
+cat .env | mu k8s secret my-app
+
+# Output to file
+mu k8s secret my-app KEY=val -o secret.yaml
+
+# Decode an existing Secret YAML back to plaintext
+mu k8s secret secret.yaml --decode
+```
+
+Supports `key=value` format with `#` comments and blank lines in env files.
 
 ### mock — Mock servers for testing
 
@@ -162,7 +217,8 @@ mu gateway --port 8080
 | `/mock/__admin/*` | Mock Dynamic | Dynamic mock endpoint management |
 | `/qrcode/` | QR Code | QR code generator web UI |
 | `/jarinfo/` | JAR Analyzer | JAR file analysis web UI |
-| `/crypto/` | Crypto | Encrypt, decrypt, and generate passwords |
+| `/crypto/` | Crypto | Encrypt, decrypt, passwords, JWT, encode/decode |
+| `/diff/` | Diff | Side-by-side text comparison |
 
 All services are optional — if a config file is missing (mock), the corresponding route is
 skipped with a warning and the rest of the gateway starts normally.
