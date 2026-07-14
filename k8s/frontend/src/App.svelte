@@ -206,7 +206,7 @@
 </div>
 
 <style>
-  .app { max-width: 720px; margin: 0 auto; padding: 40px 16px; }
+  .app { max-width: 960px; margin: 0 auto; padding: 40px 16px; }
   h1 { font-size: 24px; margin-bottom: 16px; }
   .home-link { float: left; }
 

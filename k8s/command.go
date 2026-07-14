@@ -15,6 +15,7 @@ import (
 
 type Options struct {
 	Secret SecretOptions `cmd:"" name:"secret" aliases:"s" help:"Generate or decode a Kubernetes Secret YAML."`
+	Get    GetOptions    `cmd:"" name:"get" help:"List Kubernetes resources (pods, nodes, deployments, services)."`
 	Serve  ServeOptions  `cmd:"" name:"serve" help:"Start Kubernetes tools HTTP server."`
 }
 

@@ -87,7 +87,8 @@ The web UI provides a full-page CodeMirror-based merge view with:
 ### k8s — Kubernetes utilities
 
 Generate and decode Kubernetes Opaque Secret YAML files. Values are automatically
-base64-encoded for the `data` section.
+base64-encoded for the `data` section. List Kubernetes resources from your cluster
+using your kubeconfig (`~/.kube/config` by default).
 
 ```bash
 # Generate a Secret YAML from CLI arguments
@@ -104,9 +105,16 @@ mu k8s secret my-app KEY=val -o secret.yaml
 
 # Decode an existing Secret YAML back to plaintext
 mu k8s secret secret.yaml --decode
-```
 
-```bash
+# List resources from the current kubeconfig context
+mu k8s get pods
+mu k8s get pods -n kube-system
+mu k8s get nodes
+mu k8s get deployments
+mu k8s get services
+mu k8s get pods --context my-cluster
+mu k8s get pods --kubeconfig /path/to/config
+
 # Serve web UI (standalone)
 mu k8s serve --port 8089
 ```
