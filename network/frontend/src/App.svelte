@@ -21,6 +21,21 @@
   let whoisResult = $state('')
   let whoisError = $state('')
 
+  // SSL Cert
+  let certDomain = $state('')
+  let certResult = $state('')
+  let certError = $state('')
+
+  async function doCert() {
+    if (!certDomain.trim()) { certError = 'Domain is required'; return }
+    certError = ''; certResult = ''
+    try {
+      const r = await fetch('/api/network/cert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain: certDomain.trim() }) })
+      if (!r.ok) throw new Error((await r.text()) || 'failed')
+      certResult = (await r.json()).cert
+    } catch (e) { certError = e.message }
+  }
+
   async function doWhois() {
     if (!whoisDomain.trim()) { whoisError = 'Domain is required'; return }
     whoisError = ''; whoisResult = ''
@@ -75,6 +90,7 @@
     <button class="tab" class:active={tab === 'dns'} onclick={() => tab = 'dns'}>DNS Lookup</button>
     <button class="tab" class:active={tab === 'dig'} onclick={() => tab = 'dig'}>DIG</button>
     <button class="tab" class:active={tab === 'whois'} onclick={() => tab = 'whois'}>WHOIS</button>
+    <button class="tab" class:active={tab === 'cert'} onclick={() => tab = 'cert'}>SSL Cert</button>
   </div>
 
   {#if tab === 'dns'}
@@ -153,7 +169,7 @@
         </div>
       {/if}
     </div>
-  {:else}
+  {:else if tab === 'whois'}
     <div class="card">
       <div class="field">
         <label for="whois-domain">Domain or IP</label>
@@ -167,6 +183,23 @@
         <div class="result-area">
           <button class="btn xs" onclick={() => copy(whoisResult)}>📋 Copy</button>
           <pre class="dig-block">{whoisResult}</pre>
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <div class="card">
+      <div class="field">
+        <label for="cert-domain">Domain</label>
+        <div class="field-row">
+          <input id="cert-domain" type="text" bind:value={certDomain} placeholder="example.com" style="flex:1" />
+          <button class="btn" onclick={doCert}>Check</button>
+        </div>
+      </div>
+      {#if certError}<div class="msg error">{certError}</div>{/if}
+      {#if certResult}
+        <div class="result-area">
+          <button class="btn xs" onclick={() => copy(certResult)}>📋 Copy</button>
+          <pre class="dig-block">{certResult}</pre>
         </div>
       {/if}
     </div>

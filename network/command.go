@@ -1,6 +1,8 @@
 package network
 
 import (
+	"crypto/sha256"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,6 +18,7 @@ type Options struct {
 	DNS   DNSOptions   `cmd:"" name:"dns" help:"DNS lookup."`
 	DIG   DIGOptions   `cmd:"" name:"dig" help:"Detailed DNS query (dig-style)."`
 	Whois WhoisOptions `cmd:"" name:"whois" help:"WHOIS lookup for domain or IP."`
+	Cert  CertOptions  `cmd:"" name:"cert" help:"SSL/TLS certificate details."`
 	Serve ServeOptions `cmd:"" name:"serve" help:"Start network tools HTTP server."`
 }
 
@@ -32,6 +35,11 @@ type DIGOptions struct {
 
 type WhoisOptions struct {
 	Domain string `arg:"" name:"domain" help:"Domain name or IP to look up."`
+}
+
+type CertOptions struct {
+	Domain string `arg:"" name:"domain" help:"Domain name to check."`
+	Port   int    `short:"p" name:"port" help:"Port to connect to." default:"443"`
 }
 
 type ServeOptions struct {
@@ -68,6 +76,15 @@ func (o *WhoisOptions) Run() error {
 	return nil
 }
 
+func (o *CertOptions) Run() error {
+	result, err := certInfo(o.Domain, o.Port)
+	if err != nil {
+		return err
+	}
+	fmt.Print(result)
+	return nil
+}
+
 func (o *ServeOptions) Run() error {
 	mux := http.NewServeMux()
 	mux.Handle("/", FrontendHandler())
@@ -80,6 +97,7 @@ func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/network/dns", handleDNS)
 	mux.HandleFunc("/api/network/dig", handleDIG)
 	mux.HandleFunc("/api/network/whois", handleWhois)
+	mux.HandleFunc("/api/network/cert", handleCert)
 }
 
 // DNS Lookup — standard library approach
@@ -221,6 +239,33 @@ func digQuery(host, rtype, ns string) (string, error) {
 
 // API handlers
 
+func certInfo(domain string, port int) (string, error) {
+	addr := fmt.Sprintf("%s:%d", domain, port)
+	conn, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		return "", fmt.Errorf("connect to %s: %w", addr, err)
+	}
+	defer conn.Close()
+
+	var b strings.Builder
+	for _, cert := range conn.ConnectionState().PeerCertificates {
+		b.WriteString(fmt.Sprintf("Subject:     %s\n", cert.Subject))
+		b.WriteString(fmt.Sprintf("Issuer:      %s\n", cert.Issuer))
+		b.WriteString(fmt.Sprintf("Serial:      %X\n", cert.SerialNumber))
+		b.WriteString(fmt.Sprintf("Version:     %d\n", cert.Version))
+		b.WriteString(fmt.Sprintf("Not Before:  %s\n", cert.NotBefore.Format(time.RFC3339)))
+		b.WriteString(fmt.Sprintf("Not After:   %s\n", cert.NotAfter.Format(time.RFC3339)))
+		b.WriteString(fmt.Sprintf("DNS SANs:    %s\n", strings.Join(cert.DNSNames, ", ")))
+		if len(cert.EmailAddresses) > 0 {
+			b.WriteString(fmt.Sprintf("Email:       %s\n", strings.Join(cert.EmailAddresses, ", ")))
+		}
+		// SHA-256 fingerprint
+		fingerprint := sha256.Sum256(cert.Raw)
+		b.WriteString(fmt.Sprintf("SHA-256:     %X\n", fingerprint))
+	}
+	return b.String(), nil
+}
+
 func handleDNS(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
@@ -294,4 +339,29 @@ func handleWhois(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"whois": result})
+}
+
+func handleCert(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Domain string `json:"domain"`
+		Port   int    `json:"port"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Port == 0 {
+		req.Port = 443
+	}
+	result, err := certInfo(req.Domain, req.Port)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"cert": result})
 }
