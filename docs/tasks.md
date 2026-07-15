@@ -111,3 +111,4 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **k8s Describe** — CLI and web UI describe command for 10 resource types with detailed resource info in a modal dialog
 - **Misc Tools** — `mu misc uuid|json|timestamp|hash` with CLI and web UI (4 tabs), zero external dependencies, gateway integration at `/misc/`
 - **Network Tools** — `mu network dns|dig|whois` with CLI and web UI (3 tabs), uses `github.com/miekg/dns` and `github.com/likexian/whois`, gateway integration at `/network/`
+- **k8s Metrics** — `mu k8s get nodes --metrics` and `mu k8s get pods --metrics` with CPU/memory usage, percentage for nodes, optional in Web UI via "Show metrics" checkbox; zero new dependencies

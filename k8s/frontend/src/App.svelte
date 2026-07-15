@@ -21,6 +21,7 @@
   let kcActive = $state(false)
   let kcSaved = $state({})       // {name: yamlContent}
   let resType = $state('pods')
+  let resMetrics = $state(false)
   let currentCtx = $state('')
   let namespaces = $state([])
   let resNs = $state('')
@@ -196,7 +197,7 @@
   async function doQuery() {
     resLoading = true; resError = ''; resCols = []; resRows = []
     try {
-      const r = await fetch('/api/k8s/resources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resType, namespace: resNs }) })
+      const r = await fetch('/api/k8s/resources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resType, namespace: resNs, metrics: resMetrics }) })
       if (!r.ok) throw new Error((await r.text()) || 'failed')
       const d = await r.json()
       resCols = d.columns || []; resRows = d.rows || []
@@ -356,6 +357,10 @@
             <button class="btn" onclick={doQuery} disabled={resLoading}>{resLoading ? 'Querying...' : 'Query'}</button>
           </div>
         </div>
+        <label class="metrics-toggle">
+          <input type="checkbox" bind:checked={resMetrics} />
+          <span>Show metrics</span>
+        </label>
 
         {#if resError}<div class="msg error">{resError}</div>{/if}
         {#if resCols.length > 0}
@@ -458,6 +463,8 @@
   .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text2); font-size: 12px; }
   .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 
+  .metrics-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); cursor: pointer; margin-bottom: 14px; }
+  .metrics-toggle input { width: auto; }
   .conn-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-radius: 8px; margin-bottom: 16px; }
   .conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #4caf50; flex-shrink: 0; }
   .conn-ctx { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); max-width: 300px; }

@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -19,6 +20,7 @@ type GetOptions struct {
 	Namespace  string `short:"n" name:"namespace" help:"Kubernetes namespace (default: all namespaces)."`
 	Context    string `name:"context" help:"Kubeconfig context name (default: current-context)."`
 	Kubeconfig string `name:"kubeconfig" help:"Path to kubeconfig file."`
+	Metrics    bool   `name:"metrics" help:"Show CPU/memory usage (requires metrics-server)."`
 }
 
 func (o *GetOptions) Run() error {
@@ -48,9 +50,9 @@ func (o *GetOptions) Run() error {
 
 	switch strings.ToLower(o.Resource) {
 	case "pods":
-		return listPods(ctx, clientset, ns)
+		return listPods(ctx, clientset, ns, o.Metrics)
 	case "nodes":
-		return listNodes(ctx, clientset)
+		return listNodes(ctx, clientset, o.Metrics)
 	case "deployments":
 		return listDeployments(ctx, clientset, ns)
 	case "services":
@@ -72,33 +74,55 @@ func (o *GetOptions) Run() error {
 	}
 }
 
-func listPods(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+func listPods(ctx context.Context, cs *kubernetes.Clientset, namespace string, showMetrics bool) error {
 	pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list pods: %w", err)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAMESPACE\tNAME\tREADY\tSTATUS\tRESTARTS\tAGE")
+	if showMetrics {
+		fmt.Fprintln(w, "NAMESPACE\tNAME\tREADY\tSTATUS\tRESTARTS\tCPU\tMEMORY\tAGE")
+	} else {
+		fmt.Fprintln(w, "NAMESPACE\tNAME\tREADY\tSTATUS\tRESTARTS\tAGE")
+	}
+	podMetrics := fetchPodMetrics(ctx, cs, namespace)
 	for _, pod := range pods.Items {
 		ready := countReady(pod.Status.ContainerStatuses)
 		restarts := countRestarts(pod.Status.ContainerStatuses)
-		fmt.Fprintf(w, "%s\t%s\t%d/%d\t%s\t%d\t%s\n",
-			pod.Namespace, pod.Name,
-			ready, len(pod.Status.ContainerStatuses),
-			pod.Status.Phase, restarts,
-			humanAge(pod.CreationTimestamp.Time),
-		)
+		cpu, mem := podMetrics[pod.Namespace+"/"+pod.Name]
+		if showMetrics {
+			fmt.Fprintf(w, "%s\t%s\t%d/%d\t%s\t%d\t%s\t%s\t%s\n",
+				pod.Namespace, pod.Name,
+				ready, len(pod.Status.ContainerStatuses),
+				pod.Status.Phase, restarts,
+				cpu, mem,
+				humanAge(pod.CreationTimestamp.Time),
+			)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%d/%d\t%s\t%d\t%s\n",
+				pod.Namespace, pod.Name,
+				ready, len(pod.Status.ContainerStatuses),
+				pod.Status.Phase, restarts,
+				humanAge(pod.CreationTimestamp.Time),
+			)
+		}
 	}
 	return w.Flush()
 }
 
-func listNodes(ctx context.Context, cs *kubernetes.Clientset) error {
+func listNodes(ctx context.Context, cs *kubernetes.Clientset, showMetrics bool) error {
 	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("list nodes: %w", err)
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSTATUS\tROLES\tVERSION\tAGE")
+	if showMetrics {
+		fmt.Fprintln(w, "NAME\tSTATUS\tROLES\tCPU\tCPU%\tMEMORY\tMEM%\tAGE")
+	} else {
+		fmt.Fprintln(w, "NAME\tSTATUS\tROLES\tVERSION\tAGE")
+	}
+	nodeMetrics := fetchNodeMetrics(ctx, cs)
+	nodeCap := fetchNodeCapacity(ctx, cs)
 	for _, node := range nodes.Items {
 		status := "Ready"
 		for _, c := range node.Status.Conditions {
@@ -109,13 +133,153 @@ func listNodes(ctx context.Context, cs *kubernetes.Clientset) error {
 				break
 			}
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			node.Name, status, extractRoles(node.Labels),
-			node.Status.NodeInfo.KubeletVersion,
-			humanAge(node.CreationTimestamp.Time),
-		)
+		if showMetrics {
+			cpu := "-"
+			mem := "-"
+			cpuPct := "-"
+			memPct := "-"
+			if m, ok := nodeMetrics[node.Name]; ok {
+				cpu = m[0]
+				mem = m[1]
+				if cap, ok := nodeCap[node.Name]; ok {
+					cpuPct = calcPercent(cpu, cap[0])
+					memPct = calcPercent(mem, cap[1])
+				}
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				node.Name, status, extractRoles(node.Labels),
+				cpu, cpuPct, mem, memPct,
+				humanAge(node.CreationTimestamp.Time),
+			)
+		} else {
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+				node.Name, status, extractRoles(node.Labels),
+				node.Status.NodeInfo.KubeletVersion,
+				humanAge(node.CreationTimestamp.Time),
+			)
+		}
 	}
 	return w.Flush()
+}
+
+func calcPercent(value, total string) string {
+	// Simple parser: value like "500m" or "1Gi"
+	v := parseQuantity(value)
+	t := parseQuantity(total)
+	if t == 0 {
+		return "-"
+	}
+	return fmt.Sprintf("%d%%", v*100/t)
+}
+
+func parseQuantity(s string) int64 {
+	if s == "" || s == "-" {
+		return 0
+	}
+	// Handles formats like "500m", "1Gi", "256Mi", "2", "1.5"
+	var mult int64 = 1
+	if strings.HasSuffix(s, "m") {
+		mult = 1
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "Gi") {
+		mult = 1024 * 1024 * 1024
+		s = s[:len(s)-2]
+	} else if strings.HasSuffix(s, "Mi") {
+		mult = 1024 * 1024
+		s = s[:len(s)-2]
+	} else if strings.HasSuffix(s, "Ki") {
+		mult = 1024
+		s = s[:len(s)-2]
+	} else if strings.HasSuffix(s, "Ti") {
+		mult = 1024 * 1024 * 1024 * 1024
+		s = s[:len(s)-2]
+	}
+	var val int64
+	fmt.Sscanf(s, "%d", &val)
+	return val * mult
+}
+
+func fetchPodMetrics(ctx context.Context, cs *kubernetes.Clientset, namespace string) map[string]string {
+	result := make(map[string]string)
+	var metrics struct {
+		Items []struct {
+			Metadata struct {
+				Name      string `json:"name"`
+				Namespace string `json:"namespace"`
+			} `json:"metadata"`
+			Containers []struct {
+				Usage struct {
+					CPU    string `json:"cpu"`
+					Memory string `json:"memory"`
+				} `json:"usage"`
+			} `json:"containers"`
+		} `json:"items"`
+	}
+	data, err := cs.DiscoveryClient.RESTClient().Get().
+		RequestURI("/apis/metrics.k8s.io/v1beta1/pods").
+		Do(ctx).
+		Raw()
+	if err != nil {
+		return result
+	}
+	json.Unmarshal(data, &metrics)
+	for _, item := range metrics.Items {
+		if namespace != "" && item.Metadata.Namespace != namespace {
+			continue
+		}
+		totalCPU := ""
+		totalMem := ""
+		for _, c := range item.Containers {
+			totalCPU = c.Usage.CPU
+			totalMem = c.Usage.Memory
+			// take the last container's values as a simple aggregate
+		}
+		if totalCPU != "" && totalMem != "" {
+			result[item.Metadata.Namespace+"/"+item.Metadata.Name] = totalCPU + "/" + totalMem
+		}
+	}
+	return result
+}
+
+func fetchNodeMetrics(ctx context.Context, cs *kubernetes.Clientset) map[string][2]string {
+	result := make(map[string][2]string)
+	var metrics struct {
+		Items []struct {
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Usage struct {
+				CPU    string `json:"cpu"`
+				Memory string `json:"memory"`
+			} `json:"usage"`
+		} `json:"items"`
+	}
+	data, err := cs.DiscoveryClient.RESTClient().Get().
+		RequestURI("/apis/metrics.k8s.io/v1beta1/nodes").
+		Do(ctx).
+		Raw()
+	if err != nil {
+		return result
+	}
+	json.Unmarshal(data, &metrics)
+	for _, item := range metrics.Items {
+		result[item.Metadata.Name] = [2]string{item.Usage.CPU, item.Usage.Memory}
+	}
+	return result
+}
+
+func fetchNodeCapacity(ctx context.Context, cs *kubernetes.Clientset) map[string][2]string {
+	result := make(map[string][2]string)
+	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return result
+	}
+	for _, node := range nodes.Items {
+		cpu := node.Status.Capacity.Cpu().String()
+		mem := node.Status.Capacity.Memory().String()
+		result[node.Name] = [2]string{cpu, mem}
+	}
+	return result
 }
 
 func listDeployments(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {

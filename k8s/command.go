@@ -358,6 +358,7 @@ func handleResources(w http.ResponseWriter, r *http.Request) {
 		Type       string `json:"type"`
 		Namespace  string `json:"namespace"`
 		Kubeconfig string `json:"kubeconfig"`
+		Metrics    bool   `json:"metrics"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
@@ -384,9 +385,9 @@ func handleResources(w http.ResponseWriter, r *http.Request) {
 
 	switch strings.ToLower(req.Type) {
 	case "pods":
-		listPodsJSON(ctx, cs, req.Namespace, w)
+		listPodsJSON(ctx, cs, req.Namespace, req.Metrics, w)
 	case "nodes":
-		listNodesJSON(ctx, cs, w)
+		listNodesJSON(ctx, cs, req.Metrics, w)
 	case "deployments":
 		listDeploymentsJSON(ctx, cs, req.Namespace, w)
 	case "services":
@@ -502,13 +503,17 @@ func handleDescribe(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"describe": text})
 }
 
-func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, showMetrics bool, w http.ResponseWriter) {
 	pods, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("list pods: %v", err), http.StatusInternalServerError)
 		return
 	}
 	columns := []string{"NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "AGE"}
+	if showMetrics {
+		columns = []string{"NAMESPACE", "NAME", "READY", "STATUS", "RESTARTS", "CPU", "MEMORY", "AGE"}
+	}
+	podMetrics := fetchPodMetrics(ctx, cs, namespace)
 	var rows [][]string
 	for _, pod := range pods.Items {
 		ready := 0
@@ -521,25 +526,49 @@ func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace strin
 		for _, s := range pod.Status.ContainerStatuses {
 			restarts += s.RestartCount
 		}
-		rows = append(rows, []string{
-			pod.Namespace, pod.Name,
-			fmt.Sprintf("%d/%d", ready, len(pod.Status.ContainerStatuses)),
-			string(pod.Status.Phase),
-			fmt.Sprintf("%d", restarts),
-			humanAge(pod.CreationTimestamp.Time),
-		})
+		cpu, mem := "-", "-"
+		if showMetrics {
+			key := pod.Namespace + "/" + pod.Name
+			if v, ok := podMetrics[key]; ok {
+				parts := strings.SplitN(v, "/", 2)
+				if len(parts) == 2 {
+					cpu, mem = parts[0], parts[1]
+				}
+			}
+			rows = append(rows, []string{
+				pod.Namespace, pod.Name,
+				fmt.Sprintf("%d/%d", ready, len(pod.Status.ContainerStatuses)),
+				string(pod.Status.Phase),
+				fmt.Sprintf("%d", restarts),
+				cpu, mem,
+				humanAge(pod.CreationTimestamp.Time),
+			})
+		} else {
+			rows = append(rows, []string{
+				pod.Namespace, pod.Name,
+				fmt.Sprintf("%d/%d", ready, len(pod.Status.ContainerStatuses)),
+				string(pod.Status.Phase),
+				fmt.Sprintf("%d", restarts),
+				humanAge(pod.CreationTimestamp.Time),
+			})
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
 }
 
-func listNodesJSON(ctx context.Context, cs *kubernetes.Clientset, w http.ResponseWriter) {
+func listNodesJSON(ctx context.Context, cs *kubernetes.Clientset, showMetrics bool, w http.ResponseWriter) {
 	nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("list nodes: %v", err), http.StatusInternalServerError)
 		return
 	}
 	columns := []string{"NAME", "STATUS", "ROLES", "VERSION", "AGE"}
+	if showMetrics {
+		columns = []string{"NAME", "STATUS", "ROLES", "CPU", "CPU%", "MEMORY", "MEM%", "AGE"}
+	}
+	nodeMetrics := fetchNodeMetrics(ctx, cs)
+	nodeCap := fetchNodeCapacity(ctx, cs)
 	var rows [][]string
 	for _, node := range nodes.Items {
 		status := "Ready"
@@ -561,11 +590,27 @@ func listNodesJSON(ctx context.Context, cs *kubernetes.Clientset, w http.Respons
 		if roleStr == "" {
 			roleStr = "<none>"
 		}
-		rows = append(rows, []string{
-			node.Name, status, roleStr,
-			node.Status.NodeInfo.KubeletVersion,
-			humanAge(node.CreationTimestamp.Time),
-		})
+		if showMetrics {
+			cpu, mem, cpuPct, memPct := "-", "-", "-", "-"
+			if m, ok := nodeMetrics[node.Name]; ok {
+				cpu, mem = m[0], m[1]
+				if cap, ok := nodeCap[node.Name]; ok {
+					cpuPct = calcPercent(cpu, cap[0])
+					memPct = calcPercent(mem, cap[1])
+				}
+			}
+			rows = append(rows, []string{
+				node.Name, status, roleStr,
+				cpu, cpuPct, mem, memPct,
+				humanAge(node.CreationTimestamp.Time),
+			})
+		} else {
+			rows = append(rows, []string{
+				node.Name, status, roleStr,
+				node.Status.NodeInfo.KubeletVersion,
+				humanAge(node.CreationTimestamp.Time),
+			})
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
