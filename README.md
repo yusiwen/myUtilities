@@ -128,7 +128,7 @@ The web UI provides:
 - **Secret** tab — encode/decode Secret YAML in one place, with mode switch, .env file loading, copy/download
 - **Resources** tab — connect to a Kubernetes cluster by uploading or pasting your kubeconfig,
   list pods, nodes, deployments, and services with namespace filtering and context switching
-  (kubeconfig is persisted at `~/.config/mu/kubeconfig.yaml`)
+  (kubeconfig is persisted at `~/.config/mu/kubeconfigs.yaml`, supports multiple saved configs)
 
 Supports `key=value` format with `#` comments and blank lines in env files.
 

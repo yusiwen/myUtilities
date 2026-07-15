@@ -16,31 +16,37 @@
   let decodeInput = $state('')
   let decodedData = $state(null)
 
-  // Resources
-  let resourceType = $state('pods')
-  let resourceNs = $state('')
-  let resColumns = $state([])
+  // Resources / Kubeconfig
+  let kcConfig = $state(null)    // full config response from API
+  let kcActive = $state(false)
+  let kcSaved = $state({})       // {name: yamlContent}
+  let resType = $state('pods')
+  let currentCtx = $state('')
+  let namespaces = $state([])
+  let resNs = $state('')
+  let resCols = $state([])
   let resRows = $state([])
   let resLoading = $state(false)
   let resError = $state('')
-  let kcConfig = $state(null)
-  let kcContext = $state('')
-  let kcUploadMode = $state('paste')
-  let kcText = $state('')
 
-  onMount(async () => {
-    // Check if kubeconfig is already configured
+  // Add new config form
+  let newName = $state('')
+  let newKc = $state('')
+  let newKcFile = $state(null)
+
+  onMount(fetchConfig)
+
+  async function fetchConfig() {
     try {
       const r = await fetch('/api/k8s/config')
       if (r.ok) {
         const d = await r.json()
-        if (d.active) {
-          kcConfig = d
-          kcContext = d.currentContext || ''
-        }
+        kcSaved = d.configs || {}
+        kcConfig = d
+        kcActive = d.active
       }
     } catch {}
-  })
+  }
 
   // === Secret Encode ===
   function addRow() { secretRows = [...secretRows, { key: '', value: '' }] }
@@ -91,41 +97,86 @@
   }
 
   // === Kubeconfig ===
-  function loadKcFile(e) {
+  function loadNewKcFile(e) {
     const file = e.target.files[0]; if (!file) return
     const reader = new FileReader()
-    reader.onload = () => { kcText = reader.result }
+    reader.onload = () => { newKc = reader.result }
     reader.readAsText(file)
   }
 
   async function uploadKubeconfig() {
-    if (!kcText.trim()) return
+    if (!newKc.trim()) return
+    resError = ''
     try {
-      const r = await fetch('/api/k8s/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kubeconfig: kcText }) })
+      const r = await fetch('/api/k8s/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName || undefined, kubeconfig: newKc }),
+      })
       if (!r.ok) throw new Error((await r.text()) || 'failed')
       const d = await r.json()
-      kcConfig = d
-      kcContext = d.currentContext || ''
+      kcConfig = d; kcActive = true; kcSaved = d.configs || {}; currentCtx = d.currentContext || ''
+      newKc = ''; newName = ''; loadNamespaces()
     } catch (e) { resError = e.message }
   }
 
-  async function clearKubeconfig() {
-    await fetch('/api/k8s/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clear: true }) })
-    kcConfig = null; kcText = ''; resRows = []; resColumns = []
+  async function activateConfig(name) {
+    resError = ''
+    try {
+      const r = await fetch(`/api/k8s/configs/${encodeURIComponent(name)}`, { method: 'POST' })
+      if (!r.ok) throw new Error((await r.text()) || 'failed')
+      const d = await r.json()
+      kcConfig = d; kcActive = true; kcSaved = d.configs || {}; currentCtx = d.currentContext || ''
+      resCols = []; resRows = []; loadNamespaces()
+    } catch (e) { resError = e.message }
+  }
+
+  async function deleteConfig(name) {
+    resError = ''
+    try {
+      const r = await fetch(`/api/k8s/configs/${encodeURIComponent(name)}`, { method: 'DELETE' })
+      if (!r.ok) throw new Error((await r.text()) || 'failed')
+      const d = await r.json()
+      kcSaved = d.configs || {}
+      if (name === kcConfig?.activeName) { kcActive = false; kcConfig = null }
+    } catch (e) { resError = e.message }
   }
 
   async function switchContext() {
-    await fetch('/api/k8s/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ switchContext: kcContext }) })
-    kcConfig = { ...kcConfig, currentContext: kcContext }
+    try {
+      const r = await fetch('/api/k8s/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ switchContext: currentCtx }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        kcConfig = d; kcSaved = d.configs || {}; currentCtx = d.currentContext || ''
+        resCols = []; resRows = []; loadNamespaces()
+      }
+    } catch (e) { resError = e.message }
+  }
+
+  async function disconnect() {
+    await fetch('/api/k8s/config', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deactivate: true }),
+    })
+    kcActive = false; kcConfig = null; resCols = []; resRows = []
+  }
+
+  async function loadNamespaces() {
+    try {
+      const r = await fetch('/api/k8s/namespaces')
+      if (r.ok) namespaces = await r.json()
+    } catch {}
   }
 
   async function doQuery() {
-    resLoading = true; resError = ''; resRows = []
+    resLoading = true; resError = ''; resCols = []; resRows = []
     try {
-      const r = await fetch('/api/k8s/resources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resourceType, namespace: resourceNs }) })
+      const r = await fetch('/api/k8s/resources', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: resType, namespace: resNs }) })
       if (!r.ok) throw new Error((await r.text()) || 'failed')
       const d = await r.json()
-      resColumns = d.columns || []; resRows = d.rows || []
+      resCols = d.columns || []; resRows = d.rows || []
     } catch (e) { resError = e.message } finally { resLoading = false }
   }
 
@@ -207,35 +258,55 @@
       {/if}
     </div>
   {:else}
-    {#if !kcConfig}
+    {#if !kcActive}
       <div class="card">
         <h2 class="section-title">Configure Kubeconfig</h2>
-        <p class="section-desc">Upload or paste your kubeconfig to connect to a Kubernetes cluster.</p>
+
+        {#if entries(kcSaved).length > 0}
+          <div class="field">
+            <div class="field-label">Saved Configs</div>
+            {#each entries(kcSaved) as [name, _]}
+              <div class="saved-row">
+                <span class="saved-name">{name}</span>
+                <div class="saved-actions">
+                  <button class="btn xs" onclick={() => activateConfig(name)}>Connect</button>
+                  <button class="btn xs" onclick={() => deleteConfig(name)}>Delete</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+          <div class="divider"><span>or add a new one</span></div>
+        {/if}
+
         <div class="field">
-          <label>Kubeconfig Content <button class="btn xs upload-inline" onclick={() => document.getElementById('kc-file').click()}>📂 Upload</button></label>
-          <input id="kc-file" type="file" accept=".yaml,.yml,.kubeconfig" onchange={loadKcFile} style="display:none" />
-          <textarea bind:value={kcText} rows="10" placeholder="Paste your kubeconfig YAML here"></textarea>
+          <label for="new-name">Name (optional, defaults to current context)</label>
+          <input id="new-name" type="text" bind:value={newName} placeholder="my-cluster" />
         </div>
-        <button class="btn primary" onclick={uploadKubeconfig} disabled={!kcText.trim()}>Connect</button>
+        <div class="field">
+          <label>Kubeconfig Content <button class="btn xs upload-inline" onclick={() => document.getElementById('kc-file2').click()}>📂 Upload</button></label>
+          <input id="kc-file2" type="file" accept=".yaml,.yml,.kubeconfig" onchange={loadNewKcFile} style="display:none" />
+          <textarea bind:value={newKc} rows="8" placeholder="Paste your kubeconfig YAML here"></textarea>
+        </div>
+        <button class="btn primary" onclick={uploadKubeconfig} disabled={!newKc.trim()}>Connect</button>
         {#if resError}<div class="msg error">{resError}</div>{/if}
       </div>
     {:else}
       <div class="card">
         <div class="conn-bar">
           <span class="conn-dot"></span>
-          <select class="conn-ctx" bind:value={kcContext} onchange={switchContext}>
+          <select class="conn-ctx" bind:value={currentCtx} onchange={switchContext}>
             {#each kcConfig.contexts || [] as ctx}
               <option value={ctx}>{ctx}</option>
             {/each}
           </select>
           <span class="spacer"></span>
-          <button class="btn xs" onclick={clearKubeconfig}>Disconnect</button>
+          <button class="btn xs" onclick={disconnect}>Disconnect</button>
         </div>
 
         <div class="field-row">
           <div class="field">
             <label for="res-type">Resource</label>
-            <select id="res-type" bind:value={resourceType}>
+            <select id="res-type" bind:value={resType}>
               <option value="pods">Pods</option>
               <option value="nodes">Nodes</option>
               <option value="deployments">Deployments</option>
@@ -244,7 +315,12 @@
           </div>
           <div class="field">
             <label for="res-ns">Namespace</label>
-            <input id="res-ns" type="text" bind:value={resourceNs} placeholder="All namespaces (empty)" />
+            <select id="res-ns" bind:value={resNs}>
+              <option value="">All namespaces</option>
+              {#each namespaces as ns}
+                <option value={ns}>{ns}</option>
+              {/each}
+            </select>
           </div>
           <div class="field" style="flex:0">
             <div style="height:1.5em"></div>
@@ -253,10 +329,10 @@
         </div>
 
         {#if resError}<div class="msg error">{resError}</div>{/if}
-        {#if resColumns.length > 0}
+        {#if resCols.length > 0}
           <div class="res-table-wrap">
             <table class="res-table">
-              <thead><tr>{#each resColumns as col}<th>{col}</th>{/each}</tr></thead>
+              <thead><tr>{#each resCols as col}<th>{col}</th>{/each}</tr></thead>
               <tbody>
                 {#each resRows as row}
                   <tr>{#each row as cell}<td>{cell}</td>{/each}</tr>
@@ -316,7 +392,13 @@
   .decode-val { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: var(--text); word-break: break-all; }
 
   .section-title { font-size: 18px; margin-bottom: 8px; }
-  .section-desc { font-size: 14px; color: var(--text2); margin-bottom: 16px; }
+
+  .saved-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: 6px; margin-bottom: 6px; }
+  .saved-name { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; }
+  .saved-actions { display: flex; gap: 6px; }
+
+  .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text2); font-size: 12px; }
+  .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 
   .conn-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-radius: 8px; margin-bottom: 16px; }
   .conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #4caf50; flex-shrink: 0; }

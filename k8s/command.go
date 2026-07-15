@@ -66,9 +66,57 @@ func (o *SecretOptions) Run() error {
 	return o.encode()
 }
 
-func kubeconfigPath() string {
+func indexPath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "mu", "kubeconfig.yaml")
+	return filepath.Join(home, ".config", "mu", "kubeconfigs.yaml")
+}
+
+type configIndex struct {
+	Active  string            `yaml:"active"`
+	Configs map[string]string `yaml:"configs"`
+}
+
+func loadIndex() (*configIndex, error) {
+	idx := &configIndex{Configs: make(map[string]string)}
+	data, err := os.ReadFile(indexPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Migrate old single-file format
+			oldPath := filepath.Join(filepath.Dir(indexPath()), "kubeconfig.yaml")
+			oldData, oldErr := os.ReadFile(oldPath)
+			if oldErr == nil && len(oldData) > 0 {
+				rawCfg, parseErr := clientcmd.NewClientConfigFromBytes(oldData)
+				if parseErr == nil {
+					cfg, _ := rawCfg.RawConfig()
+					name := cfg.CurrentContext
+					if name == "" {
+						name = "default"
+					}
+					idx.Active = name
+					idx.Configs[name] = string(oldData)
+					saveIndex(idx)
+					os.Remove(oldPath)
+				}
+			}
+			return idx, nil
+		}
+		return nil, err
+	}
+	if err := yaml.Unmarshal(data, idx); err != nil {
+		return nil, err
+	}
+	if idx.Configs == nil {
+		idx.Configs = make(map[string]string)
+	}
+	return idx, nil
+}
+
+func saveIndex(idx *configIndex) error {
+	data, err := yaml.Marshal(idx)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(indexPath(), data, 0644)
 }
 
 func (o *ServeOptions) Run() error {
@@ -77,15 +125,33 @@ func (o *ServeOptions) Run() error {
 		if err != nil {
 			return fmt.Errorf("read kubeconfig: %w", err)
 		}
-		os.WriteFile(kubeconfigPath(), data, 0644)
+		rawCfg, parseErr := clientcmd.NewClientConfigFromBytes(data)
+		if parseErr == nil {
+			cfg, _ := rawCfg.RawConfig()
+			name := cfg.CurrentContext
+			if name == "" {
+				name = "default"
+			}
+			idx, _ := loadIndex()
+			idx.Active = name
+			idx.Configs[name] = string(data)
+			saveIndex(idx)
+		}
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/", FrontendHandler())
-	RegisterHandlers(mux)
+	mux.Handle("/api/k8s/secret", http.HandlerFunc(handleSecret))
+	mux.Handle("/api/k8s/secret/decode", http.HandlerFunc(handleSecretDecode))
+	mux.Handle("/api/k8s/resources", http.HandlerFunc(handleResources))
+	mux.Handle("/api/k8s/namespaces", http.HandlerFunc(handleNamespaces))
+	mux.Handle("/api/k8s/config", http.HandlerFunc(handleConfig))
+	mux.Handle("/api/k8s/configs/", http.HandlerFunc(handleConfigs))
 	fmt.Printf("Kubernetes tools server listening on :%d\n", o.Port)
-	if _, err := os.Stat(kubeconfigPath()); err == nil {
-		fmt.Printf("  Kubeconfig: %s (loaded)\n", kubeconfigPath())
+	idx, _ := loadIndex()
+	if idx.Active != "" {
+		fmt.Printf("  Active config: %s\n", idx.Active)
+		fmt.Printf("  Saved configs: %d\n", len(idx.Configs))
 	} else {
 		fmt.Printf("  Kubeconfig: not configured\n")
 	}
@@ -96,157 +162,188 @@ func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/k8s/secret", handleSecret)
 	mux.HandleFunc("/api/k8s/secret/decode", handleSecretDecode)
 	mux.HandleFunc("/api/k8s/resources", handleResources)
+	mux.HandleFunc("/api/k8s/namespaces", handleNamespaces)
 	mux.HandleFunc("/api/k8s/config", handleConfig)
+	mux.HandleFunc("/api/k8s/configs/", handleConfigs)
 }
 
-func kubeconfigFromStore() (string, error) {
-	data, err := os.ReadFile(kubeconfigPath())
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
-}
-
-func kubeconfigToStore(data string) error {
-	return os.WriteFile(kubeconfigPath(), []byte(data), 0644)
-}
-
-func kubeconfigDelete() {
-	os.Remove(kubeconfigPath())
-}
-
-func loadK8sClient(kubeconfigContent string) (*kubernetes.Clientset, *clientcmd.ConfigOverrides, error) {
+func loadK8sClient(kubeconfigContent string) (*kubernetes.Clientset, error) {
 	config, err := clientcmd.NewClientConfigFromBytes([]byte(kubeconfigContent))
 	if err != nil {
-		return nil, nil, fmt.Errorf("parse kubeconfig: %w", err)
+		return nil, fmt.Errorf("parse kubeconfig: %w", err)
 	}
 	restConfig, err := config.ClientConfig()
 	if err != nil {
-		return nil, nil, fmt.Errorf("create rest config: %w", err)
+		return nil, fmt.Errorf("create rest config: %w", err)
 	}
 	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("create kubernetes client: %w", err)
+		return nil, fmt.Errorf("create kubernetes client: %w", err)
 	}
-	return clientset, nil, nil
+	return clientset, nil
+}
+
+func parseKubeconfigMeta(data string) ([]string, string) {
+	rawCfg, err := clientcmd.NewClientConfigFromBytes([]byte(data))
+	if err != nil {
+		return nil, ""
+	}
+	cfg, err := rawCfg.RawConfig()
+	if err != nil {
+		return nil, ""
+	}
+	var contexts []string
+	for name := range cfg.Contexts {
+		contexts = append(contexts, name)
+	}
+	return contexts, cfg.CurrentContext
 }
 
 func handleConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
 	switch r.Method {
 	case http.MethodGet:
-		data, err := kubeconfigFromStore()
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+		idx, _ := loadIndex()
+		if idx.Active == "" || idx.Configs[idx.Active] == "" {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"active": false,
+				"configs": idx.Configs,
+			})
 			return
 		}
-		// Parse to get contexts
-		rawCfg, err := clientcmd.NewClientConfigFromBytes([]byte(data))
-		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
-			return
-		}
-		cfg, err := rawCfg.RawConfig()
-		activeContext := cfg.CurrentContext
-		if err != nil {
-			activeContext = ""
-		}
-		var contexts []string
-		for name := range cfg.Contexts {
-			contexts = append(contexts, name)
-		}
-		w.Header().Set("Content-Type", "application/json")
+		contexts, currentCtx := parseKubeconfigMeta(idx.Configs[idx.Active])
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"active":         true,
-			"kubeconfig":     data,
+			"activeName":     idx.Active,
+			"configs":        idx.Configs,
 			"contexts":       contexts,
-			"currentContext": activeContext,
+			"currentContext": currentCtx,
 		})
 
 	case http.MethodPost:
 		var req struct {
+			Name          string `json:"name"`
 			Kubeconfig    string `json:"kubeconfig"`
-			Clear         bool   `json:"clear"`
+			Deactivate    bool   `json:"deactivate"`
 			SwitchContext string `json:"switchContext"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+			http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 			return
 		}
-		if req.Clear {
-			kubeconfigDelete()
-			w.Header().Set("Content-Type", "application/json")
+
+		idx, _ := loadIndex()
+
+		if req.Deactivate {
+			idx.Active = ""
+			saveIndex(idx)
 			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
 			return
 		}
+
 		if req.SwitchContext != "" {
-			data, err := kubeconfigFromStore()
-			if err != nil {
-				http.Error(w, "no kubeconfig configured", http.StatusBadRequest)
+			kc, ok := idx.Configs[idx.Active]
+			if !ok {
+				http.Error(w, `{"error":"no active config"}`, http.StatusBadRequest)
 				return
 			}
 			var cfg map[string]interface{}
-			if err := yaml.Unmarshal([]byte(data), &cfg); err != nil {
-				http.Error(w, "parse kubeconfig: "+err.Error(), http.StatusBadRequest)
+			if err := yaml.Unmarshal([]byte(kc), &cfg); err != nil {
+				http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
 				return
-			}
-			// Navigate to contexts and set current-context
-			if contexts, ok := cfg["contexts"].([]interface{}); ok {
-				found := false
-				for _, c := range contexts {
-					if ctx, ok := c.(map[string]interface{}); ok {
-						if name, _ := ctx["name"].(string); name == req.SwitchContext {
-							found = true
-							break
-						}
-					}
-				}
-				if !found {
-					http.Error(w, "context not found", http.StatusBadRequest)
-					return
-				}
 			}
 			cfg["current-context"] = req.SwitchContext
 			updated, _ := yaml.Marshal(cfg)
-			if err := kubeconfigToStore(string(updated)); err != nil {
-				http.Error(w, "save config: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Set("Content-Type", "application/json")
+			idx.Configs[idx.Active] = string(updated)
+			saveIndex(idx)
+			contexts, currentCtx := parseKubeconfigMeta(idx.Configs[idx.Active])
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"active":         true,
-				"currentContext": req.SwitchContext,
+				"activeName":     idx.Active,
+				"configs":        idx.Configs,
+				"contexts":       contexts,
+				"currentContext": currentCtx,
 			})
 			return
 		}
-		if err := kubeconfigToStore(req.Kubeconfig); err != nil {
-			http.Error(w, fmt.Sprintf("save config: %v", err), http.StatusInternalServerError)
-			return
-		}
-		// Parse and return context info
-		rawCfg, err := clientcmd.NewClientConfigFromBytes([]byte(req.Kubeconfig))
-		if err != nil {
-			http.Error(w, fmt.Sprintf("parse kubeconfig: %v", err), http.StatusBadRequest)
-			return
-		}
-		cfg, err := rawCfg.RawConfig()
-		var contexts []string
-		activeContext := cfg.CurrentContext
-		if err == nil {
-			for name := range cfg.Contexts {
-				contexts = append(contexts, name)
+
+		name := req.Name
+		if name == "" {
+			_, currentCtx := parseKubeconfigMeta(req.Kubeconfig)
+			name = currentCtx
+			if name == "" {
+				name = "default"
 			}
 		}
-		w.Header().Set("Content-Type", "application/json")
+		idx.Active = name
+		idx.Configs[name] = req.Kubeconfig
+		saveIndex(idx)
+
+		contexts, currentCtx := parseKubeconfigMeta(req.Kubeconfig)
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"active":         true,
+			"activeName":     name,
+			"configs":        idx.Configs,
 			"contexts":       contexts,
-			"currentContext": activeContext,
+			"currentContext": currentCtx,
 		})
 
 	default:
-		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+		http.Error(w, `{"error":"GET or POST"}`, http.StatusMethodNotAllowed)
 	}
+}
+
+func handleConfigs(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// DELETE /api/k8s/configs/{name}
+	if r.Method == http.MethodDelete {
+		name := strings.TrimPrefix(r.URL.Path, "/api/k8s/configs/")
+		if name == "" {
+			http.Error(w, `{"error":"name required"}`, http.StatusBadRequest)
+			return
+		}
+		idx, _ := loadIndex()
+		if idx.Active == name {
+			idx.Active = ""
+		}
+		delete(idx.Configs, name)
+		saveIndex(idx)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active": idx.Active != "" && idx.Configs[idx.Active] != "",
+			"configs": idx.Configs,
+		})
+		return
+	}
+
+	// POST /api/k8s/configs/{name} — activate a saved config
+	if r.Method == http.MethodPost {
+		name := strings.TrimPrefix(r.URL.Path, "/api/k8s/configs/")
+		if name == "" {
+			http.Error(w, `{"error":"name required"}`, http.StatusBadRequest)
+			return
+		}
+		idx, _ := loadIndex()
+		if _, ok := idx.Configs[name]; !ok {
+			http.Error(w, `{"error":"config not found"}`, http.StatusNotFound)
+			return
+		}
+		idx.Active = name
+		saveIndex(idx)
+
+		contexts, currentCtx := parseKubeconfigMeta(idx.Configs[name])
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active":         true,
+			"activeName":     name,
+			"configs":        idx.Configs,
+			"contexts":       contexts,
+			"currentContext": currentCtx,
+		})
+		return
+	}
+
+	http.Error(w, `{"error":"POST or DELETE"}`, http.StatusMethodNotAllowed)
 }
 
 func handleResources(w http.ResponseWriter, r *http.Request) {
@@ -266,15 +363,15 @@ func handleResources(w http.ResponseWriter, r *http.Request) {
 
 	kc := req.Kubeconfig
 	if kc == "" {
-		stored, err := kubeconfigFromStore()
-		if err != nil {
+		idx, _ := loadIndex()
+		if idx.Active == "" || idx.Configs[idx.Active] == "" {
 			http.Error(w, "kubeconfig not configured; upload or paste your config first", http.StatusBadRequest)
 			return
 		}
-		kc = stored
+		kc = idx.Configs[idx.Active]
 	}
 
-	cs, _, err := loadK8sClient(kc)
+	cs, err := loadK8sClient(kc)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("kubeconfig error: %v", err), http.StatusBadRequest)
 		return
@@ -294,6 +391,38 @@ func handleResources(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "unsupported resource type", http.StatusBadRequest)
 	}
+}
+
+func handleNamespaces(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"GET required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+
+	idx, _ := loadIndex()
+	if idx.Active == "" || idx.Configs[idx.Active] == "" {
+		http.Error(w, `{"error":"kubeconfig not configured"}`, http.StatusBadRequest)
+		return
+	}
+
+	cs, err := loadK8sClient(idx.Configs[idx.Active])
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	nsList, err := cs.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"list namespaces: %v"}`, err), http.StatusInternalServerError)
+		return
+	}
+
+	var namespaces []string
+	for _, ns := range nsList.Items {
+		namespaces = append(namespaces, ns.Name)
+	}
+	json.NewEncoder(w).Encode(namespaces)
 }
 
 func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
