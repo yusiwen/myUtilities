@@ -109,3 +109,4 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **k8s Resource Listing** — `mu k8s get pods|nodes|deployments|services|configmaps|namespaces|statefulsets|daemonsets|ingresses|secrets` using `k8s.io/client-go`, supports `--context` and `--kubeconfig`
 - **k8s Web UI Resources** — Resources tab with kubeconfig upload/paste, multi-config management, context switching, namespace dropdown, 10 resource types listing
 - **k8s Describe** — CLI and web UI describe command for 10 resource types with detailed resource info in a modal dialog
+- **Misc Tools** — `mu misc uuid|json|timestamp|hash` with CLI and web UI (4 tabs), zero external dependencies, gateway integration at `/misc/`

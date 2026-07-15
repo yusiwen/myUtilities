@@ -15,6 +15,7 @@ import (
 	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/k8s"
+	"github.com/yusiwen/myUtilities/misc"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
@@ -125,6 +126,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128196;</div>
       <div class="app-name">Diff</div>
       <div class="app-desc">Compare text and files side by side</div>
+    </a>
+    <a href="/misc/" class="app-card">
+      <div class="app-icon">&#128377;</div>
+      <div class="app-name">Misc</div>
+      <div class="app-desc">JSON, UUID, timestamp, hash tools</div>
     </a>
     <a href="/k8s/" class="app-card">
       <div class="app-icon">&#128736;</div>
@@ -264,6 +270,10 @@ func (o *Options) Run() error {
 	mux.Handle("/k8s/", http.StripPrefix("/k8s", withGateway(k8s.FrontendHandler())))
 	k8s.RegisterHandlers(mux)
 	log.Printf("Gateway:   /k8s/* -> Kubernetes Tools frontend")
+
+	mux.Handle("/misc/", http.StripPrefix("/misc", withGateway(misc.FrontendHandler())))
+	misc.RegisterHandlers(mux)
+	log.Printf("Gateway:   /misc/* -> Misc Tools frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

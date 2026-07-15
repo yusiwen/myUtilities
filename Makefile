@@ -11,9 +11,10 @@ JARINFO_FRONTEND_DIR=jarinfo/frontend
 CRYPTO_FRONTEND_DIR=crypto/frontend
 DIFF_FRONTEND_DIR=diff/frontend
 K8S_FRONTEND_DIR=k8s/frontend
+MISC_FRONTEND_DIR=misc/frontend
 THEME_PARTIAL=shared/frontend/theme-partial.html
 COMMON_PARTIAL=shared/frontend/common-partial.html
-FRONTEND_DIRS=wol es mock qrcode jarinfo crypto diff k8s
+FRONTEND_DIRS=wol es mock qrcode jarinfo crypto diff k8s misc
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
@@ -64,6 +65,8 @@ frontend: inject-shared
 	cd $(DIFF_FRONTEND_DIR) && npm install --silent && npm run build
 	@echo "Building K8s Svelte frontend..."
 	cd $(K8S_FRONTEND_DIR) && npm install --silent && npm run build
+	@echo "Building Misc Svelte frontend..."
+	cd $(MISC_FRONTEND_DIR) && npm install --silent && npm run build
 	@for dir in $(FRONTEND_DIRS); do \
 	  git checkout -- "$$dir/frontend/index.html" 2>/dev/null || true; \
 	done
