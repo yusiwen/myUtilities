@@ -27,6 +27,9 @@
   let resCols = $state([])
   let resRows = $state([])
   let isNamespaced = $derived(resCols.length > 0 && resCols[0] !== 'NAME')
+  let resourceHasNs = $derived(resType !== 'nodes' && resType !== 'namespaces')
+
+  $effect(() => { if (!resourceHasNs) resNs = '' })
   let resLoading = $state(false)
   let resError = $state('')
 
@@ -341,7 +344,7 @@
           </div>
           <div class="field">
             <label for="res-ns">Namespace</label>
-            <select id="res-ns" bind:value={resNs}>
+            <select id="res-ns" bind:value={resNs} disabled={!resourceHasNs}>
               <option value="">All namespaces</option>
               {#each namespaces as ns}
                 <option value={ns}>{ns}</option>
@@ -414,6 +417,7 @@
   .field { margin-bottom: 14px; }
   .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
   .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
+  .field select:disabled { opacity: .4; cursor: not-allowed; }
   .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
   .field textarea { font-family: 'SF Mono', 'Fira Code', monospace; resize: vertical; }
   .field-row { display: flex; gap: 12px; align-items: flex-end; }
