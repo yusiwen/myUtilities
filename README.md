@@ -115,6 +115,12 @@ mu k8s get services
 mu k8s get pods --context my-cluster
 mu k8s get pods --kubeconfig /path/to/config
 
+# Describe a resource in detail
+mu k8s describe pod my-pod -n default
+mu k8s describe node my-node
+mu k8s describe deployment my-deploy -n default
+mu k8s describe service my-svc -n default
+
 # Serve web UI (standalone)
 mu k8s serve --port 8089
 ```
@@ -127,7 +133,8 @@ mu k8s serve --port 8089 --kubeconfig ~/.kube/config
 The web UI provides:
 - **Secret** tab — encode/decode Secret YAML in one place, with mode switch, .env file loading, copy/download
 - **Resources** tab — connect to a Kubernetes cluster by uploading or pasting your kubeconfig,
-  list pods, nodes, deployments, and services with namespace filtering and context switching
+  list pods, nodes, deployments, and services with namespace filtering and context switching;
+  click any resource name to view detailed describe information in a modal dialog
   (kubeconfig is persisted at `~/.config/mu/kubeconfigs.yaml`, supports multiple saved configs)
 
 Supports `key=value` format with `#` comments and blank lines in env files.

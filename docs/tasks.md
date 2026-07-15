@@ -108,3 +108,4 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **k8s Web UI** — Svelte 5 frontend with Secret Generator, Decode Secret tabs, .env file loading, and gateway integration at `/k8s/`
 - **k8s Resource Listing** — `mu k8s get pods|nodes|deployments|services` using `k8s.io/client-go`, reads kubeconfig current-context, supports `--context` and `--kubeconfig` flags
 - **k8s Web UI Resources** — Resources tab with kubeconfig upload/paste, multi-config management, context switching, namespace dropdown, pod/node/deployment/service listing
+- **k8s Describe** — CLI and web UI describe command for pods, nodes, deployments, services with detailed resource info in a modal dialog

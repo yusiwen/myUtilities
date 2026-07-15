@@ -20,9 +20,10 @@ import (
 )
 
 type Options struct {
-	Secret SecretOptions `cmd:"" name:"secret" aliases:"s" help:"Generate or decode a Kubernetes Secret YAML."`
-	Get    GetOptions    `cmd:"" name:"get" help:"List Kubernetes resources (pods, nodes, deployments, services)."`
-	Serve  ServeOptions  `cmd:"" name:"serve" help:"Start Kubernetes tools HTTP server."`
+	Secret   SecretOptions   `cmd:"" name:"secret" aliases:"s" help:"Generate or decode a Kubernetes Secret YAML."`
+	Get      GetOptions      `cmd:"" name:"get" help:"List Kubernetes resources (pods, nodes, deployments, services)."`
+	Describe DescribeOptions `cmd:"" name:"describe" help:"Describe a Kubernetes resource in detail."`
+	Serve    ServeOptions    `cmd:"" name:"serve" help:"Start Kubernetes tools HTTP server."`
 }
 
 type SecretOptions struct {
@@ -145,6 +146,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/api/k8s/secret/decode", http.HandlerFunc(handleSecretDecode))
 	mux.Handle("/api/k8s/resources", http.HandlerFunc(handleResources))
 	mux.Handle("/api/k8s/namespaces", http.HandlerFunc(handleNamespaces))
+	mux.Handle("/api/k8s/describe", http.HandlerFunc(handleDescribe))
 	mux.Handle("/api/k8s/config", http.HandlerFunc(handleConfig))
 	mux.Handle("/api/k8s/configs/", http.HandlerFunc(handleConfigs))
 	fmt.Printf("Kubernetes tools server listening on :%d\n", o.Port)
@@ -163,6 +165,7 @@ func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/k8s/secret/decode", handleSecretDecode)
 	mux.HandleFunc("/api/k8s/resources", handleResources)
 	mux.HandleFunc("/api/k8s/namespaces", handleNamespaces)
+	mux.HandleFunc("/api/k8s/describe", handleDescribe)
 	mux.HandleFunc("/api/k8s/config", handleConfig)
 	mux.HandleFunc("/api/k8s/configs/", handleConfigs)
 }
@@ -423,6 +426,56 @@ func handleNamespaces(w http.ResponseWriter, r *http.Request) {
 		namespaces = append(namespaces, ns.Name)
 	}
 	json.NewEncoder(w).Encode(namespaces)
+}
+
+func handleDescribe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Type      string `json:"type"`
+		Name      string `json:"name"`
+		Namespace string `json:"namespace"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
+		return
+	}
+
+	idx, _ := loadIndex()
+	if idx.Active == "" || idx.Configs[idx.Active] == "" {
+		http.Error(w, `{"error":"kubeconfig not configured"}`, http.StatusBadRequest)
+		return
+	}
+	cs, err := loadK8sClient(idx.Configs[idx.Active])
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+	var text string
+	switch strings.ToLower(req.Type) {
+	case "pod", "pods":
+		text, err = describePod(ctx, cs, req.Namespace, req.Name)
+	case "node", "nodes":
+		text, err = describeNode(ctx, cs, req.Name)
+	case "deployment", "deployments":
+		text, err = describeDeployment(ctx, cs, req.Namespace, req.Name)
+	case "service", "services":
+		text, err = describeService(ctx, cs, req.Namespace, req.Name)
+	default:
+		http.Error(w, `{"error":"unsupported resource type"}`, http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"describe": text})
 }
 
 func listPodsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {

@@ -29,6 +29,11 @@
   let resLoading = $state(false)
   let resError = $state('')
 
+  // Describe modal
+  let descText = $state('')
+  let descTitle = $state('')
+  let descLoading = $state(false)
+
   // Add new config form
   let newName = $state('')
   let newKc = $state('')
@@ -161,6 +166,20 @@
       body: JSON.stringify({ deactivate: true }),
     })
     kcActive = false; kcConfig = null; resCols = []; resRows = []
+  }
+
+  async function doDescribe(name, ns) {
+    descTitle = `Describe ${resType}: ${name}`
+    descText = ''
+    descLoading = true
+    try {
+      const r = await fetch('/api/k8s/describe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: resType, name, namespace: ns || '' }),
+      })
+      if (!r.ok) throw new Error((await r.text()) || 'failed')
+      descText = (await r.json()).describe
+    } catch (e) { descText = 'Error: ' + e.message } finally { descLoading = false }
   }
 
   async function loadNamespaces() {
@@ -335,7 +354,15 @@
               <thead><tr>{#each resCols as col}<th>{col}</th>{/each}</tr></thead>
               <tbody>
                 {#each resRows as row}
-                  <tr>{#each row as cell}<td>{cell}</td>{/each}</tr>
+                  <tr>
+                    {#each row as cell, i}
+                      {#if i === 1}
+                        <td><button class="name-link" onclick={() => doDescribe(cell, row[0])}>{cell}</button></td>
+                      {:else}
+                        <td>{cell}</td>
+                      {/if}
+                    {/each}
+                  </tr>
                 {/each}
               </tbody>
             </table>
@@ -345,6 +372,26 @@
     {/if}
   {/if}
 </div>
+
+{#if descText || descLoading}
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div class="modal-overlay" role="presentation" onclick={() => { descText = ''; descLoading = false }}>
+    <!-- svelte-ignore a11y_click_events_have_key_events,a11y_no_static_element_interactions -->
+    <div class="modal" onclick={(e) => e.stopPropagation()}>
+      <div class="modal-header">
+        <h3>{descTitle}</h3>
+        <button class="btn xs" onclick={() => { descText = ''; descLoading = false }}>✕</button>
+      </div>
+      <div class="modal-body">
+        {#if descLoading}
+          <p>Loading...</p>
+        {:else}
+          <pre class="desc-text">{descText}</pre>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .app { max-width: 960px; margin: 0 auto; padding: 40px 16px; }
@@ -410,4 +457,14 @@
   .res-table th { text-align: left; padding: 10px 12px; background: var(--surface); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   .res-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
   .res-table tr:last-child td { border-bottom: none; }
+
+  .name-link { background: none; border: none; color: var(--primary); cursor: pointer; font-family: inherit; font-size: inherit; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
+  .name-link:hover { color: var(--text); }
+
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; }
+  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 700px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .modal-header h3 { font-size: 16px; }
+  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+  .desc-text { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin: 0; }
 </style>
