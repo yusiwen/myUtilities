@@ -13,6 +13,7 @@ import (
 	"github.com/yusiwen/myUtilities/k8s"
 	"github.com/yusiwen/myUtilities/misc"
 	"github.com/yusiwen/myUtilities/mock"
+	"github.com/yusiwen/myUtilities/network"
 	"github.com/yusiwen/myUtilities/proxy"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/runner"
@@ -37,6 +38,7 @@ type MyUtilities struct {
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Diff       diff.Options                `cmd:"" name:"diff" help:"Text diff tool."`
+	Network    network.Options             `cmd:"" name:"network" help:"Network tools (DNS, DIG)."`
 	Misc       misc.Options                `cmd:"" name:"misc" help:"Miscellaneous tools (JSON, UUID, timestamp, hash)."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`

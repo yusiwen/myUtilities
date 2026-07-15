@@ -17,6 +17,7 @@ import (
 	"github.com/yusiwen/myUtilities/k8s"
 	"github.com/yusiwen/myUtilities/misc"
 	"github.com/yusiwen/myUtilities/mock"
+	"github.com/yusiwen/myUtilities/network"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
 )
@@ -131,6 +132,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128377;</div>
       <div class="app-name">Misc</div>
       <div class="app-desc">JSON, UUID, timestamp, hash tools</div>
+    </a>
+    <a href="/network/" class="app-card">
+      <div class="app-icon">&#127760;</div>
+      <div class="app-name">Network</div>
+      <div class="app-desc">DNS lookup and dig query tools</div>
     </a>
     <a href="/k8s/" class="app-card">
       <div class="app-icon">&#128736;</div>
@@ -274,6 +280,10 @@ func (o *Options) Run() error {
 	mux.Handle("/misc/", http.StripPrefix("/misc", withGateway(misc.FrontendHandler())))
 	misc.RegisterHandlers(mux)
 	log.Printf("Gateway:   /misc/* -> Misc Tools frontend")
+
+	mux.Handle("/network/", http.StripPrefix("/network", withGateway(network.FrontendHandler())))
+	network.RegisterHandlers(mux)
+	log.Printf("Gateway:   /network/* -> Network Tools frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
