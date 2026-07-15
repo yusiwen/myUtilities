@@ -13,7 +13,7 @@ import (
 )
 
 type DescribeOptions struct {
-	Resource   string `arg:"" name:"resource" help:"Resource type: pods|nodes|deployments|services"`
+	Resource   string `arg:"" name:"resource" help:"Resource type: pods|nodes|deployments|services|configmaps|namespaces|statefulsets|daemonsets|ingresses|secrets"`
 	Name       string `arg:"" name:"name" help:"Resource name."`
 	Namespace  string `short:"n" name:"namespace" help:"Kubernetes namespace."`
 	Context    string `name:"context" help:"Kubeconfig context name (default: current-context)."`
@@ -50,8 +50,20 @@ func (o *DescribeOptions) Run() error {
 		text, err = describeDeployment(ctx, clientset, o.Namespace, o.Name)
 	case "service", "services":
 		text, err = describeService(ctx, clientset, o.Namespace, o.Name)
+	case "configmap", "configmaps", "cm":
+		text, err = describeConfigMap(ctx, clientset, o.Namespace, o.Name)
+	case "namespace", "namespaces", "ns":
+		text, err = describeNamespace(ctx, clientset, o.Name)
+	case "statefulset", "statefulsets", "sts":
+		text, err = describeStatefulSet(ctx, clientset, o.Namespace, o.Name)
+	case "daemonset", "daemonsets", "ds":
+		text, err = describeDaemonSet(ctx, clientset, o.Namespace, o.Name)
+	case "ingress", "ingresses", "ing":
+		text, err = describeIngress(ctx, clientset, o.Namespace, o.Name)
+	case "secret", "secrets":
+		text, err = describeSecret(ctx, clientset, o.Namespace, o.Name)
 	default:
-		return fmt.Errorf("unsupported resource type: %s (supported: pods, nodes, deployments, services)", o.Resource)
+		return fmt.Errorf("unsupported resource type: %s (supported: pods, nodes, deployments, services, configmaps, namespaces, statefulsets, daemonsets, ingresses, secrets)", o.Resource)
 	}
 	if err != nil {
 		return err
@@ -239,6 +251,166 @@ func describeService(ctx context.Context, cs *kubernetes.Clientset, namespace, n
 		}
 	}
 	w("Selector:    %s\n", formatLabels(svc.Spec.Selector))
+	return b.String(), nil
+}
+
+func describeConfigMap(ctx context.Context, cs *kubernetes.Clientset, namespace, name string) (string, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
+	cm, err := cs.CoreV1().ConfigMaps(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get configmap: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:      %s\n", cm.Name)
+	w("Namespace: %s\n", cm.Namespace)
+	w("Labels:    %s\n", formatLabels(cm.Labels))
+	w("Data:\n")
+	for k, v := range cm.Data {
+		val := v
+		if len(val) > 200 {
+			val = val[:200] + "..."
+		}
+		w("  %s: %s\n", k, strings.ReplaceAll(val, "\n", "\\n"))
+	}
+	return b.String(), nil
+}
+
+func describeNamespace(ctx context.Context, cs *kubernetes.Clientset, name string) (string, error) {
+	ns, err := cs.CoreV1().Namespaces().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get namespace: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:   %s\n", ns.Name)
+	w("Status: %s\n", ns.Status.Phase)
+	w("Labels: %s\n", formatLabels(ns.Labels))
+	return b.String(), nil
+}
+
+func describeStatefulSet(ctx context.Context, cs *kubernetes.Clientset, namespace, name string) (string, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
+	ss, err := cs.AppsV1().StatefulSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get statefulset: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:      %s\n", ss.Name)
+	w("Namespace: %s\n", ss.Namespace)
+	w("Labels:    %s\n", formatLabels(ss.Labels))
+	w("Replicas:  %d ready | %d current | %d desired\n", ss.Status.ReadyReplicas, ss.Status.CurrentReplicas, ss.Status.Replicas)
+	if ss.Spec.ServiceName != "" {
+		w("Service:   %s\n", ss.Spec.ServiceName)
+	}
+	if len(ss.Spec.Template.Spec.Containers) > 0 {
+		w("Containers:\n")
+		for _, c := range ss.Spec.Template.Spec.Containers {
+			w("  Name:  %s\n", c.Name)
+			w("  Image: %s\n", c.Image)
+		}
+	}
+	return b.String(), nil
+}
+
+func describeDaemonSet(ctx context.Context, cs *kubernetes.Clientset, namespace, name string) (string, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
+	ds, err := cs.AppsV1().DaemonSets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get daemonset: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:      %s\n", ds.Name)
+	w("Namespace: %s\n", ds.Namespace)
+	w("Labels:    %s\n", formatLabels(ds.Labels))
+	w("Selector:  %s\n", formatLabels(ds.Spec.Selector.MatchLabels))
+	w("Desired:   %d nodes\n", ds.Status.DesiredNumberScheduled)
+	w("Ready:     %d nodes\n", ds.Status.NumberReady)
+	if len(ds.Spec.Template.Spec.Containers) > 0 {
+		w("Containers:\n")
+		for _, c := range ds.Spec.Template.Spec.Containers {
+			w("  Name:  %s\n", c.Name)
+			w("  Image: %s\n", c.Image)
+		}
+	}
+	return b.String(), nil
+}
+
+func describeIngress(ctx context.Context, cs *kubernetes.Clientset, namespace, name string) (string, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
+	ing, err := cs.NetworkingV1().Ingresses(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get ingress: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:      %s\n", ing.Name)
+	w("Namespace: %s\n", ing.Namespace)
+	w("Labels:    %s\n", formatLabels(ing.Labels))
+	if ing.Spec.IngressClassName != nil {
+		w("Class:     %s\n", *ing.Spec.IngressClassName)
+	}
+	if len(ing.Spec.Rules) > 0 {
+		w("Rules:\n")
+		for _, r := range ing.Spec.Rules {
+			host := r.Host
+			if host == "" {
+				host = "*"
+			}
+			for _, path := range r.HTTP.Paths {
+				serviceName := path.Backend.Service.Name
+				servicePort := path.Backend.Service.Port.Number
+				if servicePort == 0 && path.Backend.Service.Port.Name != "" {
+					w("  Host: %s Path: %s → %s:%s\n", host, path.Path, serviceName, path.Backend.Service.Port.Name)
+				} else {
+					w("  Host: %s Path: %s → %s:%d\n", host, path.Path, serviceName, servicePort)
+				}
+			}
+		}
+	}
+	if len(ing.Spec.TLS) > 0 {
+		w("TLS:\n")
+		for _, t := range ing.Spec.TLS {
+			w("  Hosts: %s\n", strings.Join(t.Hosts, ", "))
+			w("  Secret: %s\n", t.SecretName)
+		}
+	}
+	return b.String(), nil
+}
+
+func describeSecret(ctx context.Context, cs *kubernetes.Clientset, namespace, name string) (string, error) {
+	if namespace == "" {
+		namespace = "default"
+	}
+	secret, err := cs.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get secret: %w", err)
+	}
+	var b bytes.Buffer
+	w := func(format string, args ...interface{}) { fmt.Fprintf(&b, format, args...) }
+	w("Name:      %s\n", secret.Name)
+	w("Namespace: %s\n", secret.Namespace)
+	w("Type:      %s\n", secret.Type)
+	w("Labels:    %s\n", formatLabels(secret.Labels))
+	w("Data:\n")
+	for k, v := range secret.Data {
+		size := len(v)
+		sizeStr := fmt.Sprintf("%d bytes", size)
+		if size >= 1024 {
+			sizeStr = fmt.Sprintf("%.1f KiB", float64(size)/1024)
+		}
+		w("  %s: %s\n", k, sizeStr)
+	}
 	return b.String(), nil
 }
 

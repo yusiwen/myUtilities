@@ -106,6 +106,6 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Diff Web UI** — Full-page CodeMirror merge view with real-time diff, synchronized scrolling, file upload, localStorage persistence, and gateway integration at `/diff/`
 - **k8s Secret Tool** — CLI tool to generate and decode Kubernetes Opaque Secret YAML from key=value pairs, env files, or stdin
 - **k8s Web UI** — Svelte 5 frontend with Secret Generator, Decode Secret tabs, .env file loading, and gateway integration at `/k8s/`
-- **k8s Resource Listing** — `mu k8s get pods|nodes|deployments|services` using `k8s.io/client-go`, reads kubeconfig current-context, supports `--context` and `--kubeconfig` flags
-- **k8s Web UI Resources** — Resources tab with kubeconfig upload/paste, multi-config management, context switching, namespace dropdown, pod/node/deployment/service listing
-- **k8s Describe** — CLI and web UI describe command for pods, nodes, deployments, services with detailed resource info in a modal dialog
+- **k8s Resource Listing** — `mu k8s get pods|nodes|deployments|services|configmaps|namespaces|statefulsets|daemonsets|ingresses|secrets` using `k8s.io/client-go`, supports `--context` and `--kubeconfig`
+- **k8s Web UI Resources** — Resources tab with kubeconfig upload/paste, multi-config management, context switching, namespace dropdown, 10 resource types listing
+- **k8s Describe** — CLI and web UI describe command for 10 resource types with detailed resource info in a modal dialog

@@ -26,6 +26,7 @@
   let resNs = $state('')
   let resCols = $state([])
   let resRows = $state([])
+  let isNamespaced = $derived(resCols.length > 0 && resCols[0] !== 'NAME')
   let resLoading = $state(false)
   let resError = $state('')
 
@@ -330,6 +331,12 @@
               <option value="nodes">Nodes</option>
               <option value="deployments">Deployments</option>
               <option value="services">Services</option>
+              <option value="configmaps">ConfigMaps</option>
+              <option value="namespaces">Namespaces</option>
+              <option value="statefulsets">StatefulSets</option>
+              <option value="daemonsets">DaemonSets</option>
+              <option value="ingresses">Ingresses</option>
+              <option value="secrets">Secrets</option>
             </select>
           </div>
           <div class="field">
@@ -356,8 +363,8 @@
                 {#each resRows as row}
                   <tr>
                     {#each row as cell, i}
-                      {#if i === 1}
-                        <td><button class="name-link" onclick={() => doDescribe(cell, row[0])}>{cell}</button></td>
+                      {#if (isNamespaced && i === 1) || (!isNamespaced && i === 0)}
+                        <td><button class="name-link" onclick={() => doDescribe(cell, isNamespaced ? row[0] : '')}>{cell}</button></td>
                       {:else}
                         <td>{cell}</td>
                       {/if}

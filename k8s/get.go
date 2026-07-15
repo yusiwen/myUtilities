@@ -55,8 +55,20 @@ func (o *GetOptions) Run() error {
 		return listDeployments(ctx, clientset, ns)
 	case "services":
 		return listServices(ctx, clientset, ns)
+	case "configmaps", "cm":
+		return listConfigMaps(ctx, clientset, ns)
+	case "namespaces", "ns":
+		return listNamespaces(ctx, clientset)
+	case "statefulsets", "sts":
+		return listStatefulSets(ctx, clientset, ns)
+	case "daemonsets", "ds":
+		return listDaemonSets(ctx, clientset, ns)
+	case "ingresses", "ing":
+		return listIngresses(ctx, clientset, ns)
+	case "secrets":
+		return listSecrets(ctx, clientset, ns)
 	default:
-		return fmt.Errorf("unsupported resource type: %s (supported: pods, nodes, deployments, services)", o.Resource)
+		return fmt.Errorf("unsupported resource type: %s (supported: pods, nodes, deployments, services, configmaps, namespaces, statefulsets, daemonsets, ingresses, secrets)", o.Resource)
 	}
 }
 
@@ -137,6 +149,104 @@ func listServices(ctx context.Context, cs *kubernetes.Clientset, namespace strin
 			svc.Namespace, svc.Name, svc.Spec.Type, svc.Spec.ClusterIP,
 			ports, humanAge(svc.CreationTimestamp.Time),
 		)
+	}
+	return w.Flush()
+}
+
+func listConfigMaps(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+	cms, err := cs.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list configmaps: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAMESPACE\tNAME\tDATA\tAGE")
+	for _, cm := range cms.Items {
+		dataCount := len(cm.Data) + len(cm.BinaryData)
+		fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", cm.Namespace, cm.Name, dataCount, humanAge(cm.CreationTimestamp.Time))
+	}
+	return w.Flush()
+}
+
+func listNamespaces(ctx context.Context, cs *kubernetes.Clientset) error {
+	nsList, err := cs.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list namespaces: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAME\tSTATUS\tAGE")
+	for _, ns := range nsList.Items {
+		fmt.Fprintf(w, "%s\t%s\t%s\n", ns.Name, ns.Status.Phase, humanAge(ns.CreationTimestamp.Time))
+	}
+	return w.Flush()
+}
+
+func listStatefulSets(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+	ss, err := cs.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list statefulsets: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAMESPACE\tNAME\tREADY\tAGE")
+	for _, s := range ss.Items {
+		fmt.Fprintf(w, "%s\t%s\t%d/%d\t%s\n", s.Namespace, s.Name, s.Status.ReadyReplicas, s.Status.Replicas, humanAge(s.CreationTimestamp.Time))
+	}
+	return w.Flush()
+}
+
+func listDaemonSets(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+	ds, err := cs.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list daemonsets: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAMESPACE\tNAME\tDESIRED\tCURRENT\tREADY\tAGE")
+	for _, d := range ds.Items {
+		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%d\t%s\n", d.Namespace, d.Name, d.Status.DesiredNumberScheduled, d.Status.CurrentNumberScheduled, d.Status.NumberReady, humanAge(d.CreationTimestamp.Time))
+	}
+	return w.Flush()
+}
+
+func listIngresses(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+	ing, err := cs.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list ingresses: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAMESPACE\tNAME\tHOSTS\tADDRESS\tAGE")
+	for _, i := range ing.Items {
+		hosts := "<none>"
+		address := "<none>"
+		if len(i.Spec.Rules) > 0 {
+			var h []string
+			for _, r := range i.Spec.Rules {
+				if r.Host != "" {
+					h = append(h, r.Host)
+				}
+			}
+			if len(h) > 0 {
+				hosts = strings.Join(h, ",")
+			}
+		}
+		if len(i.Status.LoadBalancer.Ingress) > 0 {
+			address = i.Status.LoadBalancer.Ingress[0].IP
+			if address == "" {
+				address = i.Status.LoadBalancer.Ingress[0].Hostname
+			}
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", i.Namespace, i.Name, hosts, address, humanAge(i.CreationTimestamp.Time))
+	}
+	return w.Flush()
+}
+
+func listSecrets(ctx context.Context, cs *kubernetes.Clientset, namespace string) error {
+	secrets, err := cs.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("list secrets: %w", err)
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "NAMESPACE\tNAME\tTYPE\tDATA\tAGE")
+	for _, s := range secrets.Items {
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\n", s.Namespace, s.Name, s.Type, len(s.Data), humanAge(s.CreationTimestamp.Time))
 	}
 	return w.Flush()
 }

@@ -391,6 +391,18 @@ func handleResources(w http.ResponseWriter, r *http.Request) {
 		listDeploymentsJSON(ctx, cs, req.Namespace, w)
 	case "services":
 		listServicesJSON(ctx, cs, req.Namespace, w)
+	case "configmaps", "cm":
+		listConfigMapsJSON(ctx, cs, req.Namespace, w)
+	case "namespaces", "ns":
+		listNamespacesJSON(ctx, cs, w)
+	case "statefulsets", "sts":
+		listStatefulSetsJSON(ctx, cs, req.Namespace, w)
+	case "daemonsets", "ds":
+		listDaemonSetsJSON(ctx, cs, req.Namespace, w)
+	case "ingresses", "ing":
+		listIngressesJSON(ctx, cs, req.Namespace, w)
+	case "secrets":
+		listSecretsJSON(ctx, cs, req.Namespace, w)
 	default:
 		http.Error(w, "unsupported resource type", http.StatusBadRequest)
 	}
@@ -465,6 +477,18 @@ func handleDescribe(w http.ResponseWriter, r *http.Request) {
 		text, err = describeDeployment(ctx, cs, req.Namespace, req.Name)
 	case "service", "services":
 		text, err = describeService(ctx, cs, req.Namespace, req.Name)
+	case "configmap", "configmaps", "cm":
+		text, err = describeConfigMap(ctx, cs, req.Namespace, req.Name)
+	case "namespace", "namespaces", "ns":
+		text, err = describeNamespace(ctx, cs, req.Name)
+	case "statefulset", "statefulsets", "sts":
+		text, err = describeStatefulSet(ctx, cs, req.Namespace, req.Name)
+	case "daemonset", "daemonsets", "ds":
+		text, err = describeDaemonSet(ctx, cs, req.Namespace, req.Name)
+	case "ingress", "ingresses", "ing":
+		text, err = describeIngress(ctx, cs, req.Namespace, req.Name)
+	case "secret", "secrets":
+		text, err = describeSecret(ctx, cs, req.Namespace, req.Name)
 	default:
 		http.Error(w, `{"error":"unsupported resource type"}`, http.StatusBadRequest)
 		return
@@ -590,6 +614,122 @@ func listServicesJSON(ctx context.Context, cs *kubernetes.Clientset, namespace s
 			svc.Spec.ClusterIP, strings.Join(ports, ","),
 			humanAge(svc.CreationTimestamp.Time),
 		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listConfigMapsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	cms, err := cs.CoreV1().ConfigMaps(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list configmaps: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "DATA", "AGE"}
+	var rows [][]string
+	for _, cm := range cms.Items {
+		dataCount := len(cm.Data) + len(cm.BinaryData)
+		rows = append(rows, []string{cm.Namespace, cm.Name, fmt.Sprintf("%d", dataCount), humanAge(cm.CreationTimestamp.Time)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listNamespacesJSON(ctx context.Context, cs *kubernetes.Clientset, w http.ResponseWriter) {
+	nsList, err := cs.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list namespaces: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAME", "STATUS", "AGE"}
+	var rows [][]string
+	for _, ns := range nsList.Items {
+		rows = append(rows, []string{ns.Name, string(ns.Status.Phase), humanAge(ns.CreationTimestamp.Time)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listStatefulSetsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	ss, err := cs.AppsV1().StatefulSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list statefulsets: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "READY", "AGE"}
+	var rows [][]string
+	for _, s := range ss.Items {
+		rows = append(rows, []string{s.Namespace, s.Name, fmt.Sprintf("%d/%d", s.Status.ReadyReplicas, s.Status.Replicas), humanAge(s.CreationTimestamp.Time)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listDaemonSetsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	ds, err := cs.AppsV1().DaemonSets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list daemonsets: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "DESIRED", "CURRENT", "READY", "AGE"}
+	var rows [][]string
+	for _, d := range ds.Items {
+		rows = append(rows, []string{
+			d.Namespace, d.Name,
+			fmt.Sprintf("%d", d.Status.DesiredNumberScheduled),
+			fmt.Sprintf("%d", d.Status.CurrentNumberScheduled),
+			fmt.Sprintf("%d", d.Status.NumberReady),
+			humanAge(d.CreationTimestamp.Time),
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listIngressesJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	ing, err := cs.NetworkingV1().Ingresses(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list ingresses: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "HOSTS", "ADDRESS", "AGE"}
+	var rows [][]string
+	for _, i := range ing.Items {
+		hosts := "<none>"
+		address := "<none>"
+		if len(i.Spec.Rules) > 0 {
+			var h []string
+			for _, r := range i.Spec.Rules {
+				if r.Host != "" {
+					h = append(h, r.Host)
+				}
+			}
+			if len(h) > 0 {
+				hosts = strings.Join(h, ",")
+			}
+		}
+		if len(i.Status.LoadBalancer.Ingress) > 0 {
+			address = i.Status.LoadBalancer.Ingress[0].IP
+			if address == "" {
+				address = i.Status.LoadBalancer.Ingress[0].Hostname
+			}
+		}
+		rows = append(rows, []string{i.Namespace, i.Name, hosts, address, humanAge(i.CreationTimestamp.Time)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
+}
+
+func listSecretsJSON(ctx context.Context, cs *kubernetes.Clientset, namespace string, w http.ResponseWriter) {
+	secrets, err := cs.CoreV1().Secrets(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("list secrets: %v", err), http.StatusInternalServerError)
+		return
+	}
+	columns := []string{"NAMESPACE", "NAME", "TYPE", "DATA", "AGE"}
+	var rows [][]string
+	for _, s := range secrets.Items {
+		rows = append(rows, []string{s.Namespace, s.Name, string(s.Type), fmt.Sprintf("%d", len(s.Data)), humanAge(s.CreationTimestamp.Time)})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{"columns": columns, "rows": rows})
