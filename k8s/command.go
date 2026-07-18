@@ -210,7 +210,7 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		idx, _ := loadIndex()
 		if idx.Active == "" || idx.Configs[idx.Active] == "" {
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"active": false,
+				"active":  false,
 				"configs": idx.Configs,
 			})
 			return
@@ -314,7 +314,7 @@ func handleConfigs(w http.ResponseWriter, r *http.Request) {
 		delete(idx.Configs, name)
 		saveIndex(idx)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"active": idx.Active != "" && idx.Configs[idx.Active] != "",
+			"active":  idx.Active != "" && idx.Configs[idx.Active] != "",
 			"configs": idx.Configs,
 		})
 		return

@@ -509,9 +509,9 @@ func handlePasswd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Length  int  `json:"length"`
+		Length  int   `json:"length"`
 		Digits  *bool `json:"digits,omitempty"`
-		Special bool `json:"special"`
+		Special bool  `json:"special"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
@@ -731,10 +731,10 @@ func handleJwtDecode(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"header":        h,
-		"payload":       p,
-		"signature":     sig,
-		"signatureHex":  sigHex,
+		"header":       h,
+		"payload":      p,
+		"signature":    sig,
+		"signatureHex": sigHex,
 	})
 }
 

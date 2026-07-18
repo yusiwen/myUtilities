@@ -11,17 +11,17 @@ import (
 )
 
 type JarInfo struct {
-	MinJDKVersion    string         `json:"minJDKVersion"`
-	MinMajorVersion  int            `json:"minMajorVersion"`
-	ClassCount       int            `json:"classCount"`
-	VersionHistogram map[int]int    `json:"versionHistogram"`
-	Manifest         *ManifestInfo  `json:"manifest,omitempty"`
-	Maven            *MavenInfo     `json:"maven,omitempty"`
-	Signed           bool           `json:"signed"`
-	VersionedClasses map[int]int    `json:"versionedClasses,omitempty"`
-	TotalEntries     int            `json:"totalEntries"`
-	CompressedSize   uint64         `json:"compressedSize"`
-	UncompressedSize uint64         `json:"uncompressedSize"`
+	MinJDKVersion    string        `json:"minJDKVersion"`
+	MinMajorVersion  int           `json:"minMajorVersion"`
+	ClassCount       int           `json:"classCount"`
+	VersionHistogram map[int]int   `json:"versionHistogram"`
+	Manifest         *ManifestInfo `json:"manifest,omitempty"`
+	Maven            *MavenInfo    `json:"maven,omitempty"`
+	Signed           bool          `json:"signed"`
+	VersionedClasses map[int]int   `json:"versionedClasses,omitempty"`
+	TotalEntries     int           `json:"totalEntries"`
+	CompressedSize   uint64        `json:"compressedSize"`
+	UncompressedSize uint64        `json:"uncompressedSize"`
 }
 
 type ManifestInfo struct {

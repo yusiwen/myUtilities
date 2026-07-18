@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	"github.com/yusiwen/myUtilities/core/store"
-	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
+	"github.com/yusiwen/myUtilities/es"
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/k8s"
 	"github.com/yusiwen/myUtilities/misc"
@@ -21,6 +21,12 @@ import (
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/wol"
 )
+
+var versionStr string
+
+func SetVersion(v string) {
+	versionStr = v
+}
 
 func landingPage(hasMock bool) string {
 	mockCard := ""
@@ -65,6 +71,7 @@ func landingPage(hasMock bool) string {
   .container { text-align: center; padding: 2rem; position: relative; }
   h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-title); }
   .subtitle { color: var(--text2); margin-bottom: 2rem; }
+  .subtitle .version { font-size: 0.75em; color: var(--text2); }
   .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 780px; margin: 0 auto; }
   .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 220px; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
   .app-card:hover { transform: translateY(-4px); border-color: var(--border-hover); }
@@ -96,7 +103,7 @@ func landingPage(hasMock bool) string {
 <button class="toggle-btn" id="theme-btn" onclick="toggleTheme()">☀</button>
 <div class="container">
   <h1>mu Gateway</h1>
-  <p class="subtitle">Unified access to all mu services</p>
+   <p class="subtitle">Unified access to all mu services</p>
   <div class="apps">
     <a href="/wol/" class="app-card">
       <div class="app-icon">&#9200;</div>
@@ -144,7 +151,7 @@ func landingPage(hasMock bool) string {
       <div class="app-desc">Kubernetes Secret YAML generator and decoder</div>
     </a>` + mockCard + `
   </div>
-  <p class="footer">mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
+  <p class="footer"><span class="version">` + versionStr + `</span> &mdash; mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
 </div>
 <script>document.getElementById('copyright-year').textContent=new Date().getFullYear()</script>
 </body>

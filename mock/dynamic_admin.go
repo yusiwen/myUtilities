@@ -58,7 +58,7 @@ func MockFrontendHandler() http.Handler {
 }
 
 type adminHandler struct {
-	router    *DynamicRouter
+	router     *DynamicRouter
 	configPath string
 	verbose    bool
 }
@@ -224,8 +224,8 @@ func (h *adminHandler) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"ok":      true,
-		"file":    h.configPath,
+		"ok":        true,
+		"file":      h.configPath,
 		"endpoints": len(eps),
 	})
 }

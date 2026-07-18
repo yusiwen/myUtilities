@@ -197,13 +197,27 @@ func digQuery(host, rtype, ns string) (string, error) {
 	b.WriteString(fmt.Sprintf("; <<>> mu network dig <<>> %s\n", host))
 	b.WriteString(fmt.Sprintf(";; status: %s, id: %d\n", dns.RcodeToString[r.Rcode], r.MsgHdr.Id))
 	flags := ""
-	if r.MsgHdr.Response { flags += "qr " }
-	if r.MsgHdr.Authoritative { flags += "aa " }
-	if r.MsgHdr.Truncated { flags += "tc " }
-	if r.MsgHdr.RecursionDesired { flags += "rd " }
-	if r.MsgHdr.RecursionAvailable { flags += "ra " }
-	if r.MsgHdr.AuthenticatedData { flags += "ad " }
-	if r.MsgHdr.CheckingDisabled { flags += "cd " }
+	if r.MsgHdr.Response {
+		flags += "qr "
+	}
+	if r.MsgHdr.Authoritative {
+		flags += "aa "
+	}
+	if r.MsgHdr.Truncated {
+		flags += "tc "
+	}
+	if r.MsgHdr.RecursionDesired {
+		flags += "rd "
+	}
+	if r.MsgHdr.RecursionAvailable {
+		flags += "ra "
+	}
+	if r.MsgHdr.AuthenticatedData {
+		flags += "ad "
+	}
+	if r.MsgHdr.CheckingDisabled {
+		flags += "cd "
+	}
 	b.WriteString(fmt.Sprintf(";; flags: %s; QUERY: %d, ANSWER: %d, AUTHORITY: %d, ADDITIONAL: %d\n",
 		flags, len(r.Question), len(r.Answer), len(r.Ns), len(r.Extra)))
 

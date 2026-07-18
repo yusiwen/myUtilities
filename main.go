@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/alecthomas/kong"
+	"github.com/yusiwen/myUtilities/gateway"
 	"os"
 )
 
@@ -13,8 +14,10 @@ const shaLen = 7
 
 func main() {
 	version := fmt.Sprintf("myUtilities version %s", Version)
+	displayVersion := Version
 	if len(CommitSHA) >= shaLen {
 		version += " (" + CommitSHA[:shaLen] + ")"
+		displayVersion += " (" + CommitSHA[:shaLen] + ")"
 	}
 	var mu = &MyUtilities{}
 	var ctx = kong.Parse(
@@ -32,6 +35,7 @@ func main() {
 			"versionNumber": Version,
 			"versionFull":   Version + " (" + BuildTime + ")",
 		})
+	gateway.SetVersion(displayVersion)
 
 	if err := ctx.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

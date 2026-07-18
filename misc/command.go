@@ -17,11 +17,11 @@ import (
 )
 
 type Options struct {
-	UUID    UUIDOptions    `cmd:"" name:"uuid" help:"Generate UUIDs."`
-	JSON    JSONOptions    `cmd:"" name:"json" help:"Format, validate, or minify JSON."`
-	TS      TimestampOptions `cmd:"" name:"timestamp" aliases:"ts" help:"Convert timestamps."`
-	Hash    HashOptions    `cmd:"" name:"hash" help:"Compute hash of text or file."`
-	Serve   ServeOptions   `cmd:"" name:"serve" help:"Start Misc tools HTTP server."`
+	UUID  UUIDOptions      `cmd:"" name:"uuid" help:"Generate UUIDs."`
+	JSON  JSONOptions      `cmd:"" name:"json" help:"Format, validate, or minify JSON."`
+	TS    TimestampOptions `cmd:"" name:"timestamp" aliases:"ts" help:"Convert timestamps."`
+	Hash  HashOptions      `cmd:"" name:"hash" help:"Compute hash of text or file."`
+	Serve ServeOptions     `cmd:"" name:"serve" help:"Start Misc tools HTTP server."`
 }
 
 type UUIDOptions struct {
@@ -254,7 +254,9 @@ func handleJSONOp(fn jsonFunc) http.HandlerFunc {
 			http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
 			return
 		}
-		var req struct{ Input string `json:"input"` }
+		var req struct {
+			Input string `json:"input"`
+		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 			return
@@ -274,7 +276,9 @@ func handleUUID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct{ Count int `json:"count"` }
+	var req struct {
+		Count int `json:"count"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
@@ -303,7 +307,9 @@ func handleTimestamp(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"POST required"}`, http.StatusMethodNotAllowed)
 		return
 	}
-	var req struct{ Input string `json:"input"` }
+	var req struct {
+		Input string `json:"input"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
@@ -350,7 +356,9 @@ func handleHash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	alg := strings.TrimPrefix(r.URL.Path, "/api/misc/hash/")
-	var req struct{ Input string `json:"input"` }
+	var req struct {
+		Input string `json:"input"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, `{"error":"invalid JSON"}`, http.StatusBadRequest)
 		return
