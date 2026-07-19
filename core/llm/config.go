@@ -9,9 +9,10 @@ import (
 )
 
 type Config struct {
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
+	BaseURL      string `json:"base_url"`
+	APIKey       string `json:"api_key"`
+	Model        string `json:"model"`
+	SearchAPIKey string `json:"search_api_key,omitempty"`
 }
 
 const configDir = "~/.config/mu"

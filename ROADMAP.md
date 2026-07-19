@@ -7,6 +7,7 @@ Potential features for future consideration, ordered by implementation priority.
 | # | Feature | Status |
 |---|---------|--------|
 | 1 | `mu serve` — Static file server | ✅ Done |
+| 2 | `mu ask` — LLM Q&A with web search | ✅ Done |
 
 ## Proposed Features
 

@@ -119,3 +119,6 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Misc Tools** — `mu misc uuid|json|timestamp|hash` with CLI and web UI (4 tabs), zero external dependencies, gateway integration at `/misc/`
 - **Network Tools** — `mu network dns|dig|whois` with CLI and web UI (3 tabs), uses `github.com/miekg/dns` and `github.com/likexian/whois`, gateway integration at `/network/`
 - **k8s Metrics** — `mu k8s get nodes --metrics` and `mu k8s get pods --metrics` with CPU/memory usage, percentage for nodes, optional in Web UI via "Show metrics" checkbox; zero new dependencies
+- **Ask Command** — `mu ask` command for LLM Q&A with concise answers and reference URLs, using `core/openai` client and `core/llm` shared config
+- **Web Search Integration** — `mu ask --search` flag that fetches Brave Search API results and injects them into the LLM prompt for up-to-date, cited answers
+- **Shared LLM Config** — `core/llm` package to deduplicate config loading/saving logic across LLM-using commands
