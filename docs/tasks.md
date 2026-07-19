@@ -4,11 +4,18 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 
 ## Code Organization and Structure
 
+> 详细执行方案见 [Codebase Restructure Plan](./codebase-restructure-plan.md)（Phases 1-4）
+
 1. [ ] Refactor the project to follow standard Go project layout (cmd/, pkg/, internal/, etc.)
+    → See [Phase 3 — Standard Layout](./codebase-restructure-plan.md#phase-3--标准项目布局)
 2. [ ] Move version information to a dedicated package for better maintainability
+    → See [Phase 1-①](./codebase-restructure-plan.md#1-①-版本信息抽到独立包)
 3. [ ] Create separate packages for common utilities instead of embedding them in specific packages
+    → See [Phase 2-④](./codebase-restructure-plan.md#2-④-解决-4-组包名冲突)
 4. [ ] Standardize naming conventions across the codebase
+    → See [Phase 1-②](./codebase-restructure-plan.md#1-②-修复-pascalcase-文件名) + [Phase 4-⑥](./codebase-restructure-plan.md#4-⑥-统一命名规范)
 5. [ ] Remove commented-out code and TODOs, replacing them with actual implementations or GitHub issues
+    → See [Phase 1-③](./codebase-restructure-plan.md#1-③-清理-todo)
 
 ## Documentation
 
