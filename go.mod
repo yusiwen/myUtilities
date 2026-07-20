@@ -12,7 +12,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/likexian/whois v1.15.7
 	github.com/miekg/dns v1.1.72
-	github.com/morikuni/aec v1.0.0
+	github.com/morikuni/aec v1.1.0
 	github.com/ryanolee/go-chaff v0.1.1
 	github.com/sabhiram/go-wol v0.0.0-20250815165103-eaddd4c17972
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
