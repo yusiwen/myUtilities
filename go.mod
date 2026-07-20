@@ -7,7 +7,7 @@ require (
 	github.com/coreos/bbolt v1.3.1-coreos.6.0.20180223184059-4f5275f4ebbf
 	github.com/elastic/go-elasticsearch/v8 v8.19.5
 	github.com/go-git/go-git/v5 v5.16.2
-	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/likexian/whois v1.15.7
