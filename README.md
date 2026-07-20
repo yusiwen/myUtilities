@@ -272,6 +272,74 @@ The `body` field is always a raw response string (JSON or plain text).
 > supported via the admin UI but can still be added by editing the JSON config file
 > manually (they will be preserved through save operations).
 
+### svcreg — Service Registry (ServiceCenter-compatible)
+
+A lightweight RESTful server compatible with Apache ServiceComb ServiceCenter protocol.
+Acts as a drop-in replacement for `service-center` — Java Chassis / Spring Cloud Huawei
+clients can point `discovery.address` to `mu svcreg` and continue working unchanged.
+
+```bash
+# Start server (default port 30100)
+mu svcreg serve
+
+# Show server status
+mu svcreg status
+
+# List registered services
+mu svcreg list services
+mu svcreg list services --environment development
+
+# List instances (single service or all)
+mu svcreg list instances --service-id <id>
+mu svcreg list instances --all
+mu svcreg list instances --all --environment production
+```
+
+#### Configuration
+
+Settings persisted in `~/.config/mu/svcreg-config.json`:
+
+```json
+{
+    "host": "0.0.0.0",
+    "port": 30100,
+    "db_path": "~/.config/mu/svcreg.db"
+}
+```
+
+CLI flags (`--host`, `--port`, `--db-path`) override the config file.
+
+#### Supported API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v4/{project}/registry/version` | Server version + listen address |
+| `GET` | `/v4/{project}/registry/health` | Cluster health |
+| `GET` | `/v4/{project}/registry/existence` | Check service/schema existence |
+| `POST` | `/v4/{project}/registry/microservices` | Register service |
+| `GET` | `/v4/{project}/registry/microservices` | List services |
+| `GET` | `/v4/{project}/registry/microservices/{id}` | Get service detail |
+| `PUT` | `.../{id}/properties` | Update service properties |
+| `DELETE` | `.../{id}` | Delete service (cascades instances + schemas) |
+| `POST` | `.../{serviceId}/instances` | Register instance |
+| `GET` | `.../{serviceId}/instances` | List instances |
+| `DELETE` | `.../{serviceId}/instances/{id}` | Unregister instance |
+| `PUT` | `.../instances/{id}/properties` | Update instance properties |
+| `PUT` | `.../instances/{id}/status?value=` | Update instance status |
+| `PUT` | `.../instances/{id}/heartbeat` | Single heartbeat |
+| `PUT` | `/v4/{project}/registry/heartbeats` | Batch heartbeat |
+| `GET` | `/v4/{project}/registry/instances` | Find instances |
+| `POST` | `/v4/{project}/registry/instances/action?type=query` | Batch find (SDK fallback) |
+| `GET` | `.../watcher` | WebSocket instance watch |
+| `POST/GET/DELETE` | Tags + Schemas | Tag and schema management |
+
+#### Storage
+
+Uses BoltDB (embedded), no external dependencies. Instance TTL defaults to
+30s interval × 3 retries (90s). Heartbeat via REST `PUT` extends the lease.
+
+Logs every request with method, path, status code, and duration.
+
 ### gateway — Unified service portal
 
 Serves multiple mu services under a single HTTP server with a landing page.

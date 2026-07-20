@@ -19,6 +19,7 @@ import (
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/runner"
 	"github.com/yusiwen/myUtilities/serve"
+	"github.com/yusiwen/myUtilities/svcreg"
 	"github.com/yusiwen/myUtilities/watch"
 	"github.com/yusiwen/myUtilities/wol"
 )
@@ -29,6 +30,7 @@ type MyUtilities struct {
 	Mocker     mock.Options                `cmd:"" name:"mock" help:"Mockers."`
 	Qrcode     qrcode.Options              `cmd:"" name:"qrcode" help:"Generate QR codes."`
 	Serve      serve.Options               `cmd:"" name:"serve" help:"Start a static file server."`
+	Svcreg     svcreg.Options              `cmd:"" name:"svcreg" help:"Service registry server (ServiceCenter-compatible)."`
 	Proxy      proxy.Options               `cmd:"" name:"proxy" help:"Proxies."`
 	Runner     runner.CommandRunnerOptions `cmd:"" name:"run" help:"Run commands."`
 	Wol        wol.Options                 `cmd:"" name:"wol" help:"Wake-on-Lan HTTP server."`

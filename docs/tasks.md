@@ -99,6 +99,13 @@ Simple tools that would benefit from a web UI and gateway integration:
 
 ## Recently Completed
 
+- **svcreg Service Registry** — Lightweight Apache ServiceComb ServiceCenter-compatible
+  server with BoltDB storage, REST API (25+ endpoints), WebSocket watcher, heartbeat
+  lease management, environment-based isolation, batch instance query, request logging
+  middleware, and CLI client commands (`status`, `list services`, `list instances`)
+
+## Recently Completed
+
 - **Mock Dynamic Server** — Configurable multi-endpoint mock with template engine, conditional responses, delay simulation, and verbose logging
 - **Admin Web UI** — Svelte 5 frontend with CodeMirror 6 JSON editor, endpoint CRUD, and config persistence
 - **Custom DynamicRouter** — Thread-safe runtime endpoint registry with path parameter matching, replaces static `http.ServeMux`

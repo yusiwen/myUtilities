@@ -11,9 +11,14 @@ Potential features for future consideration, ordered by implementation priority.
 
 ## Proposed Features
 
-### 2. `mu encode` — Encoding/decoding toolbox
+### 2. `mu svcreg` — ServiceCenter-compatible service registry
 
-### 2. `mu encode` — Encoding/decoding toolbox
+✅ Done — v1.2.7 implements a lightweight BoltDB-backed server compatible with
+the Apache ServiceComb ServiceCenter v4 REST protocol. Supports service/instance
+registration, heartbeat (REST + WS), service discovery, tag/schema management,
+WebSocket watcher, and environment-based isolation.
+
+### 4. `mu encode` — Encoding/decoding toolbox
 
 Quick inline base64, URL, hex encoding/decoding and JWT payload decoding. Useful for
 daily ad-hoc debugging.
