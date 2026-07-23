@@ -9,6 +9,7 @@
   let hoveredCell = $state(null)
   let success = $state('')
   let wolCooldowns = $state({})
+  let refreshing = $state(false)
   let wolTimers = $state({})
   let successTimer = $state(null)
   let appVersion = $state('1.0.0')
@@ -55,6 +56,13 @@
     } catch (e) {
       bootTimes[name] = null
     }
+  }
+
+  async function refreshAllBootStatus() {
+    refreshing = true
+    const names = Object.keys(aliases)
+    await Promise.all(names.map(fetchBootTime))
+    refreshing = false
   }
 
   function timeAgo(dateStr) {
@@ -322,7 +330,11 @@
           <tr>
             <th>Hostname</th>
             <th>MAC Address</th>
-            <th>Boot Status</th>
+            <th>Boot Status
+              <button class="btn-refresh" onclick={refreshAllBootStatus} disabled={refreshing} title="Refresh all boot status">
+                <span class="refresh-icon" class:spinning={refreshing}>↻</span>
+              </button>
+            </th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -589,6 +601,38 @@
 
   .btn-fav:hover {
     transform: scale(1.2);
+  }
+
+  .btn-refresh {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 2px;
+    color: var(--text2);
+    font-size: 1.1em;
+    vertical-align: middle;
+  }
+
+  .btn-refresh:hover {
+    color: var(--primary);
+  }
+
+  .btn-refresh:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .refresh-icon {
+    display: inline-block;
+    transition: transform 0.2s;
+  }
+
+  .refresh-icon.spinning {
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .mono {
