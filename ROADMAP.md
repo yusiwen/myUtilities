@@ -13,10 +13,12 @@ Potential features for future consideration, ordered by implementation priority.
 
 ### 2. `mu svcreg` — ServiceCenter-compatible service registry
 
-✅ Done — v1.2.7 implements a lightweight BoltDB-backed server compatible with
+✅ Done — v1.2.8 implements a lightweight BoltDB-backed server compatible with
 the Apache ServiceComb ServiceCenter v4 REST protocol. Supports service/instance
 registration, heartbeat (REST + WS), service discovery, tag/schema management,
-WebSocket watcher, and environment-based isolation.
+WebSocket watcher, environment-based isolation, Svelte 5 web dashboard with admin
+server lifecycle management (start/stop with PID file recovery), and independent
+process group for gateway restart safety.
 
 ### 4. `mu encode` — Encoding/decoding toolbox
 

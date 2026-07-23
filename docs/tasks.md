@@ -99,6 +99,10 @@ Simple tools that would benefit from a web UI and gateway integration:
 
 ## Recently Completed
 
+- **svcreg Web Dashboard** — Svelte 5 frontend with Dashboard, Services, Instances, Admin tabs.
+  Admin tab includes server lifecycle management (start/stop with port/host/DB path configuration),
+  independent process group option for gateway restart safety, PID file recovery, and live logs.
+  Frontend connects to svcreg serve via proxy API; CLI refactored with `Client` module.
 - **svcreg Service Registry** — Lightweight Apache ServiceComb ServiceCenter-compatible
   server with BoltDB storage, REST API (25+ endpoints), WebSocket watcher, heartbeat
   lease management, environment-based isolation, batch instance query, request logging

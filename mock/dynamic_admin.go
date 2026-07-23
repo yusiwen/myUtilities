@@ -108,9 +108,7 @@ func (h *adminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		h.saveConfig(w, r)
 	default:
-		r.URL.Path = "/"
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		MockFrontendHandler().ServeHTTP(w, r)
+		h.router.ServeHTTP(w, r)
 	}
 }
 

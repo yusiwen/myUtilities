@@ -278,9 +278,18 @@ A lightweight RESTful server compatible with Apache ServiceComb ServiceCenter pr
 Acts as a drop-in replacement for `service-center` — Java Chassis / Spring Cloud Huawei
 clients can point `discovery.address` to `mu svcreg` and continue working unchanged.
 
+Includes a Svelte 5 web dashboard (dashboard, services, instances, admin) with integrated
+server lifecycle management.
+
 ```bash
-# Start server (default port 30100)
+# Start API-only server (bare, no frontend)
 mu svcreg serve
+
+# Start API + web dashboard (same port)
+mu svcreg serve --web
+
+# Start standalone web frontend (connects to a remote serve)
+mu svcreg frontend --server http://192.168.1.10:30100 --port 30101
 
 # Show server status
 mu svcreg status
@@ -295,9 +304,22 @@ mu svcreg list instances --all
 mu svcreg list instances --all --environment production
 ```
 
+#### Web Dashboard
+
+The web frontend (served at `serve --web` or standalone `frontend`) provides four tabs:
+
+| Tab | Features |
+|-----|----------|
+| Dashboard | Server status, service/instance counts |
+| Services | Filter by environment, expand for instance detail, delete |
+| Instances | All instances across services |
+| Admin | Start/stop serve subprocess, config port/host/DB path, live logs, independent process group option |
+
+The Admin tab persists server state across restarts via PID file recovery.
+
 #### Configuration
 
-Settings persisted in `~/.config/mu/svcreg-config.json`:
+Server settings persisted in `~/.config/mu/svcreg-config.json`:
 
 ```json
 {
