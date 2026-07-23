@@ -49,3 +49,5 @@ misc/frontend/node_modules/
 misc/frontend/dist/
 network/frontend/node_modules/
 network/frontend/dist/
+svcreg/frontend/node_modules/
+svcreg/frontend/dist/

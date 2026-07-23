@@ -19,6 +19,7 @@ import (
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/network"
 	"github.com/yusiwen/myUtilities/qrcode"
+	"github.com/yusiwen/myUtilities/svcreg"
 	"github.com/yusiwen/myUtilities/wol"
 )
 
@@ -149,6 +150,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128736;</div>
       <div class="app-name">K8s</div>
       <div class="app-desc">Kubernetes Secret YAML generator and decoder</div>
+    </a>
+    <a href="/svcreg/" class="app-card">
+      <div class="app-icon">&#128295;</div>
+      <div class="app-name">Service Registry</div>
+      <div class="app-desc">Register and discover microservices</div>
     </a>` + mockCard + `
   </div>
   <p class="footer"><span class="version">` + versionStr + `</span> &mdash; mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
@@ -291,6 +297,12 @@ func (o *Options) Run() error {
 	mux.Handle("/network/", http.StripPrefix("/network", withGateway(network.FrontendHandler())))
 	network.RegisterHandlers(mux)
 	log.Printf("Gateway:   /network/* -> Network Tools frontend")
+
+	svcregClient := &svcreg.Client{Server: o.SvcregServer}
+	svcreg.RestoreState()
+	svcreg.RegisterProxyAPI(mux, svcregClient)
+	mux.Handle("/svcreg/", http.StripPrefix("/svcreg", withGateway(svcreg.FrontendHandler())))
+	log.Printf("Gateway:   /svcreg/* -> Service Registry frontend (backend: %s)", o.SvcregServer)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

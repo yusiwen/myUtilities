@@ -59,3 +59,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	return s.store.Close()
 }
+
+func NewHandler(store Store, listenAddr string) *svcHandler {
+	return newHandler(store, listenAddr)
+}
+
+func (h *svcHandler) RegisterRoutes(mux *http.ServeMux) {
+	h.registerRoutes(mux)
+}
+
+func LoggingMiddleware(next http.Handler) http.Handler {
+	return loggingMiddleware(next)
+}
