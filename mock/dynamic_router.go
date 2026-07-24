@@ -22,11 +22,22 @@ type ManagedEndpoint struct {
 	Body    string            `json:"body"`
 }
 
+type InvocationLog struct {
+	Timestamp  string `json:"timestamp"`
+	Method     string `json:"method"`
+	Path       string `json:"path"`
+	Status     int    `json:"status"`
+	Duration   string `json:"duration"`
+	RemoteAddr string `json:"remoteAddr"`
+}
+
 type DynamicRouter struct {
 	mu        sync.RWMutex
 	endpoints []*ManagedEndpoint
 	admin     http.Handler
 	verbose   bool
+	logBuf    []InvocationLog
+	logMax    int
 }
 
 func NewDynamicRouter(endpoints []*ManagedEndpoint, admin http.Handler, verbose bool) *DynamicRouter {
@@ -34,6 +45,8 @@ func NewDynamicRouter(endpoints []*ManagedEndpoint, admin http.Handler, verbose 
 		endpoints: endpoints,
 		admin:     admin,
 		verbose:   verbose,
+		logBuf:    make([]InvocationLog, 0, 200),
+		logMax:    200,
 	}
 }
 
@@ -95,6 +108,28 @@ func (r *DynamicRouter) Delete(id string) bool {
 	return false
 }
 
+func (r *DynamicRouter) Logs() []InvocationLog {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return append([]InvocationLog{}, r.logBuf...)
+}
+
+func (r *DynamicRouter) recordLog(method, path, remoteAddr string, status int, duration time.Duration) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.logBuf = append(r.logBuf, InvocationLog{
+		Timestamp:  time.Now().Format(time.RFC3339),
+		Method:     method,
+		Path:       path,
+		Status:     status,
+		Duration:   duration.String(),
+		RemoteAddr: remoteAddr,
+	})
+	if len(r.logBuf) > r.logMax {
+		r.logBuf = r.logBuf[len(r.logBuf)-r.logMax:]
+	}
+}
+
 func matchEndpoint(ep *ManagedEndpoint, method, path string) (map[string]string, bool) {
 	if ep.Method != method {
 		return nil, false
@@ -126,6 +161,7 @@ func extractPathParams(pattern string) []string {
 }
 
 func (r *DynamicRouter) handleMock(w http.ResponseWriter, req *http.Request, ep *ManagedEndpoint, pathParams map[string]string) {
+	start := time.Now()
 	rawBody, _ := io.ReadAll(req.Body)
 	if len(rawBody) > 0 {
 		req.Body = io.NopCloser(bytes.NewBuffer(rawBody))
@@ -190,4 +226,5 @@ func (r *DynamicRouter) handleMock(w http.ResponseWriter, req *http.Request, ep 
 	if len(body) > 0 {
 		w.Write(body)
 	}
+	r.recordLog(req.Method, req.URL.Path, req.RemoteAddr, status, time.Since(start))
 }

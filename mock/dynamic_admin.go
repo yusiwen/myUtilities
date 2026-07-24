@@ -107,6 +107,9 @@ func (h *adminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case path == "/api/save" && r.Method == http.MethodPost:
 		w.Header().Set("Content-Type", "application/json")
 		h.saveConfig(w, r)
+	case path == "/api/logs":
+		w.Header().Set("Content-Type", "application/json")
+		h.listLogs(w)
 	default:
 		h.router.ServeHTTP(w, r)
 	}
@@ -115,6 +118,10 @@ func (h *adminHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (h *adminHandler) listEndpoints(w http.ResponseWriter, r *http.Request) {
 	eps := h.router.List()
 	json.NewEncoder(w).Encode(eps)
+}
+
+func (h *adminHandler) listLogs(w http.ResponseWriter) {
+	json.NewEncoder(w).Encode(h.router.Logs())
 }
 
 func (h *adminHandler) createEndpoint(w http.ResponseWriter, r *http.Request) {

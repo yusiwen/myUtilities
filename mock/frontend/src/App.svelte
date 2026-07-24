@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { listEndpoints, createEndpoint, updateEndpoint, deleteEndpoint, saveToConfig } from './lib/api.js'
+  import { listEndpoints, createEndpoint, updateEndpoint, deleteEndpoint, saveToConfig, listLogs } from './lib/api.js'
   import JsonEditor from './components/JsonEditor.svelte'
 
   let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
@@ -9,6 +9,8 @@
   let success = $state('')
   let saving = $state(false)
   let editing = $state(null)
+  let tab = $state('endpoints')
+  let logs = $state([])
   let form = $state({ method: 'GET', path: '', status: 200, delay: '', headers: [], body: '' })
   let editorRef = $state(null)
 
@@ -26,7 +28,16 @@
     }
   }
 
+  async function loadLogsData() {
+    try {
+      logs = await listLogs()
+    } catch (e) {
+      // logs API may not be available
+    }
+  }
+
   onMount(load)
+  onMount(loadLogsData)
 
   function startAdd() {
     editing = 'new'
@@ -135,6 +146,13 @@
     <button class="toast success" onclick={() => success = ''}>{success}</button>
   {/if}
 
+  <div class="tabs">
+    <button class="tab" class:active={tab === 'endpoints'} onclick={() => tab = 'endpoints'}>Endpoints</button>
+    <button class="tab" class:active={tab === 'logs'} onclick={() => { tab = 'logs'; loadLogsData() }}>Logs</button>
+  </div>
+
+  {#if tab === 'endpoints'}
+
   {#if editing === 'new'}
     <div class="edit-panel">
       <h2>New Endpoint</h2>
@@ -183,6 +201,35 @@
       <div class="empty">No endpoints defined. Click "+ Add Endpoint" to create one.</div>
     {/if}
   </div>
+  {/if}
+
+  {#if tab === 'logs'}
+    <div class="table-wrap">
+      <div class="log-bar">
+        <span class="count">{logs.length} invocation(s)</span>
+        <button class="btn sm" onclick={loadLogsData}>🔄</button>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Remote IP</th></tr>
+        </thead>
+        <tbody>
+          {#each logs as log}
+            <tr>
+              <td class="log-time">{log.timestamp}</td>
+              <td><span class="badge" style="background: {methodColors[log.method] || '#999'}">{log.method}</span></td>
+              <td class="path">{log.path}</td>
+              <td>{log.status}</td>
+              <td class="log-dur">{log.duration}</td>
+              <td class="log-ip">{log.remoteAddr}</td>
+            </tr>
+          {:else}
+            <tr><td colspan="6" class="empty">No invocations recorded yet.</td></tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {/if}
 </div>
 
 {#snippet FormFields()}
@@ -272,4 +319,17 @@
   .actions { white-space: nowrap; }
   .actions .btn + .btn { margin-left: 4px; }
   .empty { padding: 32px; text-align: center; color: var(--text2); font-size: 14px; }
+
+  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text); border-bottom-color: var(--primary); }
+  .tab:hover { color: var(--text); }
+
+  .log-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); }
+  .log-bar .count { font-size: 13px; color: var(--text3); }
+  .log-bar .btn.sm { padding: 4px 8px; font-size: 14px; }
+
+  .log-time { font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .log-dur { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .log-ip { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text3); white-space: nowrap; }
 </style>

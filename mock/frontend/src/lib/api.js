@@ -34,3 +34,7 @@ export async function deleteEndpoint(id) {
 export async function saveToConfig() {
   return request('/save', { method: 'POST' })
 }
+
+export async function listLogs() {
+  return request('/logs')
+}
