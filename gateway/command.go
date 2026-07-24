@@ -204,12 +204,23 @@ func (w *injectWriter) Write(data []byte) (int, error) {
 	return w.buf.Write(data)
 }
 
+func (o *Options) configPath(name string) string {
+	dir := o.ConfigDir
+	if strings.HasPrefix(dir, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			dir = filepath.Join(home, dir[2:])
+		}
+	}
+	return filepath.Join(dir, name)
+}
+
 func (o *Options) Run() error {
-	wolCfg, err := wol.LoadConfig(o.WolConfig)
+	wolCfg, err := wol.LoadConfig(o.configPath("wol-config.json"))
 	if err != nil {
 		return fmt.Errorf("gateway: failed to load WOL config: %v", err)
 	}
-	log.Printf("Gateway: WOL config loaded from %s", o.WolConfig)
+	log.Printf("Gateway: WOL config loaded from %s", o.configPath("wol-config.json"))
 
 	wolStore, err := store.OpenStore(wolCfg.DBPath)
 	if err != nil {
@@ -225,7 +236,7 @@ func (o *Options) Run() error {
 		Token:     wolCfg.Token,
 	}
 
-	esState := es.NewServerState(o.EsConfig)
+	esState := es.NewServerState(o.configPath("es-config.json"))
 	if err := esState.LoadConfig(); err != nil {
 		log.Printf("Gateway: warning: could not load ES config: %v", err)
 	}
@@ -243,13 +254,7 @@ func (o *Options) Run() error {
 	log.Printf("Gateway:   /es/* -> ES frontend")
 
 	hasMock := false
-	mockConfigPath := o.MockConfig
-	if strings.HasPrefix(mockConfigPath, "~/") {
-		home, ere := os.UserHomeDir()
-		if ere == nil {
-			mockConfigPath = filepath.Join(home, mockConfigPath[2:])
-		}
-	}
+	mockConfigPath := o.configPath("mock-config.json")
 	if _, err := os.Stat(mockConfigPath); os.IsNotExist(err) {
 		defaultCfg := `{
   "port": 8084,

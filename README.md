@@ -418,14 +418,18 @@ Serves multiple mu services under a single HTTP server with a landing page.
 
 ```bash
 mu gateway --port 8080
+mu gateway --config-dir /etc/mu    # custom config directory
 ```
 
-By default, WOL and ES are loaded from `~/.config/mu/wol-config.json` and `~/.config/mu/es-config.json`.
-Mock Dynamic can be added by creating `~/.config/mu/mock-config.json`:
+By default, module configs are read from `~/.config/mu/`:
 
-```bash
-echo '{"port":8084,"endpoints":[]}' > ~/.config/mu/mock-config.json
-mu gateway --port 8080
+```
+~/.config/mu/
+├── wol-config.json
+├── es-config.json
+├── mock-config.json     (optional, auto-created on first start)
+├── budget.json
+└── svcreg-config.json
 ```
 
 | Route | Service | Description |
