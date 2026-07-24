@@ -99,6 +99,8 @@ Simple tools that would benefit from a web UI and gateway integration:
 
 ## Recently Completed
 
+- **Frontend Favicons** — Added emoji favicons to all 11 frontends matching gateway landing page card icons
+- **Mock Dynamic Server Fix** — Fixed gateway integration default route fallback to DynamicRouter for mock endpoints
 - **svcreg Web Dashboard** — Svelte 5 frontend with Dashboard, Services, Instances, Admin tabs.
   Admin tab includes server lifecycle management (start/stop with port/host/DB path configuration),
   independent process group option for gateway restart safety, PID file recovery, and live logs.
