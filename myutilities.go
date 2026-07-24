@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/ask"
+	"github.com/yusiwen/myUtilities/budget"
 	"github.com/yusiwen/myUtilities/completion"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
@@ -45,5 +46,6 @@ type MyUtilities struct {
 	Misc       misc.Options                `cmd:"" name:"misc" help:"Miscellaneous tools (JSON, UUID, timestamp, hash)."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Ask        ask.Options                 `cmd:"" name:"ask" help:"Ask LLM questions."`
+	Budget     budget.Options              `cmd:"" name:"budget" help:"Query LLM API usage and balance."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

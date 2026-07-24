@@ -51,3 +51,5 @@ network/frontend/node_modules/
 network/frontend/dist/
 svcreg/frontend/node_modules/
 svcreg/frontend/dist/
+budget/frontend/node_modules/
+budget/frontend/dist/

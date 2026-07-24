@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yusiwen/myUtilities/budget"
 	"github.com/yusiwen/myUtilities/core/store"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
@@ -155,6 +156,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128295;</div>
       <div class="app-name">Service Registry</div>
       <div class="app-desc">Register and discover microservices</div>
+    </a>
+    <a href="/budget/" class="app-card">
+      <div class="app-icon">&#128176;</div>
+      <div class="app-name">API Budget</div>
+      <div class="app-desc">Track LLM API balance and usage</div>
     </a>` + mockCard + `
   </div>
   <p class="footer"><span class="version">` + versionStr + `</span> &mdash; mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
@@ -303,6 +309,10 @@ func (o *Options) Run() error {
 	svcreg.RegisterProxyAPI(mux, svcregClient)
 	mux.Handle("/svcreg/", http.StripPrefix("/svcreg", withGateway(svcreg.FrontendHandler())))
 	log.Printf("Gateway:   /svcreg/* -> Service Registry frontend (backend: %s)", o.SvcregServer)
+
+	budget.RegisterHandlers(mux)
+	mux.Handle("/budget/", http.StripPrefix("/budget", withGateway(budget.FrontendHandler())))
+	log.Printf("Gateway:   /budget/* -> API Budget frontend")
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

@@ -18,7 +18,7 @@ var wsUpgrader = websocket.Upgrader{
 }
 
 type svcHandler struct {
-	store     Store
+	store      Store
 	listenAddr string
 
 	mu       sync.Mutex

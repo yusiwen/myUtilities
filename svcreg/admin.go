@@ -86,19 +86,22 @@ func (m *serverManager) restoreState() {
 	}
 	var state adminState
 	if err := json.Unmarshal(data, &state); err != nil {
-		log.Printf("svcreg: restoreState unmarhal: %v", err)
+		log.Printf("svcreg: restoreState unmarshal: %v", err)
+		return
+	}
+	if state.PID <= 0 {
 		return
 	}
 	if !processExists(state.PID) {
-		log.Printf("svcreg: restoreState PID %d not alive, removing stale file", state.PID)
-		os.Remove(m.pidFile)
+		log.Printf("svcreg: restoreState PID %d not alive, clearing state", state.PID)
+		m.saveClearedState()
 		return
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", state.Config.Port)
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
-		log.Printf("svcreg: restoreState TCP check %s failed: %v, removing stale file", addr, err)
-		os.Remove(m.pidFile)
+		log.Printf("svcreg: restoreState TCP check %s failed: %v, clearing state", addr, err)
+		m.saveClearedState()
 		return
 	}
 	conn.Close()
@@ -125,8 +128,17 @@ func (m *serverManager) saveState() {
 	}
 }
 
-func (m *serverManager) removeState() {
-	os.Remove(m.pidFile)
+func (m *serverManager) saveClearedState() {
+	state := adminState{PID: -1, Config: adminConfig{}}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return
+	}
+	dir := filepath.Dir(m.pidFile)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return
+	}
+	os.WriteFile(m.pidFile, data, 0600)
 }
 
 func (m *serverManager) logPath() string {
@@ -213,7 +225,7 @@ func (m *serverManager) start(cfg adminConfig) error {
 		m.running = false
 		m.pid = 0
 		m.cmd = nil
-		m.removeState()
+		m.saveClearedState()
 		m.mu.Unlock()
 	}()
 
@@ -241,7 +253,7 @@ func (m *serverManager) stop() error {
 	m.running = false
 	m.pid = 0
 	m.cmd = nil
-	m.removeState()
+	m.saveClearedState()
 	return nil
 }
 

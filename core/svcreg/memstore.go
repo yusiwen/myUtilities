@@ -5,12 +5,12 @@ import (
 )
 
 type memStore struct {
-	mu            sync.RWMutex
-	services      map[string]*MicroService
-	serviceIndex  map[string]string
-	instances     map[string]*instanceRow
-	schemas       map[string]*Schema
-	tags          map[string]map[string]string
+	mu           sync.RWMutex
+	services     map[string]*MicroService
+	serviceIndex map[string]string
+	instances    map[string]*instanceRow
+	schemas      map[string]*Schema
+	tags         map[string]map[string]string
 }
 
 func newMemStore() *memStore {

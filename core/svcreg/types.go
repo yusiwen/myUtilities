@@ -85,24 +85,24 @@ func SuccessResponse() *Response {
 }
 
 type MicroService struct {
-	ServiceId    string            `json:"serviceId,omitempty"`
-	AppId        string            `json:"appId,omitempty"`
-	ServiceName  string            `json:"serviceName,omitempty"`
-	Version      string            `json:"version,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Level        string            `json:"level,omitempty"`
-	Schemas      []string          `json:"schemas,omitempty"`
-	Paths        []*ServicePath    `json:"paths,omitempty"`
-	Status       string            `json:"status,omitempty"`
-	Properties   map[string]string `json:"properties,omitempty"`
-	Timestamp    string            `json:"timestamp,omitempty"`
+	ServiceId    string             `json:"serviceId,omitempty"`
+	AppId        string             `json:"appId,omitempty"`
+	ServiceName  string             `json:"serviceName,omitempty"`
+	Version      string             `json:"version,omitempty"`
+	Description  string             `json:"description,omitempty"`
+	Level        string             `json:"level,omitempty"`
+	Schemas      []string           `json:"schemas,omitempty"`
+	Paths        []*ServicePath     `json:"paths,omitempty"`
+	Status       string             `json:"status,omitempty"`
+	Properties   map[string]string  `json:"properties,omitempty"`
+	Timestamp    string             `json:"timestamp,omitempty"`
 	Providers    []*MicroServiceKey `json:"providers,omitempty"`
-	Alias        string            `json:"alias,omitempty"`
-	LBStrategy   map[string]string `json:"LBStrategy,omitempty"`
-	ModTimestamp string            `json:"modTimestamp,omitempty"`
-	Environment  string            `json:"environment,omitempty"`
-	RegisterBy   string            `json:"registerBy,omitempty"`
-	Framework    *FrameWork        `json:"framework,omitempty"`
+	Alias        string             `json:"alias,omitempty"`
+	LBStrategy   map[string]string  `json:"LBStrategy,omitempty"`
+	ModTimestamp string             `json:"modTimestamp,omitempty"`
+	Environment  string             `json:"environment,omitempty"`
+	RegisterBy   string             `json:"registerBy,omitempty"`
+	Framework    *FrameWork         `json:"framework,omitempty"`
 }
 
 type MicroServiceKey struct {
@@ -173,7 +173,7 @@ type InstanceHbRst struct {
 }
 
 type HeartbeatSetResponse struct {
-	Response  *Response       `json:"-"`
+	Response  *Response        `json:"-"`
 	Instances []*InstanceHbRst `json:"instances,omitempty"`
 }
 
@@ -298,8 +298,8 @@ type GetSchemaResponse struct {
 }
 
 type GetAllSchemaResponse struct {
-	Response *Response  `json:"-"`
-	Schemas  []*Schema  `json:"schemas,omitempty"`
+	Response *Response `json:"-"`
+	Schemas  []*Schema `json:"schemas,omitempty"`
 }
 
 type ModifySchemasRequest struct {
@@ -397,7 +397,7 @@ type FindResult struct {
 }
 
 type FindFailedResult struct {
-	Indexes []int64  `json:"indexes"`
+	Indexes []int64   `json:"indexes"`
 	Error   *RawError `json:"error"`
 }
 
