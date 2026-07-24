@@ -20,13 +20,29 @@ type ProviderConfig struct {
 	AccessKeySecret string `json:"access_key_secret"`
 }
 
-func loadConfig() (*BudgetConfig, error) {
-	cfg := &BudgetConfig{}
-	path, err := configFilePath()
+func defaultConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("unable to find home directory: %w", err)
+	}
+	dir := filepath.Join(home, ".config", "mu")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", fmt.Errorf("unable to create config directory: %w", err)
+	}
+	return filepath.Join(dir, "budget-config.json"), nil
+}
+
+func loadConfig(configPath string) (*BudgetConfig, error) {
+	path := configPath
+	if path == "" {
+		var err error
+		path, err = defaultConfigPath()
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	cfg := &BudgetConfig{}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -40,18 +56,6 @@ func loadConfig() (*BudgetConfig, error) {
 	}
 
 	return cfg, nil
-}
-
-func configFilePath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("unable to find home directory: %w", err)
-	}
-	dir := filepath.Join(home, ".config", "mu")
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("unable to create config directory: %w", err)
-	}
-	return filepath.Join(dir, "budget.json"), nil
 }
 
 func resolveAPIKey(provider string, flagKey string, cfg *BudgetConfig) (string, error) {
@@ -75,7 +79,7 @@ func resolveAPIKey(provider string, flagKey string, cfg *BudgetConfig) (string, 
 	return "", fmt.Errorf(
 		"no API key configured for %s\nSet it via:\n"+
 			"  - --key flag\n"+
-			"  - ~/.config/mu/budget.json → providers.%s.api_key\n"+
+			"  - ~/.config/mu/budget-config.json → providers.%s.api_key\n"+
 			"  - ~/.config/mu/ask.json → api_key\n"+
 			"  - ~/.config/mu/commit.json → api_key",
 		provider, provider,

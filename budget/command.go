@@ -37,7 +37,7 @@ type packageProvider interface {
 }
 
 func (o *BalanceOptions) Run() error {
-	cfg, err := loadConfig()
+	cfg, err := loadConfig("")
 	if err != nil {
 		return err
 	}
@@ -53,24 +53,26 @@ func (o *BalanceOptions) Run() error {
 func (o *ServeOptions) Run() error {
 	mux := http.NewServeMux()
 	mux.Handle("/", FrontendHandler())
-	RegisterHandlers(mux)
+	RegisterHandlers(mux, "")
 	fmt.Printf("Budget server listening on :%d\n", o.Port)
 	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
-func RegisterHandlers(mux *http.ServeMux) {
-	debugLog("RegisterHandlers: registering GET /api/budget/balance")
-	mux.HandleFunc("/api/budget/balance", handleBalance)
+func RegisterHandlers(mux *http.ServeMux, configPath string) {
+	debugLog("RegisterHandlers: registering GET /api/budget/balance, config=%s", configPath)
+	mux.HandleFunc("/api/budget/balance", func(w http.ResponseWriter, r *http.Request) {
+		handleBalance(w, r, configPath)
+	})
 }
 
-func handleBalance(w http.ResponseWriter, r *http.Request) {
+func handleBalance(w http.ResponseWriter, r *http.Request, configPath string) {
 	debugLog("handleBalance: called, method=%s", r.Method)
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"GET required"}`, http.StatusMethodNotAllowed)
 		return
 	}
 
-	cfg, err := loadConfig()
+	cfg, err := loadConfig(configPath)
 	if err != nil {
 		debugLog("handleBalance: loadConfig failed: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
@@ -221,7 +223,7 @@ func queryOne(ctx context.Context, name string, flagKey string, cfg *BudgetConfi
 func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
 	allNames := allConfiguredProviders(cfg, flagKey)
 	if len(allNames) == 0 {
-		path, _ := configFilePath()
+		path, _ := defaultConfigPath()
 		return fmt.Errorf(
 			"no configured providers found\nCreate %s with your API keys:\n"+
 				`  {"providers": {"deepseek": {"api_key": "sk-xxx"}, "openrouter": {"api_key": "sk-or-v1-xxx"}}}`,

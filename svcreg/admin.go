@@ -63,6 +63,9 @@ type serverManager struct {
 var mgr = newServerManager()
 
 func adminStatePath() string {
+	if stateDir != "" {
+		return filepath.Join(stateDir, "svcreg-admin.json")
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "/tmp/svcreg-admin.json"
@@ -74,7 +77,14 @@ func newServerManager() *serverManager {
 	return &serverManager{pidFile: adminStatePath()}
 }
 
-func RestoreState() {
+var stateDir string
+
+func RestoreState(configDir string) {
+	if configDir != "" {
+		stateDir = configDir
+	}
+	os.MkdirAll(stateDir, 0700)
+	mgr.pidFile = adminStatePath()
 	mgr.restoreState()
 }
 

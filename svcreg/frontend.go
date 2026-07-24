@@ -12,7 +12,7 @@ type FrontendOptions struct {
 }
 
 func (o *FrontendOptions) Run() error {
-	RestoreState()
+	RestoreState("")
 	addr := fmt.Sprintf(":%d", o.Port)
 	client := &Client{Server: o.Server}
 	mux := http.NewServeMux()

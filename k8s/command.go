@@ -68,8 +68,14 @@ func (o *SecretOptions) Run() error {
 }
 
 func indexPath() string {
+	if kubeconfigDir != "" {
+		os.MkdirAll(kubeconfigDir, 0700)
+		return filepath.Join(kubeconfigDir, "kubeconfigs.yaml")
+	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "mu", "kubeconfigs.yaml")
+	dir := filepath.Join(home, ".config", "mu")
+	os.MkdirAll(dir, 0700)
+	return filepath.Join(dir, "kubeconfigs.yaml")
 }
 
 type configIndex struct {
@@ -160,7 +166,12 @@ func (o *ServeOptions) Run() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
-func RegisterHandlers(mux *http.ServeMux) {
+var kubeconfigDir string
+
+func RegisterHandlers(mux *http.ServeMux, configDir string) {
+	if configDir != "" {
+		kubeconfigDir = configDir
+	}
 	mux.HandleFunc("/api/k8s/secret", handleSecret)
 	mux.HandleFunc("/api/k8s/secret/decode", handleSecretDecode)
 	mux.HandleFunc("/api/k8s/resources", handleResources)

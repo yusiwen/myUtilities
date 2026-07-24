@@ -139,7 +139,7 @@ mu budget balance -p aliyun
 mu budget serve --port 8095
 ```
 
-Configuration at `~/.config/mu/budget.json`:
+Configuration at `~/.config/mu/budget-config.json`:
 
 ```json
 {
@@ -165,7 +165,7 @@ details (CDN traffic, storage, CU packages) with remaining amounts and expiry da
 | OpenRouter | Management key → `GET /api/v1/credits`, fallback to `GET /api/v1/auth/key` | |
 | Aliyun | AK/SK HMAC-SHA1 signature | `QueryAccountBalance` + `QueryResourcePackageInstances` |
 
-API key fallback: `--key` flag → `budget.json` → `ask.json` → `commit.json`.
+API key fallback: `--key` flag → `budget-config.json` → `ask.json` → `commit.json`.
 
 Debug logging can be enabled with `"debug_log": true` — writes to `~/.config/mu/budget.log`.
 
@@ -428,7 +428,7 @@ By default, module configs are read from `~/.config/mu/`:
 ├── wol-config.json
 ├── es-config.json
 ├── mock-config.json     (optional, auto-created on first start)
-├── budget.json
+├── budget-config.json
 └── svcreg-config.json
 ```
 

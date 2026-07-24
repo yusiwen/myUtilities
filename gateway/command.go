@@ -298,7 +298,7 @@ func (o *Options) Run() error {
 	log.Printf("Gateway:   /diff/* -> Diff Tool frontend")
 
 	mux.Handle("/k8s/", http.StripPrefix("/k8s", withGateway(k8s.FrontendHandler())))
-	k8s.RegisterHandlers(mux)
+	k8s.RegisterHandlers(mux, o.ConfigDir)
 	log.Printf("Gateway:   /k8s/* -> Kubernetes Tools frontend")
 
 	mux.Handle("/misc/", http.StripPrefix("/misc", withGateway(misc.FrontendHandler())))
@@ -310,12 +310,12 @@ func (o *Options) Run() error {
 	log.Printf("Gateway:   /network/* -> Network Tools frontend")
 
 	svcregClient := &svcreg.Client{Server: o.SvcregServer}
-	svcreg.RestoreState()
+	svcreg.RestoreState(o.ConfigDir)
 	svcreg.RegisterProxyAPI(mux, svcregClient)
 	mux.Handle("/svcreg/", http.StripPrefix("/svcreg", withGateway(svcreg.FrontendHandler())))
 	log.Printf("Gateway:   /svcreg/* -> Service Registry frontend (backend: %s)", o.SvcregServer)
 
-	budget.RegisterHandlers(mux)
+	budget.RegisterHandlers(mux, o.configPath("budget-config.json"))
 	mux.Handle("/budget/", http.StripPrefix("/budget", withGateway(budget.FrontendHandler())))
 	log.Printf("Gateway:   /budget/* -> API Budget frontend")
 

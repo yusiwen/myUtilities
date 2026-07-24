@@ -56,7 +56,7 @@
   {:else if balances.length === 0 && !error}
     <div class="empty">
       <p>No providers configured.</p>
-      <p class="hint">Add API keys to <code>~/.config/mu/budget.json</code></p>
+      <p class="hint">Add API keys to <code>~/.config/mu/budget-config.json</code></p>
     </div>
   {:else}
     <div class="cards">
