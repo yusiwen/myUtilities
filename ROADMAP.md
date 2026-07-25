@@ -8,6 +8,8 @@ Potential features for future consideration, ordered by implementation priority.
 |---|---------|--------|
 | 1 | `mu serve` — Static file server | ✅ Done |
 | 2 | `mu ask` — LLM Q&A with web search | ✅ Done |
+| 3 | `mu budget` — LLM API balance & usage tracking | ✅ Done |
+| 4 | `mu svcreg` — ServiceCenter-compatible service registry | ✅ Done |
 
 ## Proposed Features
 
@@ -75,3 +77,35 @@ mu port check db.example.com:5432
 
 **Depends on:** `net` (stdlib)
 **Complexity:** Low (single file, ~50 lines)
+
+---
+
+### 6. `mu secret` — Secure credential storage via OS keyring
+
+Store API keys and credentials in the OS-native keychain/keyring instead of
+plain-text config files. Provides a `mu secret` subcommand for CRUD operations
+and integrates with `budget`, `commit`, and `ask` modules for transparent
+credential resolution.
+
+```
+mu secret set deepseek sk-xxx
+mu secret get deepseek
+mu secret list
+mu secret delete deepseek
+```
+
+Resolution priority: `--key` flag → config file → OS keyring.
+
+**Keyring backends:** Secret Service (Linux), Keychain (macOS), Credential
+Manager (Windows) via `github.com/zalando/go-keyring`.
+
+**Integration points:**
+- `core/secret/keyring.go` — `Set(service, key, value)`, `Get(service, key)`, `Delete(service, key)`
+- `budget/config.go` — `resolveAPIKey()` fallback to keyring
+- `git/commit.go` — API key resolution fallback
+- `ask/command.go` — API key resolution fallback
+
+**Depends on:** `github.com/zalando/go-keyring` (pure Go, no CGO)
+**Complexity:** Medium (~200 lines core + ~100 lines CLI + 3 integration edits)
+
+
