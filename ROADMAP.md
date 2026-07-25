@@ -10,6 +10,7 @@ Potential features for future consideration, ordered by implementation priority.
 | 2 | `mu ask` — LLM Q&A with web search | ✅ Done |
 | 3 | `mu budget` — LLM API balance & usage tracking | ✅ Done |
 | 4 | `mu svcreg` — ServiceCenter-compatible service registry | ✅ Done |
+| 5 | `mu set` — Unified config via `ModuleSetter` registry | ✅ Done |
 
 ## Proposed Features
 
@@ -100,6 +101,7 @@ Resolution priority: `--key` flag → config file → OS keyring.
 Manager (Windows) via `github.com/zalando/go-keyring`.
 
 **Integration points:**
+- New `core/config.ModuleSetter` (`mu set`) command provides a unified interface
 - `core/secret/keyring.go` — `Set(service, key, value)`, `Get(service, key)`, `Delete(service, key)`
 - `budget/config.go` — `resolveAPIKey()` fallback to keyring
 - `git/commit.go` — API key resolution fallback
