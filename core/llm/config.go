@@ -77,3 +77,29 @@ func SaveConfig(appName string, cfg *Config) error {
 
 	return nil
 }
+
+func SaveConfigToPath(path string, cfg *Config) error {
+	resolved := path
+	if strings.HasPrefix(resolved, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("unable to find home directory: %w", err)
+		}
+		resolved = filepath.Join(home, resolved[2:])
+	}
+	dir := filepath.Dir(resolved)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("unable to create config directory: %w", err)
+	}
+
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(resolved, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+
+	return nil
+}

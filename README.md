@@ -45,7 +45,7 @@ echo "Explain TCP handshake" | mu ask
 mu ask --model gpt-4o --verbose "How does TLS work?"
 ```
 
-Configuration at `~/.config/mu/ask.json`:
+Configuration at `~/.config/mu/ask-config.json`:
 
 ```json
 {
@@ -165,7 +165,7 @@ details (CDN traffic, storage, CU packages) with remaining amounts and expiry da
 | OpenRouter | Management key → `GET /api/v1/credits`, fallback to `GET /api/v1/auth/key` | |
 | Aliyun | AK/SK HMAC-SHA1 signature | `QueryAccountBalance` + `QueryResourcePackageInstances` |
 
-API key fallback: `--key` flag → `budget-config.json` → `ask.json` → `commit.json`.
+API key fallback: `--key` flag → `budget-config.json` → `ask-config.json` → `commit-config.json`.
 
 Debug logging can be enabled with `"debug_log": true` — writes to `~/.config/mu/budget.log`.
 
@@ -548,7 +548,7 @@ mu git commit --verbose
 mu git commit --dry-run
 ```
 
-Configuration at `~/.config/mu/commit.json`:
+Configuration at `~/.config/mu/commit-config.json`:
 
 ```json
 {

@@ -64,6 +64,50 @@ type Options struct {
 	Question     string `arg:"" name:"question" help:"Question to ask." optional:""`
 }
 
+type SetOptions struct {
+	ConfigBaseURL    string `help:"Base URL of the AI service."`
+	ConfigModel      string `help:"Model name."`
+	ConfigAPIKey     string `help:"API key for the AI service."`
+	ConfigSearchKey  string `help:"Brave Search API key."`
+	ConfigPath       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+}
+
+func (o *SetOptions) Run() error {
+	cfg, err := llm.LoadConfig("ask-config")
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if o.ConfigBaseURL == "" && o.ConfigModel == "" && o.ConfigAPIKey == "" && o.ConfigSearchKey == "" {
+		return fmt.Errorf("at least one of --config-base-url, --config-model, --config-api-key, --config-search-key is required")
+	}
+
+	if o.ConfigBaseURL != "" {
+		cfg.BaseURL = o.ConfigBaseURL
+	}
+	if o.ConfigModel != "" {
+		cfg.Model = o.ConfigModel
+	}
+	if o.ConfigAPIKey != "" {
+		cfg.APIKey = o.ConfigAPIKey
+	}
+	if o.ConfigSearchKey != "" {
+		cfg.SearchAPIKey = o.ConfigSearchKey
+	}
+
+	path := o.ConfigPath
+	if path == "" {
+		path = "~/.config/mu/ask-config.json"
+	}
+
+	if err := llm.SaveConfigToPath(path, cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("Config saved to %s\n", path)
+	return nil
+}
+
 func buildSystemPrompt(lang string, withSearch bool) string {
 	base := systemPrompt
 	if withSearch {
@@ -90,7 +134,7 @@ func formatSearchResults(results []search.Result) string {
 }
 
 func (o *Options) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfig("ask-config")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -112,7 +156,7 @@ func (o *Options) Run() error {
 		return fmt.Errorf("API key is required. Set it via:\n" +
 			"  - OPENAI_API_KEY environment variable\n" +
 			"  - --api-key flag\n" +
-			"  - ~/.config/mu/ask.json config file")
+			"  - ~/.config/mu/ask-config.json config file")
 	}
 
 	question := o.Question
@@ -136,7 +180,7 @@ func (o *Options) Run() error {
 			return fmt.Errorf("Brave Search API key is required for --search. Set it via:\n" +
 				"  - BRAVE_SEARCH_API_KEY environment variable\n" +
 				"  - --search-api-key flag\n" +
-				"  - search_api_key in ~/.config/mu/ask.json")
+				"  - search_api_key in ~/.config/mu/ask-config.json")
 		}
 
 		fmt.Fprintf(os.Stderr, "%s\n", faint("Searching web..."))

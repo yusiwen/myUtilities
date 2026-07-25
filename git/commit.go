@@ -11,6 +11,7 @@ import (
 
 	"github.com/morikuni/aec"
 	coregit "github.com/yusiwen/myUtilities/core/git"
+	"github.com/yusiwen/myUtilities/core/llm"
 	"github.com/yusiwen/myUtilities/core/openai"
 )
 
@@ -73,6 +74,47 @@ type CommitOptions struct {
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
+	Set          SetOptions `cmd:"" name:"set" help:"Update commit config (base-url, model, api-key)."`
+}
+
+type SetOptions struct {
+	ConfigBaseURL string `help:"Base URL of the AI service."`
+	ConfigModel   string `help:"Model name."`
+	ConfigAPIKey  string `help:"API key for the AI service."`
+	ConfigPath    string `name:"config" help:"Config file path. Default: ~/.config/mu/commit-config.json"`
+}
+
+func (o *SetOptions) Run() error {
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	if o.ConfigBaseURL == "" && o.ConfigModel == "" && o.ConfigAPIKey == "" {
+		return fmt.Errorf("at least one of --config-base-url, --config-model, --config-api-key is required")
+	}
+
+	if o.ConfigBaseURL != "" {
+		cfg.BaseURL = o.ConfigBaseURL
+	}
+	if o.ConfigModel != "" {
+		cfg.Model = o.ConfigModel
+	}
+	if o.ConfigAPIKey != "" {
+		cfg.APIKey = o.ConfigAPIKey
+	}
+
+	path := o.ConfigPath
+	if path == "" {
+		path = "~/.config/mu/commit-config.json"
+	}
+
+	if err := llm.SaveConfigToPath(path, cfg); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	fmt.Printf("Config saved to %s\n", path)
+	return nil
 }
 
 func (o *CommitOptions) Run() error {
@@ -95,7 +137,7 @@ func (o *CommitOptions) Run() error {
 		return fmt.Errorf("API key is required. Set it via:\n" +
 			"  - OPENAI_API_KEY environment variable\n" +
 			"  - --api-key flag\n" +
-			"  - ~/.config/mu/commit.json config file")
+			"  - ~/.config/mu/commit-config.json config file")
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {

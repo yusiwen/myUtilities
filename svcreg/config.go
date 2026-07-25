@@ -61,3 +61,18 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	return &cfg, nil
 }
+
+func SaveConfig(configPath string, cfg *Config) error {
+	path, err := resolveConfigPath(configPath)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
+	return nil
+}

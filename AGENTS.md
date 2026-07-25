@@ -86,9 +86,37 @@ public functions and structs so they can be reused across commands or tested ind
 Example — `commit/` → `core/openai/` + `core/git/`:
 
 - `commit/command.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
-- `commit/config.go` — CLI-specific config (`CommitConfig`, `~/.config/mu/commit.json`)
+- `commit/config.go` — CLI-specific config (`CommitConfig`, `~/.config/mu/commit-config.json`)
 - `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`
 - `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetStagedNameStatus()`
+
+### Configuration File Convention
+
+All module configuration files follow the pattern `<module>-config.json`
+stored under `~/.config/mu/` by default:
+
+| Module | Config File |
+|--------|-------------|
+| ask | `ask-config.json` |
+| budget | `budget-config.json` |
+| commit | `commit-config.json` |
+| es | `es-config.json` |
+| mock | `mock-config.json` |
+| svcreg | `svcreg-config.json` |
+| wol | `wol-config.json` |
+
+**Directory override:** The `mu gateway --config-dir <path>` flag
+overrides the base directory for all gateway-integrated modules.
+Modules with config files should accept a config path parameter in their
+`LoadConfig` or `RegisterHandlers` functions; when the path is empty,
+fall back to `~/.config/mu/<module>-config.json`.
+
+**Security:** Config files containing secrets must use file permission
+`0600`. Future versions will support OS keyring storage
+(`mu secret set/get`) as a more secure alternative.
+
+**Do NOT hardcode** `~/.config/mu` in module code — always accept a
+config path parameter and fall back to the default only when empty.
 
 ### Core Packages
 

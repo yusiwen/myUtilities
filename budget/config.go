@@ -80,8 +80,8 @@ func resolveAPIKey(provider string, flagKey string, cfg *BudgetConfig) (string, 
 		"no API key configured for %s\nSet it via:\n"+
 			"  - --key flag\n"+
 			"  - ~/.config/mu/budget-config.json → providers.%s.api_key\n"+
-			"  - ~/.config/mu/ask.json → api_key\n"+
-			"  - ~/.config/mu/commit.json → api_key",
+			"  - ~/.config/mu/ask-config.json → api_key\n"+
+			"  - ~/.config/mu/commit-config.json → api_key",
 		provider, provider,
 	)
 }
