@@ -40,7 +40,7 @@ func LoadConfig(appName string) (*Config, error) {
 		Model:   "gpt-4o-mini",
 	}
 
-	path, err := configFilePath(appName)
+	path, err := configFilePath(appName + "-config")
 	if err != nil {
 		return nil, err
 	}

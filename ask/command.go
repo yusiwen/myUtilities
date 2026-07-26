@@ -73,7 +73,7 @@ type SetOptions struct {
 }
 
 func (o *SetOptions) Run() error {
-	cfg, err := llm.LoadConfig("ask-config")
+	cfg, err := llm.LoadConfig("ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -134,7 +134,7 @@ func formatSearchResults(results []search.Result) string {
 }
 
 func (o *Options) Run() error {
-	cfg, err := llm.LoadConfig("ask-config")
+	cfg, err := llm.LoadConfig("ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
