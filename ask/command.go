@@ -65,11 +65,11 @@ type Options struct {
 }
 
 type SetOptions struct {
-	ConfigBaseURL    string `help:"Base URL of the AI service."`
-	ConfigModel      string `help:"Model name."`
-	ConfigAPIKey     string `help:"API key for the AI service."`
-	ConfigSearchKey  string `help:"Brave Search API key."`
-	ConfigPath       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	BaseURL    string `help:"Base URL of the AI service."`
+	Model      string `help:"Model name."`
+	APIKey     string `help:"API key for the AI service."`
+	SearchKey  string `help:"Brave Search API key."`
+	Path       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func (o *SetOptions) Run() error {
@@ -78,24 +78,24 @@ func (o *SetOptions) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.ConfigBaseURL == "" && o.ConfigModel == "" && o.ConfigAPIKey == "" && o.ConfigSearchKey == "" {
-		return fmt.Errorf("at least one of --config-base-url, --config-model, --config-api-key, --config-search-key is required")
+	if o.BaseURL == "" && o.Model == "" && o.APIKey == "" && o.SearchKey == "" {
+		return fmt.Errorf("at least one of --base-url, --model, --api-key, --search-key is required")
 	}
 
-	if o.ConfigBaseURL != "" {
-		cfg.BaseURL = o.ConfigBaseURL
+	if o.BaseURL != "" {
+		cfg.BaseURL = o.BaseURL
 	}
-	if o.ConfigModel != "" {
-		cfg.Model = o.ConfigModel
+	if o.Model != "" {
+		cfg.Model = o.Model
 	}
-	if o.ConfigAPIKey != "" {
-		cfg.APIKey = o.ConfigAPIKey
+	if o.APIKey != "" {
+		cfg.APIKey = o.APIKey
 	}
-	if o.ConfigSearchKey != "" {
-		cfg.SearchAPIKey = o.ConfigSearchKey
+	if o.SearchKey != "" {
+		cfg.SearchAPIKey = o.SearchKey
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		path = "~/.config/mu/ask-config.json"
 	}

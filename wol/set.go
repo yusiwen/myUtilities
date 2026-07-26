@@ -31,21 +31,21 @@ func (s *wolSetter) Set(args []string) error {
 }
 
 type WolSetOptions struct {
-	ConfigServer    string `help:"WOL HTTP server URL."`
-	ConfigDBPath    string `help:"BoltDB file path."`
-	ConfigPort      int    `help:"HTTP server port."`
-	ConfigToken     string `help:"API auth token."`
-	ConfigInterface string `help:"Network interface name."`
-	ConfigHostname  string `help:"Hostname for agent registration."`
-	ConfigPath      string `name:"config" help:"Config file path. Default: ~/.config/mu/wol-config.json"`
+	Server    string `help:"WOL HTTP server URL."`
+	DBPath    string `help:"BoltDB file path."`
+	Port      int    `help:"HTTP server port."`
+	Token     string `help:"API auth token."`
+	Interface string `help:"Network interface name."`
+	Hostname  string `help:"Hostname for agent registration."`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/wol-config.json"`
 }
 
 func (o *WolSetOptions) Run() error {
-	if o.ConfigServer == "" && o.ConfigDBPath == "" && o.ConfigPort == 0 && o.ConfigToken == "" && o.ConfigInterface == "" && o.ConfigHostname == "" {
+	if o.Server == "" && o.DBPath == "" && o.Port == 0 && o.Token == "" && o.Interface == "" && o.Hostname == "" {
 		return fmt.Errorf("at least one flag is required")
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		path = "~/.config/mu/wol-config.json"
 	}
@@ -55,23 +55,23 @@ func (o *WolSetOptions) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.ConfigServer != "" {
-		cfg.Server = o.ConfigServer
+	if o.Server != "" {
+		cfg.Server = o.Server
 	}
-	if o.ConfigDBPath != "" {
-		cfg.DBPath = o.ConfigDBPath
+	if o.DBPath != "" {
+		cfg.DBPath = o.DBPath
 	}
-	if o.ConfigPort > 0 {
-		cfg.Port = o.ConfigPort
+	if o.Port > 0 {
+		cfg.Port = o.Port
 	}
-	if o.ConfigToken != "" {
-		cfg.Token = o.ConfigToken
+	if o.Token != "" {
+		cfg.Token = o.Token
 	}
-	if o.ConfigInterface != "" {
-		cfg.Interface = o.ConfigInterface
+	if o.Interface != "" {
+		cfg.Interface = o.Interface
 	}
-	if o.ConfigHostname != "" {
-		cfg.Hostname = o.ConfigHostname
+	if o.Hostname != "" {
+		cfg.Hostname = o.Hostname
 	}
 
 	return saveConfig(path, cfg)

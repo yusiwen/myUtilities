@@ -31,18 +31,18 @@ func (s *esSetter) Set(args []string) error {
 }
 
 type ConfigSetOptions struct {
-	ConfigHost     string `help:"Elasticsearch server URL."`
-	ConfigUsername string `help:"Elasticsearch username."`
-	ConfigPassword string `help:"Elasticsearch password."`
-	ConfigPath     string `name:"config" help:"Config file path. Default: ~/.config/mu/es-config.json"`
+	Host     string `help:"Elasticsearch server URL."`
+	Username string `help:"Elasticsearch username."`
+	Password string `help:"Elasticsearch password."`
+	Path     string `name:"config" help:"Config file path. Default: ~/.config/mu/es-config.json"`
 }
 
 func (o *ConfigSetOptions) Run() error {
-	if o.ConfigHost == "" && o.ConfigUsername == "" && o.ConfigPassword == "" {
-		return fmt.Errorf("at least one of --config-host, --config-username, --config-password is required")
+	if o.Host == "" && o.Username == "" && o.Password == "" {
+		return fmt.Errorf("at least one of --host, --username, --password is required")
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		path = "~/.config/mu/es-config.json"
 	}
@@ -52,14 +52,14 @@ func (o *ConfigSetOptions) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.ConfigHost != "" {
-		cfg.Host = o.ConfigHost
+	if o.Host != "" {
+		cfg.Host = o.Host
 	}
-	if o.ConfigUsername != "" {
-		cfg.Username = o.ConfigUsername
+	if o.Username != "" {
+		cfg.Username = o.Username
 	}
-	if o.ConfigPassword != "" {
-		cfg.Password = o.ConfigPassword
+	if o.Password != "" {
+		cfg.Password = o.Password
 	}
 
 	return saveConfig(path, cfg)

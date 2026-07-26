@@ -31,18 +31,18 @@ func (s *svcregSetter) Set(args []string) error {
 }
 
 type ConfigSetOptions struct {
-	ConfigHost   string `help:"Listen address."`
-	ConfigPort   int    `help:"HTTP server port."`
-	ConfigDBPath string `help:"BoltDB file path."`
-	ConfigPath   string `name:"config" help:"Config file path. Default: ~/.config/mu/svcreg-config.json"`
+	Host   string `help:"Listen address."`
+	Port   int    `help:"HTTP server port."`
+	DBPath string `help:"BoltDB file path."`
+	Path   string `name:"config" help:"Config file path. Default: ~/.config/mu/svcreg-config.json"`
 }
 
 func (o *ConfigSetOptions) Run() error {
-	if o.ConfigHost == "" && o.ConfigPort == 0 && o.ConfigDBPath == "" {
-		return fmt.Errorf("at least one of --config-host, --config-port, --config-db-path is required")
+	if o.Host == "" && o.Port == 0 && o.DBPath == "" {
+		return fmt.Errorf("at least one of --host, --port, --db-path is required")
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		path = "~/.config/mu/svcreg-config.json"
 	}
@@ -52,14 +52,14 @@ func (o *ConfigSetOptions) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.ConfigHost != "" {
-		cfg.Host = o.ConfigHost
+	if o.Host != "" {
+		cfg.Host = o.Host
 	}
-	if o.ConfigPort > 0 {
-		cfg.Port = o.ConfigPort
+	if o.Port > 0 {
+		cfg.Port = o.Port
 	}
-	if o.ConfigDBPath != "" {
-		cfg.DBPath = o.ConfigDBPath
+	if o.DBPath != "" {
+		cfg.DBPath = o.DBPath
 	}
 
 	return SaveConfig(path, cfg)

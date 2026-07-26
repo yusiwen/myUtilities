@@ -74,14 +74,13 @@ type CommitOptions struct {
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
-	Set          SetOptions `cmd:"" name:"set" help:"Update commit config (base-url, model, api-key)."`
 }
 
 type SetOptions struct {
-	ConfigBaseURL string `help:"Base URL of the AI service."`
-	ConfigModel   string `help:"Model name."`
-	ConfigAPIKey  string `help:"API key for the AI service."`
-	ConfigPath    string `name:"config" help:"Config file path. Default: ~/.config/mu/commit-config.json"`
+	BaseURL string `help:"Base URL of the AI service."`
+	Model   string `help:"Model name."`
+	APIKey  string `help:"API key for the AI service."`
+	Path    string `name:"config" help:"Config file path. Default: ~/.config/mu/commit-config.json"`
 }
 
 func (o *SetOptions) Run() error {
@@ -90,21 +89,21 @@ func (o *SetOptions) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.ConfigBaseURL == "" && o.ConfigModel == "" && o.ConfigAPIKey == "" {
-		return fmt.Errorf("at least one of --config-base-url, --config-model, --config-api-key is required")
+	if o.BaseURL == "" && o.Model == "" && o.APIKey == "" {
+		return fmt.Errorf("at least one of --base-url, --model, --api-key is required")
 	}
 
-	if o.ConfigBaseURL != "" {
-		cfg.BaseURL = o.ConfigBaseURL
+	if o.BaseURL != "" {
+		cfg.BaseURL = o.BaseURL
 	}
-	if o.ConfigModel != "" {
-		cfg.Model = o.ConfigModel
+	if o.Model != "" {
+		cfg.Model = o.Model
 	}
-	if o.ConfigAPIKey != "" {
-		cfg.APIKey = o.ConfigAPIKey
+	if o.APIKey != "" {
+		cfg.APIKey = o.APIKey
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		path = "~/.config/mu/commit-config.json"
 	}

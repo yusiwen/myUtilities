@@ -31,17 +31,17 @@ func (s *watchSetter) Set(args []string) error {
 }
 
 type SetOptions struct {
-	ConfigGitUser     string `help:"Git auth username."`
-	ConfigGitPassword string `help:"Git auth password."`
-	ConfigPath        string `name:"config" help:"Config file path. Default: ~/.config/mu/watch.json"`
+	GitUser     string `help:"Git auth username."`
+	GitPassword string `help:"Git auth password."`
+	Path        string `name:"config" help:"Config file path. Default: ~/.config/mu/watch.json"`
 }
 
 func (o *SetOptions) Run() error {
-	if o.ConfigGitUser == "" && o.ConfigGitPassword == "" {
-		return fmt.Errorf("at least one of --config-git-user, --config-git-password is required")
+	if o.GitUser == "" && o.GitPassword == "" {
+		return fmt.Errorf("at least one of --git-user, --git-password is required")
 	}
 
-	path := o.ConfigPath
+	path := o.Path
 	if path == "" {
 		var err error
 		path, err = defaultConfigPath()
@@ -59,11 +59,11 @@ func (o *SetOptions) Run() error {
 		cfg.GitAuth = &GitAuthConfig{}
 	}
 
-	if o.ConfigGitUser != "" {
-		cfg.GitAuth.Username = o.ConfigGitUser
+	if o.GitUser != "" {
+		cfg.GitAuth.Username = o.GitUser
 	}
-	if o.ConfigGitPassword != "" {
-		cfg.GitAuth.Password = o.ConfigGitPassword
+	if o.GitPassword != "" {
+		cfg.GitAuth.Password = o.GitPassword
 	}
 
 	return saveConfig(path, cfg)
