@@ -159,6 +159,21 @@ The web UI (also available at `/budget/` in the gateway) displays balance cards 
 each provider with real-time data. Aliyun cards additionally show resource package
 details (CDN traffic, storage, CU packages) with remaining amounts and expiry dates.
 
+Each provider card includes a **Top Up ↗** link that opens the provider's official
+recharge page in a new tab. The default URL can be overridden via the optional
+`"top_up_url"` field in the config:
+
+```json
+{
+  "providers": {
+    "deepseek": {
+      "api_key": "sk-xxx",
+      "top_up_url": "https://my-custom-portal.com/recharge"
+    }
+  }
+}
+```
+
 | Provider | Auth Method | API Endpoint |
 |----------|-------------|--------------|
 | DeepSeek | `Bearer <API_KEY>` | `GET /user/balance` |

@@ -63,8 +63,11 @@
       {#each balances as b}
         <div class="card balance-card">
           <div class="provider-name">
-            {b.provider === 'deepseek' ? 'DeepSeek' : b.provider === 'openrouter' ? 'OpenRouter' : b.provider === 'aliyun' ? 'Aliyun' : b.provider}
+            <span class="provider-label">{b.provider === 'deepseek' ? 'DeepSeek' : b.provider === 'openrouter' ? 'OpenRouter' : b.provider === 'aliyun' ? 'Aliyun' : b.provider}</span>
             <span class="currency">{b.currency}</span>
+            {#if b.extra?.top_up_url}
+              <a href={b.extra.top_up_url} target="_blank" rel="noopener noreferrer" class="top-up-link">Top Up ↗</a>
+            {/if}
           </div>
 
           {#if b.error}
@@ -272,5 +275,20 @@
     color: #e94560;
     font-size: 14px;
     padding: 8px 0;
+  }
+
+  .provider-label {
+    white-space: nowrap;
+  }
+
+  .top-up-link {
+    font-size: 11px;
+    color: var(--primary);
+    text-decoration: none;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+  .top-up-link:hover {
+    text-decoration: underline;
   }
 </style>

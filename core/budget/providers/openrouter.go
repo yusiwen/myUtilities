@@ -84,14 +84,16 @@ func (p *openrouterProvider) tryCredits(ctx context.Context, apiKey string) (*Ba
 		return nil, fmt.Errorf("openrouter: failed to parse credits response: %w", err)
 	}
 
-	return &BalanceInfo{
+	info := &BalanceInfo{
 		Provider:  "openrouter",
 		Currency:  "USD",
 		Total:     body.Data.TotalCredits,
 		Used:      body.Data.TotalUsage,
 		Remaining: body.Data.TotalCredits - body.Data.TotalUsage,
 		Extra:     make(map[string]string),
-	}, nil
+	}
+	info.Extra["top_up_url"] = "https://openrouter.ai/credits"
+	return info, nil
 }
 
 func (p *openrouterProvider) tryKeyInfo(ctx context.Context, apiKey string) (*BalanceInfo, error) {
@@ -126,6 +128,7 @@ func (p *openrouterProvider) tryKeyInfo(ctx context.Context, apiKey string) (*Ba
 		Used:     body.Data.Usage,
 		Extra:    make(map[string]string),
 	}
+	info.Extra["top_up_url"] = "https://openrouter.ai/credits"
 	if body.Data.Limit != nil {
 		info.Total = *body.Data.Limit
 		info.Remaining = info.Total - info.Used

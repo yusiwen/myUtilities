@@ -81,6 +81,7 @@ func (p *deepseekProvider) GetBalance(ctx context.Context, apiKey string) (*Bala
 		info.Remaining = info.Total
 		info.Extra["granted_balance"] = b.GrantedBalance
 		info.Extra["topped_up_balance"] = b.ToppedUpBalance
+		info.Extra["top_up_url"] = "https://platform.deepseek.com/top_up"
 	}
 
 	return info, nil

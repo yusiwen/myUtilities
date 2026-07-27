@@ -18,6 +18,7 @@ type ProviderConfig struct {
 	APIKey          string `json:"api_key"`
 	AccessKeyID     string `json:"access_key_id"`
 	AccessKeySecret string `json:"access_key_secret"`
+	TopUpURL        string `json:"top_up_url,omitempty"`
 }
 
 func defaultConfigPath() (string, error) {

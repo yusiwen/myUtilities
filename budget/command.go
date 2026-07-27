@@ -92,6 +92,15 @@ func handleBalance(w http.ResponseWriter, r *http.Request, configPath string) {
 	debugLog("handleBalance: response written, done")
 }
 
+func applyTopUpURL(info *providers.BalanceInfo, pc *ProviderConfig) {
+	if pc != nil && pc.TopUpURL != "" {
+		if info.Extra == nil {
+			info.Extra = make(map[string]string)
+		}
+		info.Extra["top_up_url"] = pc.TopUpURL
+	}
+}
+
 func fetchBalances(ctx context.Context, flagKey string, cfg *BudgetConfig) []balanceResult {
 	allNames := allConfiguredProviders(cfg, flagKey)
 	if len(allNames) == 0 {
@@ -153,6 +162,7 @@ func fetchBalances(ctx context.Context, flagKey string, cfg *BudgetConfig) []bal
 				return
 			}
 			logd(cfg, "fetchBalances: goroutine [%s] GetBalance ok, total=%.2f", name, info.Total)
+			applyTopUpURL(info, pc)
 			if name == "aliyun" {
 				if pp, ok := p.(packageProvider); ok {
 					pkgs, pkgErr := pp.GetPackages(ctx)
@@ -200,6 +210,7 @@ func queryOne(ctx context.Context, name string, flagKey string, cfg *BudgetConfi
 		if err != nil {
 			return err
 		}
+		applyTopUpURL(info, pc)
 		fetchPackages(ctx, info, p)
 		printBalance(*info)
 	} else {
@@ -215,6 +226,7 @@ func queryOne(ctx context.Context, name string, flagKey string, cfg *BudgetConfi
 		if err != nil {
 			return err
 		}
+		applyTopUpURL(info, pc)
 		printBalance(*info)
 	}
 	return nil
@@ -244,6 +256,7 @@ func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
 			}
 			info, err = p.GetBalance(ctx, "")
 			if err == nil {
+				applyTopUpURL(info, pc)
 				fetchPackages(ctx, info, p)
 			}
 		} else {
@@ -257,6 +270,9 @@ func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
 				continue
 			}
 			info, err = p.GetBalance(ctx, key)
+			if err == nil {
+				applyTopUpURL(info, pc)
+			}
 		}
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))

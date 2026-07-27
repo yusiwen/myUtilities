@@ -114,6 +114,7 @@ func (p *aliyunProvider) GetBalance(ctx context.Context, apiKey string) (*Balanc
 	info.Extra["available_cash"] = resp.Data.AvailableCashAmount
 	info.Extra["credit_amount"] = resp.Data.CreditAmount
 	info.Extra["mybank_credit"] = resp.Data.MybankCreditAmount
+	info.Extra["top_up_url"] = "https://www.aliyun.com/"
 
 	return info, nil
 }
