@@ -342,6 +342,61 @@ The `body` field is always a raw response string (JSON or plain text).
 | Persistence | "Save to Config" button writes all endpoints back to the config file |
 | Verbose logging | `--verbose` flag prints request/response details to stdout |
 
+| Conditional responses | Per-endpoint `"responses"` with conditions using template expressions |
+| Recursive conditions | Each condition can contain child conditions for multi-level branching |
+| Default fallback | Conditionless `"default": true` response, or parent `body` as implicit fallback |
+
+##### Conditional responses
+
+Each endpoint can specify a list of `"responses"` evaluated in order. The first matching
+condition wins; if none match, the endpoint's own fields serve as the fallback.
+
+```json
+{
+  "method": "GET",
+  "path": "/api/hello/:id",
+  "status": 200,
+  "delay": "100ms",
+  "body": "{\"message\": \"Hello guest!\", \"id\": \"{{path.id}}\"}",
+  "responses": [
+    {
+      "condition": "{{path.id}} == 1",
+      "delay": "500ms",
+      "headers": {"X-Role": "admin"},
+      "body": "{\"message\": \"Hello Admin!\", \"role\": \"admin\"}"
+    },
+    {
+      "condition": "{{path.id}} == 2",
+      "body": "{\"message\": \"Hello User!\", \"role\": \"user\"}"
+    }
+  ]
+}
+```
+
+**Operator reference:**
+
+| Operator | Example | Effect |
+|----------|---------|--------|
+| *(none)* | `{{header.auth}}` | Exists / non-empty |
+| `==` | `{{path.id}} == 1` | Equal |
+| `!=` | `{{path.id}} != admin` | Not equal |
+| `>` / `<` / `>=` / `<=` | `{{path.id}} > 100` | Numeric comparison |
+| `contains` | `{{body.email}} contains @` | Substring match |
+| `matches` | `{{path.id}} matches ^\\d+$` | Regex match |
+
+##### Default demo endpoints
+
+When the **gateway** (`mu gateway`) starts and `mock-config.json` does not exist yet,
+it auto-creates two demo endpoints:
+
+| Route | Description |
+|-------|-------------|
+| `GET /api/hello` | Simple greeting — quick sanity check |
+| `GET /api/hello/:id` | Conditional response demo with path params, headers, delay |
+
+Visit `http://localhost:8080/mock/api/hello` or `http://localhost:8080/mock/api/hello/1`
+to try them.
+
 **Template sources:**
 
 | Source | Syntax | Example |

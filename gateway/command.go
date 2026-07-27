@@ -264,7 +264,30 @@ func (o *Options) Run() error {
       "method": "GET",
       "path": "/api/hello",
       "status": 200,
+      "headers": {"X-Server": "mock-dynamic"},
       "body": "{\"message\": \"Hello from Mock Dynamic Server!\", \"docs\": \"Edit or add endpoints at /__admin/\"}"
+    },
+    {
+      "id": "hello-id",
+      "method": "GET",
+      "path": "/api/hello/:id",
+      "status": 200,
+      "delay": "100ms",
+      "headers": {"X-Server": "mock-dynamic"},
+      "body": "{\"message\": \"Hello guest!\", \"id\": \"{{path.id}}\", \"hint\": \"Try /api/hello/1 or /api/hello/2\"}",
+      "responses": [
+        {
+          "condition": "{{path.id}} == 1",
+          "delay": "500ms",
+          "headers": {"X-Role": "admin"},
+          "body": "{\"message\": \"Hello Admin!\", \"id\": \"{{path.id}}\", \"role\": \"admin\"}"
+        },
+        {
+          "condition": "{{path.id}} == 2",
+          "headers": {"X-Role": "user"},
+          "body": "{\"message\": \"Hello User!\", \"id\": \"{{path.id}}\", \"role\": \"user\"}"
+        }
+      ]
     }
   ]
 }`

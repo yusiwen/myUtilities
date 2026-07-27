@@ -13,13 +13,24 @@ import (
 )
 
 type ManagedEndpoint struct {
-	ID      string            `json:"id"`
-	Method  string            `json:"method"`
-	Path    string            `json:"path"`
-	Status  int               `json:"status"`
-	Delay   string            `json:"delay,omitempty"`
-	Headers map[string]string `json:"headers,omitempty"`
-	Body    string            `json:"body"`
+	ID        string                 `json:"id"`
+	Method    string                 `json:"method"`
+	Path      string                 `json:"path"`
+	Status    int                    `json:"status"`
+	Delay     string                 `json:"delay,omitempty"`
+	Headers   map[string]string      `json:"headers,omitempty"`
+	Body      string                 `json:"body"`
+	Responses []*ConditionalResponse `json:"responses,omitempty"`
+}
+
+type ConditionalResponse struct {
+	Condition string                 `json:"condition,omitempty"`
+	Default   bool                   `json:"default,omitempty"`
+	Status    int                    `json:"status,omitempty"`
+	Delay     string                 `json:"delay,omitempty"`
+	Headers   map[string]string      `json:"headers,omitempty"`
+	Body      string                 `json:"body,omitempty"`
+	Responses []*ConditionalResponse `json:"responses,omitempty"`
 }
 
 type InvocationLog struct {
@@ -191,17 +202,41 @@ func (r *DynamicRouter) handleMock(w http.ResponseWriter, req *http.Request, ep 
 		}
 	}
 
-	bodyContent := resolveTemplate(ep.Body, ctx)
+	status := ep.Status
+	bodyContent := ep.Body
+	respHeaders := ep.Headers
+
+	if len(ep.Responses) > 0 {
+		s, b, h, d := resolveConditionalResponse(ep.Responses, ctx, Defaults{
+			Status:  ep.Status,
+			Body:    ep.Body,
+			Headers: ep.Headers,
+			Delay:   ep.Delay,
+		})
+		if s > 0 || b != "" {
+			status = s
+			bodyContent = b
+			if h != nil {
+				respHeaders = mergeHeaders(ep.Headers, h)
+			}
+			if d != "" {
+				if pd, err := time.ParseDuration(d); err == nil {
+					time.Sleep(pd)
+				}
+			}
+		}
+	}
+
+	bodyContent = resolveTemplate(bodyContent, ctx)
 	body := []byte(bodyContent)
 
-	for k, v := range ep.Headers {
+	for k, v := range respHeaders {
 		w.Header().Set(k, resolveTemplate(v, ctx))
 	}
 	if w.Header().Get("Content-Type") == "" && len(body) > 0 {
 		w.Header().Set("Content-Type", "application/json")
 	}
 
-	status := ep.Status
 	if status == 0 {
 		status = http.StatusOK
 	}

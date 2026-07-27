@@ -2,6 +2,7 @@
   import { onMount } from 'svelte'
   import { listEndpoints, createEndpoint, updateEndpoint, deleteEndpoint, saveToConfig, listLogs } from './lib/api.js'
   import JsonEditor from './components/JsonEditor.svelte'
+  import ConditionTree from './components/ConditionTree.svelte'
 
   let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
   let endpoints = $state([])
@@ -13,9 +14,19 @@
   let logs = $state([])
   let form = $state({ method: 'GET', path: '', status: 200, delay: '', headers: [], body: '' })
   let editorRef = $state(null)
+  let errors = $state({})
+
+  const exampleEndpoint = `{
+  "method": "POST",
+  "path": "/api/users/:id",
+  "status": 201,
+  "delay": "500ms",
+  "headers": {"X-Echo": "{{header.x-request-id}}"},
+  "body": "{\\"userId\\": \\"{{path.id}}\\", \\"name\\": \\"{{body.name}}\\", \\"page\\": \\"{{query.page}}\\"}"
+}`
 
   function emptyForm() {
-    return { method: 'GET', path: '', status: 200, delay: '', headers: [], body: '' }
+    return { method: 'GET', path: '', status: 200, delay: '', headers: [], body: '', conditions: [] }
   }
 
   const methodColors = { GET: '#61affe', POST: '#49cc90', PUT: '#fca130', PATCH: '#50e3c2', DELETE: '#f93e3e' }
@@ -42,10 +53,12 @@
   function startAdd() {
     editing = 'new'
     form = emptyForm()
+    errors = {}
   }
 
   function startEdit(ep) {
     editing = ep.id
+    errors = {}
     form = {
       method: ep.method,
       path: ep.path,
@@ -53,11 +66,58 @@
       delay: ep.delay || '',
       headers: Object.entries(ep.headers || {}).map(([k, v]) => ({ key: k, value: v })),
       body: ep.body || '',
+      conditions: ep.responses ? ep.responses.map(r => copyCond(r)) : [],
+    }
+  }
+
+  function copyCond(r) {
+    return {
+      condition: r.condition || '',
+      status: r.status || '',
+      delay: r.delay || '',
+      headers: Object.entries(r.headers || {}).map(([k, v]) => ({ key: k, value: v })),
+      body: r.body || '',
+      _default: r.default || false,
+      _uid: Date.now() + Math.random(),
+      children: (r.responses || []).map(c => copyCond(c)),
     }
   }
 
   function cancelEdit() {
     editing = null
+  }
+
+  function addCondition() {
+    form.conditions = [...form.conditions, {
+      condition: '',
+      status: '', delay: '', headers: [], body: '',
+      _uid: Date.now() + Math.random(),
+      children: [],
+    }]
+  }
+
+  function removeCondition(node) {
+    const removeRecursive = (list) => {
+      return list.filter(c => c !== node).map(c => ({ ...c, children: removeRecursive(c.children) }))
+    }
+    form.conditions = removeRecursive(form.conditions)
+  }
+
+  function collectCond(r) {
+    const obj = {}
+    if (r.condition) obj.condition = r.condition
+    if (r.status) obj.status = r.status
+    if (r.delay) obj.delay = r.delay
+    if (r.body) obj.body = r.body
+    const hdrs = {}
+    for (const h of r.headers) {
+      if (h.key.trim()) hdrs[h.key.trim()] = h.value
+    }
+    if (Object.keys(hdrs).length) obj.headers = hdrs
+    if (r.children && r.children.length) {
+      obj.responses = r.children.map(c => collectCond(c))
+    }
+    return obj
   }
 
   function collectData() {
@@ -69,10 +129,14 @@
     if (form.delay) data.delay = form.delay
     if (Object.keys(headers).length) data.headers = headers
     data.body = form.body
+    if (form.conditions.length) {
+      data.responses = form.conditions.map(c => collectCond(c))
+    }
     return data
   }
 
   async function handleSave() {
+    if (!validate()) return
     const data = collectData()
     try {
       saving = true
@@ -121,6 +185,44 @@
       form.body = JSON.stringify(parsed, null, 2)
     } catch { /* ignore */ }
   }
+
+  function validate() {
+    const errs = {}
+
+    if (!form.path.trim()) {
+      errs.path = 'Path is required'
+    } else if (!form.path.trim().startsWith('/')) {
+      errs.path = 'Path must start with /'
+    }
+
+    const status = Number(form.status)
+    if (form.status === '' || form.status === null || form.status === undefined) {
+      errs.status = 'Status is required'
+    } else if (!Number.isInteger(status) || status < 100 || status > 599) {
+      errs.status = 'Status must be between 100 and 599'
+    }
+
+    if (form.delay && !/^\d+(\.\d+)?(ms|s|m|h)$/.test(form.delay)) {
+      errs.delay = 'Invalid format. Use e.g. 500ms, 2s, 1m'
+    }
+
+    const emptyConds = []
+    function findEmptyConds(list) {
+      for (const c of list) {
+        if (!c.condition.trim()) {
+          emptyConds.push(c._uid)
+        }
+        findEmptyConds(c.children)
+      }
+    }
+    findEmptyConds(form.conditions)
+    if (emptyConds.length) {
+      errs.condErrors = Object.fromEntries(emptyConds.map(uid => [uid, true]))
+    }
+
+    errors = errs
+    return Object.keys(errs).length === 0
+  }
 </script>
 
 <div class="app">
@@ -149,6 +251,7 @@
   <div class="tabs">
     <button class="tab" class:active={tab === 'endpoints'} onclick={() => tab = 'endpoints'}>Endpoints</button>
     <button class="tab" class:active={tab === 'logs'} onclick={() => { tab = 'logs'; loadLogsData() }}>Logs</button>
+    <button class="tab" class:active={tab === 'help'} onclick={() => tab = 'help'}>Help</button>
   </div>
 
   {#if tab === 'endpoints'}
@@ -230,6 +333,58 @@
       </table>
     </div>
   {/if}
+
+  {#if tab === 'help'}
+    <div class="help-section">
+      <div class="help-card">
+        <h2>Template Variables</h2>
+        <p class="help-desc">Use <code>{"{{"}source.key{"}}"}</code> in the response body or headers to
+        dynamically inject values from the incoming request.</p>
+        <table class="help-table">
+          <thead><tr><th>Source</th><th>Syntax</th><th>Example</th></tr></thead>
+          <tbody>
+            <tr><td>URL path param</td><td><code>{"{{"}path.id{"}}"}</code></td><td>Url <code>/api/users/:id</code> → <code>42</code></td></tr>
+            <tr><td>Query string</td><td><code>{"{{"}query.page{"}}"}</code></td><td><code>?page=3</code> → <code>3</code></td></tr>
+            <tr><td>Request header</td><td><code>{"{{"}header.authorization{"}}"}</code></td><td><code>Authorization: Bearer xxx</code> → <code>Bearer xxx</code></td></tr>
+            <tr><td>JSON body (top-level)</td><td><code>&#123;&#123;body.name&#125;&#125;</code></td><td><code>&#123;"name":"alice"&#125;</code> → <code>alice</code></td></tr>
+            <tr><td>JSON body (nested)</td><td><code>{"{{"}body.user.address.city{"}}"}</code></td><td>Dot notation for deep fields</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Example Endpoint</h3>
+        <div class="help-example"><pre>{exampleEndpoint}</pre></div>
+          <p class="help-desc">Request <code>POST /api/users/42?page=3</code> with body
+          <code>&#123;"name":"alice"&#125;</code> → <code>&#123;"userId":"42","name":"alice","page":"3"&#125;</code></p>
+      </div>
+
+      <div class="help-card">
+        <h2>Additional Options</h2>
+        <table class="help-table">
+          <thead><tr><th>Field</th><th>Format</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>delay</code></td><td><code>"500ms"</code>, <code>"2s"</code>, <code>"1.5m"</code></td><td>Simulated response delay</td></tr>
+            <tr><td><code>status</code></td><td><code>200</code>, <code>404</code>, <code>500</code></td><td>Custom HTTP status code</td></tr>
+              <tr><td><code>headers</code></td><td><code>&#123;"X-Custom": "value"&#125;</code></td><td>Response headers (supports templates)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="help-card">
+        <h2>Admin API</h2>
+        <table class="help-table">
+          <thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td><code>/__admin/api/endpoints</code></td><td>GET</td><td>List all endpoints</td></tr>
+            <tr><td><code>/__admin/api/endpoints</code></td><td>POST</td><td>Create a new endpoint</td></tr>
+            <tr><td><code>/__admin/api/endpoints/:id</code></td><td>PUT</td><td>Update an endpoint</td></tr>
+            <tr><td><code>/__admin/api/endpoints/:id</code></td><td>DELETE</td><td>Delete an endpoint</td></tr>
+            <tr><td><code>/__admin/api/config</code></td><td>POST</td><td>Save all endpoints to config file</td></tr>
+            <tr><td><code>/__admin/api/logs</code></td><td>GET</td><td>Recent invocation logs (up to 200)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  {/if}
 </div>
 
 {#snippet FormFields()}
@@ -241,15 +396,18 @@
         </select>
       </label>
       <label class="grow">Path
-        <input type="text" bind:value={form.path} placeholder="/api/example" />
+        <input type="text" bind:value={form.path} placeholder="/api/example" class:field-error={errors.path} />
+        {#if errors.path}<span class="err-msg">{errors.path}</span>{/if}
       </label>
     </div>
     <div class="form-row">
       <label>Status
-        <input type="number" bind:value={form.status} min="100" max="599" />
+        <input type="number" bind:value={form.status} min="100" max="599" class:field-error={errors.status} />
+        {#if errors.status}<span class="err-msg">{errors.status}</span>{/if}
       </label>
       <label class="grow">Delay
-        <input type="text" bind:value={form.delay} placeholder="e.g. 500ms, 2s" />
+        <input type="text" bind:value={form.delay} placeholder="e.g. 500ms, 2s" class:field-error={errors.delay} />
+        {#if errors.delay}<span class="err-msg">{errors.delay}</span>{/if}
       </label>
     </div>
     <label>Headers
@@ -265,9 +423,15 @@
         <button class="btn xs" onclick={addHeader}>+ Add Header</button>
       </div>
     </label>
+    <div class="cond-section">
+      <button class="btn xs" onclick={addCondition}>+ Add Condition</button>
+    </div>
+    {#each form.conditions as cond (cond._uid)}
+      <ConditionTree node={cond} level={0} onRemove={removeCondition} condErrors={errors.condErrors || {}} />
+    {/each}
     <label>Response Body <button class="btn xs" onclick={formatBody} style="float:right">Format</button>
       <div class="body-editor">
-        <textarea bind:value={form.body} rows="10" placeholder='response body (JSON or plain text)'></textarea>
+        <textarea bind:value={form.body} rows="10" placeholder='response body (JSON or plain text) — this IS the default fallback'></textarea>
       </div>
     </label>
   </div>
@@ -332,4 +496,23 @@
   .log-time { font-size: 12px; color: var(--text2); white-space: nowrap; }
   .log-dur { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text2); white-space: nowrap; }
   .log-ip { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text3); white-space: nowrap; }
+
+  .help-section { display: flex; flex-direction: column; gap: 16px; }
+  .help-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .help-card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--text); }
+  .help-card h3 { margin: 16px 0 6px; font-size: 0.95rem; color: var(--text); }
+  .help-desc { font-size: 14px; color: var(--text2); margin: 0 0 12px; }
+  .help-desc code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .help-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .help-table th, .help-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
+  .help-table th { color: var(--text2); font-weight: 600; font-size: 13px; }
+  .help-table td { color: var(--text); }
+  .help-table code { background: var(--surface2); padding: 2px 5px; border-radius: 3px; font-family: 'Menlo','Consolas',monospace; font-size: 13px; }
+  .help-example { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'Menlo','Consolas',monospace; font-size: 13px; line-height: 1.5; white-space: pre; overflow-x: auto; color: var(--text); }
+
+  .cond-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+  .field-error { border-color: var(--primary) !important; }
+  .err-msg { color: var(--primary); font-size: 12px; margin-top: 2px; display: block; }
 </style>
+
