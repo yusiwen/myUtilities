@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	bolt "github.com/coreos/bbolt"
+	bolt "go.etcd.io/bbolt"
 )
 
 // Event represents a boot or shutdown notification event.

@@ -4,7 +4,6 @@ go 1.26.0
 
 require (
 	github.com/alecthomas/kong v1.12.1
-	github.com/coreos/bbolt v1.3.1-coreos.6.0.20180223184059-4f5275f4ebbf
 	github.com/elastic/go-elasticsearch/v8 v8.19.5
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -19,6 +18,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tjfoc/gmsm v1.4.1
+	go.etcd.io/bbolt v1.3.11
 	golang.org/x/term v0.39.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.2
