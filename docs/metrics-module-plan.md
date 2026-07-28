@@ -518,6 +518,8 @@ github.com/shirou/gopsutil/v4     → OS 指标采集
 | 6 | `metrics/options.go` 新增 `QueryOptions` + `query` 子命令 | ✅ |
 | 7 | `metrics/command.go` 新增 `query.Run()`（table/json/csv 三格式输出） | ✅ |
 | 8 | Agent 推送重试 + 本地缓存策略实现 | ✅ |
+| 9 | Debug 日志（`--debug` flag + `debug_log` 配置 + 关键路径日志） | ✅ |
+| 10 | `query` 和 `compact` 改为通过 HTTP API 与 server 交互（不再读本地 bbolt） | ✅ |
 
 ### 已创建的文件清单
 

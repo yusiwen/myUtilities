@@ -13,6 +13,7 @@ type MetricsConfig struct {
 	Hostname  string `json:"hostname,omitempty"`
 	ServerURL string `json:"server_url,omitempty"`
 	DataDir   string `json:"data_dir,omitempty"`
+	DebugLog  bool   `json:"debug_log,omitempty"`
 }
 
 func defaultConfigPath() (string, error) {

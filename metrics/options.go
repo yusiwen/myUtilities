@@ -13,6 +13,7 @@ type ServeOptions struct {
 	Agent     bool   `help:"Also run agent locally."`
 	Interval  string `help:"Collect interval (only with --agent)." default:"30s"`
 	Hostname  string `help:"Override hostname for tags."`
+	Debug     bool   `help:"Enable debug logging."`
 }
 
 type AgentOptions struct {
@@ -20,14 +21,17 @@ type AgentOptions struct {
 	Interval  string `help:"Collect interval." default:"30s"`
 	Hostname  string `help:"Override hostname for tags."`
 	Retention string `help:"Local data retention (when no server)." default:"0"`
+	Debug     bool   `help:"Enable debug logging."`
 }
 
 type CompactOptions struct {
+	Server    string `help:"Metrics server URL." default:"http://localhost:8096"`
 	Retention string `help:"Data retention (e.g. 30d, 7d, 0=forever)." default:"30d"`
 }
 
 type QueryOptions struct {
 	Name   string `arg:"" optional:"" help:"Metric name to query."`
+	Server string `help:"Metrics server URL." default:"http://localhost:8096"`
 	Last   string `help:"Time range shortcut (e.g. 1h, 30m)." default:"10m"`
 	From   string `help:"Start time (RFC3339)."`
 	To     string `help:"End time (RFC3339)." default:"now"`
