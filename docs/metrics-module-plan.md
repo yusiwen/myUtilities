@@ -520,6 +520,7 @@ github.com/shirou/gopsutil/v4     → OS 指标采集
 | 8 | Agent 推送重试 + 本地缓存策略实现 | ✅ |
 | 9 | Debug 日志（`--debug` flag + `debug_log` 配置 + 关键路径日志） | ✅ |
 | 10 | `query` 和 `compact` 改为通过 HTTP API 与 server 交互（不再读本地 bbolt） | ✅ |
+| 11 | TSDB `Query` 修复：tags 为空时扫描 metric 下所有 tag 组合（而非只查无标签数据） | ✅ |
 
 ### 已创建的文件清单
 

@@ -65,11 +65,15 @@ func (d *DB) WriteBatch(metrics []Metric) error {
 }
 
 func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limit int) ([]Metric, error) {
-	hash := tagsHash(tags)
-	prefix := makeSeriesPrefix([]byte(name), hash)
+	var prefix []byte
+	if len(tags) > 0 {
+		prefix = makeSeriesPrefix([]byte(name), tagsHash(tags))
+	} else {
+		prefix = makeNamePrefix([]byte(name))
+	}
 
-	fromBE := makeTimestampBytes(from.UnixNano())
-	toBE := makeTimestampBytes(to.UnixNano())
+	fromNano := from.UnixNano()
+	toNano := to.UnixNano()
 
 	var result []Metric
 	var current *Metric
@@ -78,11 +82,14 @@ func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limi
 		b := tx.Bucket(seriesBucket)
 		c := b.Cursor()
 
-		seekKey := append(prefix[:len(prefix):len(prefix)], fromBE...)
-		for k, v := c.Seek(seekKey); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
-			ts := k[len(k)-8:]
+		totalPoints := 0
+		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
+			ts := int64(binary.BigEndian.Uint64(k[len(k)-8:]))
 
-			if bytes.Compare(ts, toBE) > 0 {
+			if ts < fromNano {
+				continue
+			}
+			if ts > toNano {
 				break
 			}
 
@@ -95,11 +102,12 @@ func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limi
 			}
 
 			current.Points = append(current.Points, DataPoint{
-				Timestamp: int64(binary.BigEndian.Uint64(ts)),
+				Timestamp: ts,
 				Value:     math.Float64frombits(binary.LittleEndian.Uint64(v)),
 			})
 
-			if limit > 0 && len(current.Points) >= limit {
+			totalPoints++
+			if limit > 0 && totalPoints >= limit {
 				break
 			}
 		}
@@ -113,6 +121,13 @@ func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limi
 		result = append(result, *current)
 	}
 	return result, nil
+}
+
+func makeNamePrefix(name []byte) []byte {
+	key := make([]byte, len(name)+1)
+	copy(key, name)
+	key[len(name)] = 0
+	return key
 }
 
 func (d *DB) ListMetrics() ([]string, error) {
