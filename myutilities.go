@@ -13,6 +13,7 @@ import (
 	"github.com/yusiwen/myUtilities/installer"
 	"github.com/yusiwen/myUtilities/jarinfo"
 	"github.com/yusiwen/myUtilities/k8s"
+	"github.com/yusiwen/myUtilities/metrics"
 	"github.com/yusiwen/myUtilities/misc"
 	"github.com/yusiwen/myUtilities/mock"
 	"github.com/yusiwen/myUtilities/network"
@@ -47,5 +48,6 @@ type MyUtilities struct {
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Ask        ask.Options                 `cmd:"" name:"ask" help:"Ask LLM questions."`
 	Budget     budget.Options              `cmd:"" name:"budget" help:"Query LLM API usage and balance."`
+	Metrics    metrics.Options             `cmd:"" name:"metrics" help:"Time-series metrics collection and querying."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }
