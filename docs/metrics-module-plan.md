@@ -480,7 +480,156 @@ github.com/shirou/gopsutil/v4     → OS 指标采集
 
 ---
 
-## 11. 未来可扩展（当前版本不做）
+## 11. 采集模型设计
+
+### 11.1 三种采集模型对比
+
+#### HTTP Push（当前 agent 模式）
+
+```
+Agent（定时 tick）
+  └── POST /api/metrics/write ──→ Server（接收并写入 bbolt）
+```
+
+| 特性 | 说明 |
+|------|------|
+| Agent 端口 | 不需要暴露端口 |
+| 数据流 | Agent → Server（单向） |
+| 数据缓存 | Agent 本地 bbolt（失败时回退） |
+| 离线处理 | Agent 带重试，最终回退本地缓存 |
+| Server 压力 | 被动接收，不控制采集节奏 |
+
+#### HTTP Pull（Prometheus / node-exporter 风格）
+
+```
+Server（定时 tick）
+  └── GET http://agent:9100/metrics ──→ Agent（实时采集并返回）
+                                            └─ 写入 Server bbolt
+```
+
+| 特性 | 说明 |
+|------|------|
+| Agent 端口 | **需要暴露端口**，或被 Server 可达 |
+| 数据流 | Server → Agent（Server 拉取） |
+| 数据缓存 | Agent 不需要任何持久化存储 |
+| 离线处理 | Server 感知拉取失败，跳过该 tick |
+| Server 压力 | 主动控制采集节奏，管理所有 agent 定时器 |
+
+#### WebSocket Pull（折中方案，推荐未来方向）
+
+```
+Agent（主动发起 WS 连接）
+  │  ws://server:8096/ws/metrics
+  │
+Server ←── 连接建立 ──→ Agent（零端口暴露）
+  │                       │
+  │  ──{"type":"collect"}──►（Server 控制节奏）
+  │  ◄──{"type":"metrics"}──（Agent 实时采集并返回）
+  │                       │
+  │  ──{"type":"collect"}──►
+  │  ◄──{"type":"metrics"}──
+```
+
+| 特性 | 说明 |
+|------|------|
+| Agent 端口 | 不需要暴露任何端口 |
+| 数据流 | Agent 发起 WS 连接，Server 在 WS 上发指令拉取（逻辑上是 Pull） |
+| 数据缓存 | Agent 不需要本地持久化 |
+| 离线处理 | Agent 指数退避重连，Server 断开即标记 offline |
+
+### 11.2 WebSocket Pull 详细设计
+
+#### WS 协议消息
+
+```
+Agent → Server（第一条消息，注册）：
+{"type": "hello", "hostname": "agent-a", "capabilities": ["os"]}
+
+Server → Agent：
+{"type": "collect"}                         // 要求采集一次
+{"type": "collect_interval", "interval": 30} // 动态设置采集间隔（秒）
+
+Agent → Server：
+{"type": "metrics", "data": [
+    {"metric":"cpu.used.percent","tags":{"host":"agent-a"},"value":45.2,"time":1704067200000000000}
+]}
+
+Agent → Server：
+{"type": "error", "message": "采集失败原因"}
+```
+
+#### Agent 断线重连
+
+指数退避 + jitter，上限 60s：
+
+```
+attempt 1 → 立即连接
+  失败 → 等 1s（+随机 0~500ms）
+attempt 2 → 重连
+  失败 → 等 2s（+随机 0~500ms）
+attempt 3 → 重连
+  失败 → 等 4s（+随机 0~500ms）
+  ...
+attempt N → 重连
+  失败 → 等 60s（上限）
+```
+
+#### 心跳保活
+
+```
+Server → Agent: WebSocket Ping（每 30s）
+Agent  → Server: WebSocket Pong
+```
+
+连续 N 次（如 3 次）Pong 超时 → Server 断开连接，标记 agent offline。
+
+#### Server 端 Agent 管理
+
+```
+AgentManager
+  ├── agents: map[hostname]*AgentConn
+  │     ├── conn    *websocket.Conn
+  │     ├── caps    []string           // capabilities
+  │     ├── ticker  *time.Ticker       // 按 interval 发 collect
+  │     └── lastSeen time.Time
+  ├── Register(conn, hostname, caps)
+  ├── Unregister(hostname)
+  └── List() → []AgentInfo
+```
+
+每个 agent 连接后，server 为其创建一个定时器，按 interval 发 `collect` 指令。agent 返回 `metrics` 后，server 写入本地 bbolt。
+
+#### 数据完整性策略
+
+断连期间的数据处理选项：
+
+| 方案 | 说明 | 复杂度 |
+|------|------|--------|
+| **丢弃**（推荐） | 网络抖动丢几个 tick 无所谓，metrics 是采样数据 | 最低 |
+| Agent 内存缓存 | 环形缓冲区保留最近 N 个 tick，重连后补发 | 中 |
+| Agent 本地 bbolt | 和当前 push 一样写本地文件，重连后同步 | 高 |
+
+#### WebSocket Pull 的优缺点
+
+| 优点 | 缺点 |
+|------|------|
+| Agent 零端口暴露 | Server 必须维护所有 agent 的连接 goroutine + 定时器 |
+| Server 控制采集节奏 | Server 重启后所有 agent 需要全部重新连入 |
+| 天然离线检测（WS 断开即知） | 调试不便（不能直接 `curl` 看数据） |
+| 适合动态环境（NAT/防火墙） | WS 有帧控制/心跳/编解码，比 HTTP GET 复杂 |
+| 网络层面更高效（无 HTTP 反复握手） | 代理/负载均衡需要额外配置长连接超时 |
+
+### 11.3 路线图
+
+```
+v1 (当前)    → HTTP Push（agent 定时推送到 server，本地 bbolt 缓存）
+v2（未来）   → WebSocket Pull（agent 直连 server，server 控制采集节奏）
+v3（未来）   → WebSocket Agent 嵌入 server（`mu metrics serve --agent` 直接 WS 接入）
+```
+
+---
+
+## 12. 未来可扩展（当前版本不做）
 
 | 功能 | 时机 |
 |------|------|
@@ -492,7 +641,7 @@ github.com/shirou/gopsutil/v4     → OS 指标采集
 
 ---
 
-## 12. 名词约定
+## 13. 名词约定
 
 | 术语 | 含义 |
 |------|------|
@@ -506,7 +655,7 @@ github.com/shirou/gopsutil/v4     → OS 指标采集
 
 ---
 
-## 13. 实现进度
+## 14. 实现进度
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
