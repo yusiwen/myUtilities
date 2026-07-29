@@ -541,22 +541,61 @@ Server ←── 连接建立 ──→ Agent（零端口暴露）
 
 #### WS 协议消息
 
+**请求/应答同步语义：** WS 本身是全双工异步的，但 Server 端保证串行化——**Server 在收到上一个 `collect` 的 `metrics` 响应之前，不会发送下一个 `collect`**。每条消息带 `id` 字段，用于关联请求和响应，以及检测乱序和超时。
+
+所有整型数值均以 JSON number 表示，时间戳为 UnixNano。
+
 ```
 Agent → Server（第一条消息，注册）：
-{"type": "hello", "hostname": "agent-a", "capabilities": ["os"]}
+{
+  "type": "hello",
+  "hostname": "agent-a",
+  "capabilities": ["os"]       // 本 agent 支持的能力列表
+}
 
 Server → Agent：
-{"type": "collect"}                         // 要求采集一次
-{"type": "collect_interval", "interval": 30} // 动态设置采集间隔（秒）
+{
+  "type": "collect",
+  "id": 1                      // 递增的请求 ID
+}
+{
+  "type": "collect_interval",
+  "interval": 30               // 动态设置采集间隔（秒）
+}
 
-Agent → Server：
-{"type": "metrics", "data": [
+Agent → Server（collect 应答）：
+{
+  "type": "metrics",
+  "id": 1,                     // 对应 collect 的 id
+  "data": [
     {"metric":"cpu.used.percent","tags":{"host":"agent-a"},"value":45.2,"time":1704067200000000000}
-]}
+  ]
+}
 
-Agent → Server：
-{"type": "error", "message": "采集失败原因"}
+Agent → Server（错误报告）：
+{
+  "type": "error",
+  "id": 1,                     // 对应 collect 的 id，非 collect 场景可为 0
+  "message": "采集失败原因"
+}
 ```
+
+**交互时序示例：**
+
+```
+Server                              Agent
+  │                                   │
+  │──{"type":"collect","id":1}───────►│
+  │                                   │ (Agent 采集 ~50ms)
+  │◄──{"type":"metrics","id":1,       │
+  │        "data":[...]}              │
+  │                                   │
+  │──{"type":"collect","id":2}───────►│
+  │◄──{"type":"metrics","id":2,       │
+  │        "data":[...]}              │
+```
+
+Server 发送 `collect` 后启动超时定时器（如 10s）。超时未收到对应 `id` 的 `metrics`，Server 关闭该 agent 连接，等待 agent 重连。
 
 #### Agent 断线重连
 
