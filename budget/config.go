@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"github.com/yusiwen/myUtilities/core/llm"
 )
 
 type BudgetConfig struct {
@@ -70,19 +68,10 @@ func resolveAPIKey(provider string, flagKey string, cfg *BudgetConfig) (string, 
 		}
 	}
 
-	for _, app := range []string{"ask", "commit"} {
-		llmCfg, err := llm.LoadConfig(app)
-		if err == nil && llmCfg.APIKey != "" {
-			return llmCfg.APIKey, nil
-		}
-	}
-
 	return "", fmt.Errorf(
 		"no API key configured for %s\nSet it via:\n"+
 			"  - --key flag\n"+
-			"  - ~/.config/mu/budget-config.json → providers.%s.api_key\n"+
-			"  - ~/.config/mu/ask-config.json → api_key\n"+
-			"  - ~/.config/mu/commit-config.json → api_key",
+			"  - ~/.config/mu/budget-config.json → providers.%s.api_key",
 		provider, provider,
 	)
 }

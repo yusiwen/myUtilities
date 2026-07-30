@@ -31,6 +31,31 @@ func CheckPreflight() error {
 	return nil
 }
 
+func GetDiff(args []string) (*DiffResult, error) {
+	diffArgs := append([]string{"diff"}, args...)
+	diffOut, err := runGit(diffArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	statArgs := append([]string{"diff"}, args...)
+	statArgs = append(statArgs, "--stat")
+	statOut, err := runGitColored(statArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	if strings.TrimSpace(diffOut) == "" {
+		return nil, fmt.Errorf("no changes to review")
+	}
+
+	return &DiffResult{
+		Stat:   statOut,
+		Diff:   Truncate(diffOut, MaxDiffLength),
+		RawLen: len([]rune(diffOut)),
+	}, nil
+}
+
 func GetStagedDiff() (*DiffResult, error) {
 	diffOut, err := runGit("diff", "--staged")
 	if err != nil {

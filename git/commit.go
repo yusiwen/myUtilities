@@ -11,7 +11,6 @@ import (
 
 	"github.com/morikuni/aec"
 	coregit "github.com/yusiwen/myUtilities/core/git"
-	"github.com/yusiwen/myUtilities/core/llm"
 	"github.com/yusiwen/myUtilities/core/openai"
 )
 
@@ -76,67 +75,40 @@ type CommitOptions struct {
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
 }
 
-type SetOptions struct {
-	BaseURL string `help:"Base URL of the AI service."`
-	Model   string `help:"Model name."`
-	APIKey  string `help:"API key for the AI service."`
-	Path    string `name:"config" help:"Config file path. Default: ~/.config/mu/commit-config.json"`
-}
-
-func (o *SetOptions) Run() error {
-	cfg, err := loadConfig()
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	if o.BaseURL == "" && o.Model == "" && o.APIKey == "" {
-		return fmt.Errorf("at least one of --base-url, --model, --api-key is required")
-	}
-
-	if o.BaseURL != "" {
-		cfg.BaseURL = o.BaseURL
-	}
-	if o.Model != "" {
-		cfg.Model = o.Model
-	}
-	if o.APIKey != "" {
-		cfg.APIKey = o.APIKey
-	}
-
-	path := o.Path
-	if path == "" {
-		path = "~/.config/mu/commit-config.json"
-	}
-
-	if err := llm.SaveConfigToPath(path, cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Config saved to %s\n", path)
-	return nil
-}
-
 func (o *CommitOptions) Run() error {
-	cfg, err := loadConfig()
+	gc, err := LoadGitConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.Model != "" {
-		cfg.Model = o.Model
-	}
-	if o.APIKey != "" {
-		cfg.APIKey = o.APIKey
-	}
-	if o.BaseURL != "" {
-		cfg.BaseURL = o.BaseURL
+	moduleCfg, err := GetModuleConfig(gc, "commit")
+	if err != nil {
+		return err
 	}
 
-	if cfg.APIKey == "" {
+	provider, err := ResolveProvider(gc, moduleCfg.Provider)
+	if err != nil {
+		return err
+	}
+
+	baseURL := provider.BaseURL
+	apiKey := provider.APIKey
+	model := provider.Model
+	if o.BaseURL != "" {
+		baseURL = o.BaseURL
+	}
+	if o.APIKey != "" {
+		apiKey = o.APIKey
+	}
+	if o.Model != "" {
+		model = o.Model
+	}
+
+	if apiKey == "" {
 		return fmt.Errorf("API key is required. Set it via:\n" +
 			"  - OPENAI_API_KEY environment variable\n" +
 			"  - --api-key flag\n" +
-			"  - ~/.config/mu/commit-config.json config file")
+			"  - 'mu set git provider add --name <name> --api-key <key> ...'")
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {
@@ -158,14 +130,19 @@ func (o *CommitOptions) Run() error {
 		}
 	}
 
+	lang := o.Lang
+	if lang == "" {
+		lang = moduleCfg.Lang
+	}
+
 	fmt.Fprintf(os.Stderr, "%s%s%s\n",
 		faint("Generating commit message from diff ("),
 		bright(fmt.Sprintf("%d", diff.RawLen)),
 		faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
-	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
+	client := openai.NewClient(baseURL, apiKey, model)
 
-	sysPrompt := buildSystemPrompt(o.Lang)
+	sysPrompt := buildSystemPrompt(lang)
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
 
 	if o.Verbose {
