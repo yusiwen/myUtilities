@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
-	"golang.org/x/term"
+	"github.com/yusiwen/myUtilities/core/term"
+	xterm "golang.org/x/term"
 )
 
 const reviewAgentPrompt = `You are a senior software engineer conducting a thorough code review on a git diff.
@@ -42,7 +42,7 @@ Well-structured changes, good naming, proper error handling, effective patterns.
 
 Be specific — reference code snippets with line numbers when discussing issues.`
 
-type reviewAgent struct {
+type ReviewAgent struct {
 	client         *openai.Client
 	messages       []openai.Message
 	tools          []openai.ToolDef
@@ -53,13 +53,19 @@ type reviewAgent struct {
 	spinner        *spinner.Spinner
 }
 
-func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []string, lang, context, repoName, branchName, commitHash string, maxTurns int, verbose bool) (*reviewAgent, error) {
-	nameStatus, _ := coregit.GetNameStatus(diffArgs)
+type AgentResult struct {
+	Content    string
+	Turns      int
+	MaxReached bool
+}
+
+func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, lang, context, repoName, branchName, commitHash string, maxTurns int, verbose bool) (*ReviewAgent, error) {
+	nameStatus, _ := GetNameStatus(diffArgs)
 
 	var initMsg strings.Builder
 	initMsg.WriteString(fmt.Sprintf("## Changes Overview\n\nProject: %s\nBranch: %s\nCommit: %s\n\n", repoName, branchName, commitHash))
 	initMsg.WriteString("### Diff Stat\n\n```\n")
-	initMsg.WriteString(stripANSI(diff.Stat))
+	initMsg.WriteString(term.StripANSI(diff.Stat))
 	initMsg.WriteString("\n```\n\n")
 
 	if nameStatus != "" {
@@ -68,7 +74,7 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 		initMsg.WriteString("\n```\n\n")
 	}
 
-	untracked := coregit.GetUntrackedFiles()
+	untracked := GetUntrackedFiles()
 	if len(untracked) > 0 {
 		initMsg.WriteString("### Untracked Files\n\n")
 		initMsg.WriteString("The following files are new (not yet tracked by git). ")
@@ -180,14 +186,14 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 	}
 
 	var spin *spinner.Spinner
-	if term.IsTerminal(int(os.Stderr.Fd())) {
+	if xterm.IsTerminal(int(os.Stderr.Fd())) {
 		spin = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 		spin.Color("fgHiWhite")
 		spin.Suffix = ""
 		spin.Writer = os.Stderr
 	}
 
-	return &reviewAgent{
+	return &ReviewAgent{
 		client:         client,
 		messages:       messages,
 		tools:          tools,
@@ -199,26 +205,26 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 	}, nil
 }
 
-func (a *reviewAgent) progressf(format string, args ...any) {
+func (a *ReviewAgent) progressf(format string, args ...any) {
 	a.stopSpinner()
 	msg := fmt.Sprintf(format, args...)
-	fmt.Fprintln(a.progressWriter, faint(msg))
+	fmt.Fprintln(a.progressWriter, term.Faint(msg))
 }
 
-func (a *reviewAgent) startSpinner() {
+func (a *ReviewAgent) startSpinner() {
 	if a.spinner != nil {
 		a.spinner.Start()
 	}
 }
 
-func (a *reviewAgent) stopSpinner() {
+func (a *ReviewAgent) stopSpinner() {
 	if a.spinner != nil {
 		a.spinner.Stop()
 	}
 }
 
-func (a *reviewAgent) run() (string, int, error) {
-	statLine := coregit.PlainDiffStat(a.diffArgs)
+func (a *ReviewAgent) Run() (*AgentResult, error) {
+	statLine := PlainDiffStat(a.diffArgs)
 	if statLine == "" {
 		statLine = "no changes"
 	}
@@ -228,14 +234,14 @@ func (a *reviewAgent) run() (string, int, error) {
 	for turn := 1; turn <= a.maxTurns; turn++ {
 		resp, err := a.client.ChatWithTools(a.messages, a.tools)
 		if err != nil {
-			return "", 0, fmt.Errorf("agent error at turn %d: %w", turn, err)
+			return nil, fmt.Errorf("agent error at turn %d: %w", turn, err)
 		}
 
 		if len(resp.ToolCalls) == 0 {
 			a.progressf("Step %d:", turn)
 			a.progressf("  Producing final review (%d chars)", len(resp.Content))
 			a.progressf("Complete: %d rounds", turn)
-			return resp.Content, turn, nil
+			return &AgentResult{Content: resp.Content, Turns: turn}, nil
 		}
 
 		asstMsg := openai.Message{
@@ -259,7 +265,6 @@ func (a *reviewAgent) run() (string, int, error) {
 		a.startSpinner()
 	}
 
-	// Max turns reached — force finalize
 	a.stopSpinner()
 	a.messages = append(a.messages, openai.Message{
 		Role:    "system",
@@ -268,19 +273,23 @@ func (a *reviewAgent) run() (string, int, error) {
 
 	resp, err := a.client.ChatWithTools(a.messages, nil)
 	if err != nil {
-		return "", 0, err
+		return nil, err
 	}
 
 	if resp.Content == "" {
 		a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
-		return "\n\n> ⚠ Review reached maximum turns. Some details may be incomplete.\n", a.maxTurns, nil
+		return &AgentResult{Content: "\n\n> ⚠ Review reached maximum turns. Some details may be incomplete.\n", Turns: a.maxTurns, MaxReached: true}, nil
 	}
 
 	a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
-	return resp.Content + "\n\n> ⚠ Review reached maximum turns (" + fmt.Sprintf("%d", a.maxTurns) + "). Some details may be incomplete.\n", a.maxTurns, nil
+	return &AgentResult{
+		Content:    resp.Content + "\n\n> ⚠ Review reached maximum turns (" + fmt.Sprintf("%d", a.maxTurns) + "). Some details may be incomplete.\n",
+		Turns:      a.maxTurns,
+		MaxReached: true,
+	}, nil
 }
 
-func (a *reviewAgent) executeTool(tc openai.ToolCall) string {
+func (a *ReviewAgent) executeTool(tc openai.ToolCall) string {
 	switch tc.Function.Name {
 	case "read_file":
 		var args struct {
@@ -385,9 +394,9 @@ func toolReadFile(path string, startLine, endLine int) string {
 	return sb.String()
 }
 
-func (a *reviewAgent) toolReadDiff(path string) string {
+func (a *ReviewAgent) toolReadDiff(path string) string {
 	if path != "" {
-		untracked := coregit.GetUntrackedFiles()
+		untracked := GetUntrackedFiles()
 		for _, f := range untracked {
 			if f == path {
 				return fmt.Sprintf("error: %q is an untracked file (new and not yet tracked by git). Use read_file to view its content.", path)
@@ -398,7 +407,7 @@ func (a *reviewAgent) toolReadDiff(path string) string {
 	if path != "" {
 		args = append(args, "--", path)
 	}
-	result, err := coregit.GetDiff(args)
+	result, err := GetDiff(args)
 	if err != nil {
 		return fmt.Sprintf("error: %s", err)
 	}

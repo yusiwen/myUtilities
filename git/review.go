@@ -13,7 +13,8 @@ import (
 	"github.com/charmbracelet/glamour"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
-	"golang.org/x/term"
+	"github.com/yusiwen/myUtilities/core/term"
+	xterm "golang.org/x/term"
 )
 
 const reviewSystemPrompt = `You are a senior software engineer conducting a thorough code review. Analyze the provided git diff and produce a structured markdown code review.
@@ -49,17 +50,17 @@ func (o *ReviewOptions) Run() error {
 		return cmd.Run()
 	}
 
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	moduleCfg, err := GetModuleConfig(gc, "review")
+	moduleCfg, err := coregit.GetModuleConfig(gc, "review")
 	if err != nil {
 		return err
 	}
 
-	provider, err := ResolveProvider(gc, moduleCfg.Provider)
+	provider, err := coregit.ResolveProvider(gc, moduleCfg.Provider)
 	if err != nil {
 		return err
 	}
@@ -136,12 +137,12 @@ func (o *ReviewOptions) Run() error {
 
 	maxTurns := o.MaxTurns
 	start := time.Now()
-	agent, err := newReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose)
+	agent, err := coregit.NewReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose)
 	if err != nil {
 		return err
 	}
 
-	reviewContent, _, err := agent.run()
+	agentResult, err := agent.Run()
 	elapsed := time.Since(start)
 
 	if err != nil {
@@ -152,8 +153,6 @@ func (o *ReviewOptions) Run() error {
 		fmt.Fprintf(os.Stderr, "─── Agent completed in %s ───\n", elapsed)
 	}
 
-	result := reviewContent
-
 	timestamp := time.Now()
 	base := o.Base
 	target := o.Target
@@ -162,7 +161,7 @@ func (o *ReviewOptions) Run() error {
 	}
 
 	frontMatter := buildFrontMatter(repoName, branchName, commitHash, base, target, o.Staged, o.Paths, lang, "agent", diff, o.Context, timestamp, diffArgs)
-	saveContent := frontMatter + "\n" + result
+	saveContent := frontMatter + "\n" + agentResult.Content
 
 	reviewsDir := moduleCfg.ReviewsDirPath()
 	if err := os.MkdirAll(reviewsDir, 0700); err != nil {
@@ -180,12 +179,12 @@ func (o *ReviewOptions) Run() error {
 	}
 
 	fmt.Fprintf(os.Stderr, "%s%s%s\n",
-		faint("Review saved to "),
-		bright(savePath),
-		faint(""))
+		term.Faint("Review saved to "),
+		term.Bright(savePath),
+		term.Faint(""))
 
-	out := result
-	if term.IsTerminal(int(os.Stdout.Fd())) {
+	out := agentResult.Content
+	if xterm.IsTerminal(int(os.Stdout.Fd())) {
 		r, err := glamour.NewTermRenderer(glamour.WithAutoStyle())
 		if err == nil {
 			rendered, err := r.Render(out)
@@ -237,12 +236,12 @@ func buildFrontMatter(project, branch, commit, base, target string, staged bool,
 /* ─── mu git review list ─── */
 
 func (o *ReviewListCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	moduleCfg, err := GetModuleConfig(gc, "review")
+	moduleCfg, err := coregit.GetModuleConfig(gc, "review")
 	if err != nil {
 		return err
 	}
@@ -365,11 +364,11 @@ func buildReviewUserPrompt(strategy string, diff *coregit.DiffResult, userContex
 	case "summary":
 		sb.WriteString("Since the diff is large, review the following summary and stat, focusing on the most impactful changes:\n\n")
 		sb.WriteString("```\n")
-		sb.WriteString(stripANSI(diff.Stat))
+		sb.WriteString(term.StripANSI(diff.Stat))
 		sb.WriteString("\n```")
 	case "medium":
 		sb.WriteString("Diff stat:\n\n```\n")
-		sb.WriteString(stripANSI(diff.Stat))
+		sb.WriteString(term.StripANSI(diff.Stat))
 		sb.WriteString("\n```\n\n")
 		sb.WriteString("Partial diff (truncated):\n\n```diff\n")
 		sb.WriteString(coregit.Truncate(diff.Diff, 3000))
@@ -384,7 +383,7 @@ func buildReviewUserPrompt(strategy string, diff *coregit.DiffResult, userContex
 }
 
 func pagedOutput(content string) {
-	if !term.IsTerminal(int(os.Stdout.Fd())) {
+	if !xterm.IsTerminal(int(os.Stdout.Fd())) {
 		fmt.Print(content)
 		return
 	}

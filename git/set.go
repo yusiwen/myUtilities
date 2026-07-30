@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/core/config"
+	coregit "github.com/yusiwen/myUtilities/core/git"
 )
 
 type gitSetter struct{}
@@ -56,7 +57,7 @@ type ProviderAddCmd struct {
 }
 
 func (o *ProviderAddCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return err
 	}
@@ -67,13 +68,13 @@ func (o *ProviderAddCmd) Run() error {
 		}
 	}
 
-	gc.Providers = append(gc.Providers, Provider{
+	gc.Providers = append(gc.Providers, coregit.Provider{
 		Name:    o.Name,
 		BaseURL: o.BaseURL,
 		APIKey:  o.APIKey,
 		Model:   o.Model,
 	})
-	return SaveGitConfig(gc)
+	return coregit.SaveGitConfig(gc)
 }
 
 type ProviderRmCmd struct {
@@ -81,7 +82,7 @@ type ProviderRmCmd struct {
 }
 
 func (o *ProviderRmCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return err
 	}
@@ -97,20 +98,20 @@ func (o *ProviderRmCmd) Run() error {
 		return fmt.Errorf("provider %q not found", o.Name)
 	}
 
-	for name, mc := range map[string]ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
+	for name, mc := range map[string]coregit.ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
 		if mc.Provider == o.Name {
 			return fmt.Errorf("cannot remove provider %q: module %q is using it", o.Name, name)
 		}
 	}
 
 	gc.Providers = append(gc.Providers[:idx], gc.Providers[idx+1:]...)
-	return SaveGitConfig(gc)
+	return coregit.SaveGitConfig(gc)
 }
 
 type ProviderListCmd struct{}
 
 func (o *ProviderListCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return err
 	}
@@ -129,7 +130,7 @@ func (o *ProviderListCmd) Run() error {
 	w.Flush()
 
 	fmt.Fprintln(os.Stderr, "\nModule references:")
-	for name, mc := range map[string]ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
+	for name, mc := range map[string]coregit.ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
 		if mc.Provider != "" {
 			fmt.Fprintf(os.Stderr, "  %s → %s (lang: %s)\n", name, mc.Provider, mc.Lang)
 		}
@@ -149,12 +150,12 @@ func validLang(lang string) bool {
 }
 
 func (o *CommitModuleCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return err
 	}
 	if o.Provider != "" {
-		if _, err := ResolveProvider(gc, o.Provider); err != nil {
+		if _, err := coregit.ResolveProvider(gc, o.Provider); err != nil {
 			return err
 		}
 		gc.Commit.Provider = o.Provider
@@ -165,7 +166,7 @@ func (o *CommitModuleCmd) Run() error {
 		}
 		gc.Commit.Lang = o.Lang
 	}
-	return SaveGitConfig(gc)
+	return coregit.SaveGitConfig(gc)
 }
 
 type ReviewModuleCmd struct {
@@ -175,12 +176,12 @@ type ReviewModuleCmd struct {
 }
 
 func (o *ReviewModuleCmd) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return err
 	}
 	if o.Provider != "" {
-		if _, err := ResolveProvider(gc, o.Provider); err != nil {
+		if _, err := coregit.ResolveProvider(gc, o.Provider); err != nil {
 			return err
 		}
 		gc.Review.Provider = o.Provider
@@ -194,5 +195,5 @@ func (o *ReviewModuleCmd) Run() error {
 	if o.ReviewsDir != "" {
 		gc.Review.ReviewsDir = o.ReviewsDir
 	}
-	return SaveGitConfig(gc)
+	return coregit.SaveGitConfig(gc)
 }

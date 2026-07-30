@@ -86,7 +86,6 @@ func LoadGitConfig() (*GitConfig, error) {
 		if os.IsNotExist(err) {
 			gc, migrErr := migrateFromOldConfig()
 			if migrErr != nil {
-				// Return empty config if migration fails (e.g. no old config either)
 				return &GitConfig{}, nil
 			}
 			return gc, nil

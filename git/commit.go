@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"time"
 
-	"github.com/morikuni/aec"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
+	"github.com/yusiwen/myUtilities/core/term"
 )
 
 const baseSystemPrompt = `You are a commit message generator. Generate a conventional commit message from the git diff provided.
@@ -24,34 +23,6 @@ Rules:
 - Each bullet point should be concise, under 80 characters
 - If the diff involves many files, use a higher-level summary
 - Do not wrap the message in quotes, backticks, or code blocks`
-
-var noColor bool
-
-func init() {
-	if os.Getenv("NO_COLOR") != "" {
-		noColor = true
-	}
-}
-
-func faint(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.Faint)
-}
-
-func bright(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.WhiteF)
-}
-
-var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-
-func stripANSI(s string) string {
-	return ansiRE.ReplaceAllString(s, "")
-}
 
 func buildSystemPrompt(lang string) string {
 	prompt := baseSystemPrompt
@@ -76,17 +47,17 @@ type CommitOptions struct {
 }
 
 func (o *CommitOptions) Run() error {
-	gc, err := LoadGitConfig()
+	gc, err := coregit.LoadGitConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	moduleCfg, err := GetModuleConfig(gc, "commit")
+	moduleCfg, err := coregit.GetModuleConfig(gc, "commit")
 	if err != nil {
 		return err
 	}
 
-	provider, err := ResolveProvider(gc, moduleCfg.Provider)
+	provider, err := coregit.ResolveProvider(gc, moduleCfg.Provider)
 	if err != nil {
 		return err
 	}
@@ -136,9 +107,9 @@ func (o *CommitOptions) Run() error {
 	}
 
 	fmt.Fprintf(os.Stderr, "%s%s%s\n",
-		faint("Generating commit message from diff ("),
-		bright(fmt.Sprintf("%d", diff.RawLen)),
-		faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
+		term.Faint("Generating commit message from diff ("),
+		term.Bright(fmt.Sprintf("%d", diff.RawLen)),
+		term.Faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
 	client := openai.NewClient(baseURL, apiKey, model)
 
@@ -167,7 +138,7 @@ func (o *CommitOptions) Run() error {
 
 	sep := strings.Repeat("─", 50)
 	fmt.Printf("\n%s\n%s\n%s\n\n%s\n", sep, result.Content, sep, diff.Stat)
-	fmt.Println(bright(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total",
+	fmt.Println(term.Bright(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total",
 		result.PromptTokens, result.CompletionTokens, result.TotalTokens)))
 
 	msg := result.Content
@@ -213,10 +184,10 @@ func resolveStrategy(flag string, diffLen int) string {
 func buildUserPrompt(strategy, diff, stat, nameStatus string) string {
 	switch strategy {
 	case "medium":
-		return "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat) +
+		return "Generate a conventional commit message for this git diff stat:\n\n" + term.StripANSI(stat) +
 			"\nAnd here are the first lines of the diff:\n\n```diff\n" + coregit.Truncate(diff, 3000) + "\n```"
 	case "summary":
-		summary := "Generate a conventional commit message for this git diff stat:\n\n" + stripANSI(stat)
+		summary := "Generate a conventional commit message for this git diff stat:\n\n" + term.StripANSI(stat)
 		if nameStatus != "" {
 			summary += "\nChanged files:\n\n" + nameStatus
 		}
@@ -230,7 +201,7 @@ func confirmAndEdit(msg string) (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 
 	for {
-		fmt.Print(faint("Commit with this message? (y)es / (e)dit / (n)o: "))
+		fmt.Print(term.Faint("Commit with this message? (y)es / (e)dit / (n)o: "))
 		response, err := reader.ReadString('\n')
 		if err != nil {
 			return "", fmt.Errorf("failed to read input: %w", err)
@@ -239,7 +210,7 @@ func confirmAndEdit(msg string) (string, error) {
 
 		switch {
 		case response == "n" || response == "no":
-			fmt.Println(faint("Aborted."))
+			fmt.Println(term.Faint("Aborted."))
 			return "", nil
 		case response == "e" || response == "edit":
 			edited, err := openEditor(msg)
@@ -248,7 +219,7 @@ func confirmAndEdit(msg string) (string, error) {
 			}
 			edited = strings.TrimSpace(edited)
 			if edited == "" {
-				fmt.Println(faint("Aborted: empty message."))
+				fmt.Println(term.Faint("Aborted: empty message."))
 				return "", nil
 			}
 			if edited == msg {
@@ -260,7 +231,7 @@ func confirmAndEdit(msg string) (string, error) {
 		case response == "y" || response == "yes" || response == "":
 			return msg, nil
 		default:
-			fmt.Println(faint("Invalid response."))
+			fmt.Println(term.Faint("Invalid response."))
 		}
 	}
 }
