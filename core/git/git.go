@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -105,4 +106,57 @@ func Truncate(s string, maxLen int) string {
 		return s
 	}
 	return string(runes[:maxLen]) + "\n...(diff truncated)"
+}
+
+func RepoName() string {
+	out, err := runGit("rev-parse", "--show-toplevel")
+	if err != nil {
+		return "unknown"
+	}
+	return filepath.Base(strings.TrimSpace(out))
+}
+
+func CurrentBranch() string {
+	out, err := runGit("rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil {
+		return "HEAD"
+	}
+	return strings.TrimSpace(out)
+}
+
+func ShortCommit() string {
+	out, err := runGit("rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "unknown"
+	}
+	return strings.TrimSpace(out)
+}
+
+func PlainDiffStat(args []string) string {
+	statArgs := append([]string{"diff"}, args...)
+	statArgs = append(statArgs, "--stat")
+	out, err := runGit(statArgs...)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(strings.ReplaceAll(out, "\n", " "))
+}
+
+func DirIsRepo(path string) bool {
+	cmd := exec.Command("git", "rev-parse", "--git-dir")
+	cmd.Dir = path
+	return cmd.Run() == nil
+}
+
+func FileSafeName(s string) string {
+	r := strings.NewReplacer(
+		"/", "-",
+		"\\", "-",
+		" ", "-",
+		"#", "-",
+		":", "-",
+		"\"", "",
+		"'", "",
+	)
+	return r.Replace(s)
 }

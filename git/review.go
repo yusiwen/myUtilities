@@ -3,11 +3,18 @@ package git
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
+	"text/tabwriter"
 	"time"
 
+	"github.com/briandowns/spinner"
+	"github.com/charmbracelet/glamour"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
+	"golang.org/x/term"
 )
 
 const reviewSystemPrompt = `You are a senior software engineer conducting a thorough code review. Analyze the provided git diff and produce a structured markdown code review.
@@ -38,6 +45,11 @@ List any of the following that apply:
 Write in a constructive, professional tone. Be specific — reference code snippets when discussing issues.`
 
 func (o *ReviewOptions) Run() error {
+	if o.List {
+		cmd := &ReviewListCmd{All: o.ListAll}
+		return cmd.Run()
+	}
+
 	gc, err := LoadGitConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -107,6 +119,10 @@ func (o *ReviewOptions) Run() error {
 		lang = moduleCfg.Lang
 	}
 
+	repoName := coregit.RepoName()
+	branchName := coregit.FileSafeName(coregit.CurrentBranch())
+	commitHash := coregit.ShortCommit()
+
 	sysPrompt := buildReviewSystemPrompt(lang)
 	userPrompt := buildReviewUserPrompt(strategy, diff, o.Context)
 
@@ -116,12 +132,16 @@ func (o *ReviewOptions) Run() error {
 		fmt.Fprintf(os.Stderr, "Strategy: %s, Diff size: %d chars\n", strategy, diff.RawLen)
 	}
 
-	fmt.Fprintf(os.Stderr, "%s%s%s\n",
-		faint("Running AI code review (diff: "),
-		bright(fmt.Sprintf("%d", diff.RawLen)),
-		faint(" chars)..."))
-
 	client := openai.NewClient(baseURL, apiKey, model)
+
+	var spin *spinner.Spinner
+	if term.IsTerminal(int(os.Stderr.Fd())) {
+		spin = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+		spin.Color("fgHiWhite")
+		spin.Suffix = faint(" Running AI code review (diff: ") + bright(fmt.Sprintf("%d", diff.RawLen)) + faint(" chars)...")
+		spin.Writer = os.Stderr
+		spin.Start()
+	}
 
 	if o.Verbose {
 		client.DebugWriter = os.Stderr
@@ -134,6 +154,11 @@ func (o *ReviewOptions) Run() error {
 	start := time.Now()
 	result, err := client.ChatCompletion(sysPrompt, userPrompt)
 	elapsed := time.Since(start)
+
+	if spin != nil {
+		spin.Stop()
+	}
+
 	if err != nil {
 		return err
 	}
@@ -145,9 +170,192 @@ func (o *ReviewOptions) Run() error {
 			result.PromptTokens, result.CompletionTokens, result.TotalTokens)))
 	}
 
-	fmt.Println(result.Content)
+	timestamp := time.Now()
+	base := o.Base
+	target := o.Target
+	if target == "" {
+		target = "HEAD"
+	}
+
+	frontMatter := buildFrontMatter(repoName, branchName, commitHash, base, target, o.Staged, o.Paths, lang, strategy, diff, o.Context, timestamp, diffArgs)
+	saveContent := frontMatter + "\n" + result.Content
+
+	reviewsDir := moduleCfg.ReviewsDirPath()
+	if err := os.MkdirAll(reviewsDir, 0700); err != nil {
+		return fmt.Errorf("failed to create reviews directory: %w", err)
+	}
+
+	fileName := fmt.Sprintf("%s_%s_%s.md",
+		coregit.FileSafeName(repoName),
+		branchName,
+		timestamp.Format("20060102-150405"))
+	savePath := filepath.Join(reviewsDir, fileName)
+
+	if err := os.WriteFile(savePath, []byte(saveContent), 0644); err != nil {
+		return fmt.Errorf("failed to save review: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "%s%s%s\n",
+		faint("Review saved to "),
+		bright(savePath),
+		faint(""))
+
+	out := result.Content
+	if term.IsTerminal(int(os.Stdout.Fd())) {
+		r, err := glamour.NewTermRenderer(glamour.WithAutoStyle())
+		if err == nil {
+			rendered, err := r.Render(out)
+			if err == nil {
+				out = rendered
+			}
+		}
+	}
+
+	pagedOutput(out)
 	return nil
 }
+
+func buildFrontMatter(project, branch, commit, base, target string, staged bool, paths []string, lang, strategy string, diff *coregit.DiffResult, context string, timestamp time.Time, diffArgs []string) string {
+	var sb strings.Builder
+	sb.WriteString("---\n")
+	sb.WriteString(fmt.Sprintf("project: %s\n", project))
+	sb.WriteString(fmt.Sprintf("branch: %s\n", branch))
+	sb.WriteString(fmt.Sprintf("commit: %s\n", commit))
+
+	if staged {
+		sb.WriteString("staged: true\n")
+	} else {
+		sb.WriteString("staged: false\n")
+	}
+	if base != "" {
+		sb.WriteString(fmt.Sprintf("base: %s\n", base))
+	}
+	if target != "" && target != "HEAD" {
+		sb.WriteString(fmt.Sprintf("target: %s\n", target))
+	}
+	if len(paths) > 0 {
+		sb.WriteString(fmt.Sprintf("paths: %s\n", strings.Join(paths, " ")))
+	}
+	sb.WriteString(fmt.Sprintf("lang: %s\n", lang))
+	sb.WriteString(fmt.Sprintf("strategy: %s\n", strategy))
+	sb.WriteString(fmt.Sprintf("diff_size: %d\n", diff.RawLen))
+	if stat := coregit.PlainDiffStat(diffArgs); stat != "" {
+		sb.WriteString(fmt.Sprintf("diff_stat: %s\n", stat))
+	}
+	if context != "" {
+		sb.WriteString(fmt.Sprintf("context: %s\n", context))
+	}
+	sb.WriteString(fmt.Sprintf("timestamp: %s\n", timestamp.Format(time.RFC3339)))
+	sb.WriteString("---")
+	return sb.String()
+}
+
+/* ─── mu git review list ─── */
+
+func (o *ReviewListCmd) Run() error {
+	gc, err := LoadGitConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	moduleCfg, err := GetModuleConfig(gc, "review")
+	if err != nil {
+		return err
+	}
+
+	reviewsDir := moduleCfg.ReviewsDirPath()
+
+	entries, err := os.ReadDir(reviewsDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("No review reports found.")
+			return nil
+		}
+		return fmt.Errorf("failed to read reviews directory: %w", err)
+	}
+
+	var currentProject string
+	if !o.All {
+		currentProject = coregit.RepoName()
+	}
+
+	type reviewEntry struct {
+		project   string
+		branch    string
+		timestamp string
+		strategy  string
+		filePath  string
+	}
+	var reviews []reviewEntry
+
+	fmRE := regexp.MustCompile(`(?m)^(\w+):\s*(.*)$`)
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
+		}
+
+		fullPath := filepath.Join(reviewsDir, entry.Name())
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			continue
+		}
+
+		content := string(data)
+		if !strings.HasPrefix(content, "---\n") {
+			continue
+		}
+
+		end := strings.Index(content[4:], "\n---")
+		if end == -1 {
+			continue
+		}
+		fmBlock := content[4 : 4+end]
+
+		fm := make(map[string]string)
+		for _, m := range fmRE.FindAllStringSubmatch(fmBlock, -1) {
+			fm[m[1]] = m[2]
+		}
+
+		project := fm["project"]
+		if !o.All && project != currentProject {
+			continue
+		}
+
+		reviews = append(reviews, reviewEntry{
+			project:   project,
+			branch:    fm["branch"],
+			timestamp: fm["timestamp"],
+			strategy:  fm["strategy"],
+			filePath:  fullPath,
+		})
+	}
+
+	if len(reviews) == 0 {
+		if o.All {
+			fmt.Println("No review reports found.")
+		} else {
+			fmt.Printf("No review reports found for project %q.\n", currentProject)
+		}
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+	fmt.Fprintln(w, "Date\tProject\tBranch\tStrategy")
+	fmt.Fprintln(w, "----\t-------\t------\t--------")
+	for _, r := range reviews {
+		t, err := time.Parse(time.RFC3339, r.timestamp)
+		dateStr := r.timestamp
+		if err == nil {
+			dateStr = t.Format("2006-01-02 15:04:05")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", dateStr, r.project, r.branch, r.strategy)
+	}
+	w.Flush()
+	return nil
+}
+
+/* ─── Prompt & Output Helpers ─── */
 
 func buildReviewSystemPrompt(lang string) string {
 	switch lang {
@@ -189,6 +397,42 @@ func buildReviewUserPrompt(strategy string, diff *coregit.DiffResult, userContex
 	}
 
 	return sb.String()
+}
+
+func pagedOutput(content string) {
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		fmt.Print(content)
+		return
+	}
+
+	cmdStr := pagerCommand()
+	if cmdStr == "" {
+		fmt.Print(content)
+		return
+	}
+
+	cmd := exec.Command("sh", "-c", cmdStr)
+	cmd.Stdin = strings.NewReader(content)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprint(os.Stderr, content)
+	}
+}
+
+func pagerCommand() string {
+	if p := os.Getenv("PAGER"); p != "" {
+		return p
+	}
+
+	if _, err := exec.LookPath("less"); err == nil {
+		return "less -R"
+	}
+	if _, err := exec.LookPath("more"); err == nil {
+		return "more"
+	}
+	return ""
 }
 
 func resolveReviewStrategy(diffLen int) string {

@@ -169,8 +169,9 @@ func (o *CommitModuleCmd) Run() error {
 }
 
 type ReviewModuleCmd struct {
-	Provider string `help:"Provider name to use."`
-	Lang     string `help:"Output language (en, cn)."`
+	Provider   string `help:"Provider name to use."`
+	Lang       string `help:"Output language (en, cn)."`
+	ReviewsDir string `help:"Directory to store review reports." name:"reviews-dir"`
 }
 
 func (o *ReviewModuleCmd) Run() error {
@@ -189,6 +190,9 @@ func (o *ReviewModuleCmd) Run() error {
 			return fmt.Errorf("invalid language %q, must be 'en' or 'cn'", o.Lang)
 		}
 		gc.Review.Lang = o.Lang
+	}
+	if o.ReviewsDir != "" {
+		gc.Review.ReviewsDir = o.ReviewsDir
 	}
 	return SaveGitConfig(gc)
 }

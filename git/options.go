@@ -17,4 +17,10 @@ type ReviewOptions struct {
 	Lang    string   `help:"Review output language." short:"L" default:"en" enum:"en,cn"`
 	Verbose bool     `help:"Print prompts and raw API responses for debugging."`
 	Paths   []string `arg:"" optional:"" name:"path" help:"Files or paths to review."`
+	List    bool     `help:"List saved review reports." name:"list"`
+	ListAll bool     `help:"When listing, include reviews from all projects." name:"list-all"`
+}
+
+type ReviewListCmd struct {
+	All bool `help:"List reviews from all projects, not just current." name:"all"`
 }

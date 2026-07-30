@@ -16,8 +16,23 @@ type Provider struct {
 }
 
 type ModuleConfig struct {
-	Provider string `json:"provider"`
-	Lang     string `json:"lang,omitempty"`
+	Provider   string `json:"provider"`
+	Lang       string `json:"lang,omitempty"`
+	ReviewsDir string `json:"reviews_dir,omitempty"`
+}
+
+func (m *ModuleConfig) ReviewsDirPath() string {
+	dir := m.ReviewsDir
+	if dir == "" {
+		dir = "~/.cache/mu/git_reviews"
+	}
+	if strings.HasPrefix(dir, "~/") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			dir = filepath.Join(home, dir[2:])
+		}
+	}
+	return dir
 }
 
 type GitConfig struct {
