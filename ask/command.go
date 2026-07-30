@@ -65,11 +65,11 @@ type Options struct {
 }
 
 type SetOptions struct {
-	BaseURL    string `help:"Base URL of the AI service."`
-	Model      string `help:"Model name."`
-	APIKey     string `help:"API key for the AI service."`
-	SearchKey  string `help:"Brave Search API key."`
-	Path       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	BaseURL   string `help:"Base URL of the AI service."`
+	Model     string `help:"Model name."`
+	APIKey    string `help:"API key for the AI service."`
+	SearchKey string `help:"Brave Search API key."`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func (o *SetOptions) Run() error {

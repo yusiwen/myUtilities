@@ -178,12 +178,12 @@ func (o *AgentOptions) Run() error {
 	}
 
 	ag := newAgent(agentConfig{
-		tsdb:       tsdb,
-		serverURL:  serverURL,
-		interval:   interval,
-		hostname:   hostname,
-		retention:  retention,
-		debug:      debugEnabled,
+		tsdb:      tsdb,
+		serverURL: serverURL,
+		interval:  interval,
+		hostname:  hostname,
+		retention: retention,
+		debug:     debugEnabled,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -577,12 +577,12 @@ func parseTagsParam(r *http.Request, name string) map[string]string {
 }
 
 type agentConfig struct {
-	tsdb       *coremetrics.DB
-	serverURL  string
-	interval   time.Duration
-	hostname   string
-	retention  time.Duration
-	debug      bool
+	tsdb      *coremetrics.DB
+	serverURL string
+	interval  time.Duration
+	hostname  string
+	retention time.Duration
+	debug     bool
 }
 
 type Agent struct {

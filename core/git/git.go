@@ -83,6 +83,12 @@ func GetStagedNameStatus() (string, error) {
 	return runGit("diff", "--staged", "--name-status")
 }
 
+func GetNameStatus(args []string) (string, error) {
+	nsArgs := append([]string{"diff"}, args...)
+	nsArgs = append(nsArgs, "--name-status")
+	return runGit(nsArgs...)
+}
+
 func runGit(args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	out, err := cmd.Output()
@@ -139,7 +145,11 @@ func PlainDiffStat(args []string) string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(strings.ReplaceAll(out, "\n", " "))
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(lines[len(lines)-1])
 }
 
 func DirIsRepo(path string) bool {
@@ -159,4 +169,16 @@ func FileSafeName(s string) string {
 		"'", "",
 	)
 	return r.Replace(s)
+}
+
+func GetUntrackedFiles() []string {
+	out, err := runGit("ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return nil
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return nil
+	}
+	return lines
 }

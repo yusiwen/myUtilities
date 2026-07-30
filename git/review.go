@@ -10,7 +10,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/briandowns/spinner"
 	"github.com/charmbracelet/glamour"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
@@ -112,8 +111,6 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
-	strategy := resolveReviewStrategy(diff.RawLen)
-
 	lang := o.Lang
 	if lang == "" {
 		lang = moduleCfg.Lang
@@ -124,51 +121,38 @@ func (o *ReviewOptions) Run() error {
 	commitHash := coregit.ShortCommit()
 
 	sysPrompt := buildReviewSystemPrompt(lang)
-	userPrompt := buildReviewUserPrompt(strategy, diff, o.Context)
 
 	if o.Verbose {
 		fmt.Fprintln(os.Stderr, "─── Review Args ───")
 		fmt.Fprintln(os.Stderr, "git diff", strings.Join(diffArgs, " "))
-		fmt.Fprintf(os.Stderr, "Strategy: %s, Diff size: %d chars\n", strategy, diff.RawLen)
 	}
 
 	client := openai.NewClient(baseURL, apiKey, model)
 
-	var spin *spinner.Spinner
-	if term.IsTerminal(int(os.Stderr.Fd())) {
-		spin = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-		spin.Color("fgHiWhite")
-		spin.Suffix = faint(" Running AI code review (diff: ") + bright(fmt.Sprintf("%d", diff.RawLen)) + faint(" chars)...")
-		spin.Writer = os.Stderr
-		spin.Start()
-	}
-
 	if o.Verbose {
 		client.DebugWriter = os.Stderr
-		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
 		fmt.Fprintln(os.Stderr, sysPrompt)
-		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
-		fmt.Fprintln(os.Stderr, userPrompt)
 	}
 
+	maxTurns := o.MaxTurns
 	start := time.Now()
-	result, err := client.ChatCompletion(sysPrompt, userPrompt)
-	elapsed := time.Since(start)
-
-	if spin != nil {
-		spin.Stop()
+	agent, err := newReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose)
+	if err != nil {
+		return err
 	}
+
+	reviewContent, err := agent.run()
+	elapsed := time.Since(start)
 
 	if err != nil {
 		return err
 	}
 
 	if o.Verbose {
-		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
-		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
-		fmt.Fprintln(os.Stderr, bright(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total",
-			result.PromptTokens, result.CompletionTokens, result.TotalTokens)))
+		fmt.Fprintf(os.Stderr, "─── Agent completed in %s ───\n", elapsed)
 	}
+
+	result := reviewContent
 
 	timestamp := time.Now()
 	base := o.Base
@@ -177,8 +161,8 @@ func (o *ReviewOptions) Run() error {
 		target = "HEAD"
 	}
 
-	frontMatter := buildFrontMatter(repoName, branchName, commitHash, base, target, o.Staged, o.Paths, lang, strategy, diff, o.Context, timestamp, diffArgs)
-	saveContent := frontMatter + "\n" + result.Content
+	frontMatter := buildFrontMatter(repoName, branchName, commitHash, base, target, o.Staged, o.Paths, lang, "agent", diff, o.Context, timestamp, diffArgs)
+	saveContent := frontMatter + "\n" + result
 
 	reviewsDir := moduleCfg.ReviewsDirPath()
 	if err := os.MkdirAll(reviewsDir, 0700); err != nil {
@@ -200,7 +184,7 @@ func (o *ReviewOptions) Run() error {
 		bright(savePath),
 		faint(""))
 
-	out := result.Content
+	out := result
 	if term.IsTerminal(int(os.Stdout.Fd())) {
 		r, err := glamour.NewTermRenderer(glamour.WithAutoStyle())
 		if err == nil {

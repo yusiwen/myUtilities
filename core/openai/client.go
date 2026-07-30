@@ -26,6 +26,45 @@ type ChatResult struct {
 	TotalTokens      int
 }
 
+/* ─── Tool Calling Types ─── */
+
+type ToolDef struct {
+	Type     string       `json:"type"`
+	Function ToolFunction `json:"function"`
+}
+
+type ToolFunction struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Parameters  any    `json:"parameters"`
+}
+
+type ToolCall struct {
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
+	Function ToolCallFunc `json:"function"`
+}
+
+type ToolCallFunc struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+type Message struct {
+	Role       string     `json:"role"`
+	Content    string     `json:"content"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
+	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
+}
+
+type ChatResponse struct {
+	Content          string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	ToolCalls        []ToolCall
+}
+
 type chatRequest struct {
 	Model    string             `json:"model"`
 	Messages []chatMessage      `json:"messages"`
@@ -135,6 +174,109 @@ func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, e
 	msg = strings.Trim(msg, "\"'`")
 
 	result := &ChatResult{Content: msg}
+	if chatResp.Usage != nil {
+		result.PromptTokens = chatResp.Usage.PromptTokens
+		result.CompletionTokens = chatResp.Usage.CompletionTokens
+		result.TotalTokens = chatResp.Usage.TotalTokens
+	}
+
+	return result, nil
+}
+
+func (c *Client) ChatWithTools(messages []Message, tools []ToolDef) (*ChatResponse, error) {
+	reqBody := struct {
+		Model    string             `json:"model"`
+		Messages []Message          `json:"messages"`
+		Tools    []ToolDef          `json:"tools,omitempty"`
+		Thinking *map[string]string `json:"thinking,omitempty"`
+	}{
+		Model:    c.Model,
+		Messages: messages,
+		Tools:    tools,
+	}
+
+	if c.DisableThinking {
+		reqBody.Thinking = &map[string]string{"type": "disabled"}
+	}
+
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	if c.DebugWriter != nil {
+		pretty, _ := json.MarshalIndent(reqBody, "", "  ")
+		fmt.Fprintln(c.DebugWriter, "─── Request JSON ───")
+		fmt.Fprintln(c.DebugWriter, string(pretty))
+	}
+
+	url := strings.TrimRight(c.BaseURL, "/") + "/chat/completions"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	if c.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if c.DebugWriter != nil {
+		fmt.Fprintln(c.DebugWriter, "─── Response JSON ───")
+		fmt.Fprintln(c.DebugWriter, string(respBytes))
+	}
+
+	var chatResp struct {
+		Choices []struct {
+			Message struct {
+				Role      string     `json:"role"`
+				Content   string     `json:"content"`
+				ToolCalls []ToolCall `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error *struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"error,omitempty"`
+		Usage *struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage,omitempty"`
+	}
+
+	if err := json.Unmarshal(respBytes, &chatResp); err != nil {
+		return nil, fmt.Errorf("failed to parse API response: %w", err)
+	}
+
+	if chatResp.Error != nil {
+		return nil, fmt.Errorf("API error: %s", chatResp.Error.Message)
+	}
+
+	if len(chatResp.Choices) == 0 {
+		return nil, fmt.Errorf("no response from API")
+	}
+
+	msg := chatResp.Choices[0].Message
+	content := strings.TrimSpace(msg.Content)
+	content = strings.Trim(content, "\"'`")
+
+	result := &ChatResponse{
+		Content:   content,
+		ToolCalls: msg.ToolCalls,
+	}
+
 	if chatResp.Usage != nil {
 		result.PromptTokens = chatResp.Usage.PromptTokens
 		result.CompletionTokens = chatResp.Usage.CompletionTokens

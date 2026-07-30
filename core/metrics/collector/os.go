@@ -117,5 +117,3 @@ func (o *OSCollector) collectLoad(ctx context.Context, r metrics.Registry) {
 	getOrAddGaugeFloat64(r, "load.5m").Update(avg.Load5)
 	getOrAddGaugeFloat64(r, "load.15m").Update(avg.Load15)
 }
-
-
