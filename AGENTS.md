@@ -68,7 +68,8 @@ myutilities.go
 ├── Crypto (cmd: crypto)        - Crypto utilities
 ├── Gateway (cmd: gateway)      - Unified gateway server
 ├── Es (cmd: es)                - Elasticsearch query tool
-└── Commit (cmd: commit)        - AI-generated conventional commit messages
+├── Git (cmd: git)              - Git utilities (ignore, commit, review)
+└── ...
 ```
 
 ### Design Convention
@@ -83,12 +84,13 @@ Command packages (`<cmd>/`) are **CLI wrappers only**. They handle:
 Business logic, API clients, and platform operations belong in `core/` packages, exposed as
 public functions and structs so they can be reused across commands or tested independently.
 
-Example — `commit/` → `core/openai/` + `core/git/`:
+Example — `git/` → `core/openai/` + `core/git/`:
 
-- `commit/command.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
-- `commit/config.go` — CLI-specific config (`CommitConfig`, `~/.config/mu/commit-config.json`)
-- `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`
-- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetStagedNameStatus()`
+- `git/commit.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
+- `git/review_agent.go` — Multi-turn agent loop with `ChatWithTools`, 4 tools (read_file, read_diff, search_code, read_function)
+- `git/config.go` — `GitConfig` with `providers` array, `commit`/`review` module configs; `git-config.json`
+- `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`
+- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`
 
 ### Configuration File Convention
 
@@ -99,7 +101,7 @@ stored under `~/.config/mu/` by default:
 |--------|-------------|
 | ask | `ask-config.json` |
 | budget | `budget-config.json` |
-| commit | `commit-config.json` |
+| git | `git-config.json` |
 | es | `es-config.json` |
 | mock | `mock-config.json` |
 | svcreg | `svcreg-config.json` |
@@ -140,11 +142,18 @@ The `core/` directory contains reusable business logic:
   - Buckets: `Aliases` (hostname→MAC), `Boot` (boot timestamps), `Status` (boot/shutdown state)
 - `core/openai/` - OpenAI-compatible chat completions API client
   - `Client` struct with `ChatCompletion(systemPrompt, userPrompt)` → `*ChatResult`
+  - `ChatWithTools(messages, tools)` → `*ChatResponse` with `ToolCalls` for agent loops
   - `ChatResult` includes content, prompt tokens, completion tokens, total tokens
+  - `ChatResponse` extends `ChatResult` with `ToolCalls []ToolCall`
+  - Types: `Message`, `ToolDef`, `ToolFunction`, `ToolCall`, `ToolCallFunc`
 - `core/git/` - Git operations
   - `CheckPreflight()` — verifies git is installed and in a repository
   - `GetStagedDiff()` — returns staged diff + stat with truncation
   - `GetStagedNameStatus()` — returns `git diff --staged --name-status`
+  - `GetDiff(args)` — generic diff with arbitrary args (staged, branch comparison, paths)
+  - `GetNameStatus(args)` — generic `--name-status` for arbitrary diff args
+  - `GetUntrackedFiles()` — returns list of untracked files
+  - `RepoName()`, `CurrentBranch()`, `ShortCommit()` — repo metadata helpers
 
 ### Command Packages
 
@@ -173,12 +182,15 @@ The `core/` directory contains reusable business logic:
   - `interfaces` subcommand: lists available network interfaces with WOL suitability info
   - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `wol/frontend/`)
 
-- `commit/` - AI-generated conventional commit messages
-  - Uses `core/openai` for ChatCompletion API calls
-  - Uses `core/git` for diff gathering and preflight checks
-  - Supports `--diff-strategy` (auto/full/summary) for different diff sizes
-  - Interactive confirmation with editor-based edit support
-  - Colorized output via `github.com/morikuni/aec`
+- `git/` - Git utilities (ignore, commit, review)
+  - `ignore` — Downloads .gitignore templates from GitHub
+  - `commit` — AI-generated conventional commit messages using `core/openai` + `core/git`
+  - `review` — Multi-turn AI code review agent:
+    - 4 tools: `read_file`, `read_diff`, `search_code`, `read_function`
+    - Agent loop with `core/openai.ChatWithTools()`
+    - Output rendered via `glamour` + `less -R` pager
+    - Reviews saved to `~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md`
+    - Shared config with `commit` via `git-config.json`
 
 ## Web Frontend Architecture
 
@@ -294,6 +306,7 @@ When adding a new module with a web UI:
 - `github.com/go-git/go-git/v5` - Git operations
 - `github.com/ryanolee/go-chaff` - Mock data generation
 - `github.com/morikuni/aec` - ANSI escape codes for terminal colors
+- `github.com/charmbracelet/glamour` - Terminal markdown rendering
 
 ### Build-time Variables
 

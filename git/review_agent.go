@@ -163,7 +163,7 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 }
 
 func (a *reviewAgent) progressf(format string, args ...any) {
-	msg := fmt.Sprintf("[agent] "+format, args...)
+	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintln(a.progressWriter, faint(msg))
 }
 
@@ -181,7 +181,8 @@ func (a *reviewAgent) run() (string, error) {
 		}
 
 		if len(resp.ToolCalls) == 0 {
-			a.progressf("%d/%d Producing final review (%d chars)", turn, a.maxTurns, len(resp.Content))
+			a.progressf("Step %d:", turn)
+			a.progressf("  Producing final review (%d chars)", len(resp.Content))
 			a.progressf("Complete: %d rounds", turn)
 			return resp.Content, nil
 		}
@@ -193,9 +194,10 @@ func (a *reviewAgent) run() (string, error) {
 		}
 		a.messages = append(a.messages, asstMsg)
 
+		a.progressf("Step %d:", turn)
 		for _, tc := range resp.ToolCalls {
 			args := formatToolArgs(tc.Function.Name, tc.Function.Arguments)
-			a.progressf("%d/%d %s(%s)", turn, a.maxTurns, tc.Function.Name, args)
+			a.progressf("  %s(%s)", tc.Function.Name, args)
 			result := a.executeTool(tc)
 			a.messages = append(a.messages, openai.Message{
 				Role:       "tool",
@@ -216,9 +218,11 @@ func (a *reviewAgent) run() (string, error) {
 	}
 
 	if resp.Content == "" {
+		a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
 		return "\n\n> ⚠ Review reached maximum turns. Some details may be incomplete.\n", nil
 	}
 
+	a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
 	return resp.Content + "\n\n> ⚠ Review reached maximum turns (" + fmt.Sprintf("%d", a.maxTurns) + "). Some details may be incomplete.\n", nil
 }
 

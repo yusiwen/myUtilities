@@ -135,3 +135,5 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Ask Command** — `mu ask` command for LLM Q&A with concise answers and reference URLs, using `core/openai` client and `core/llm` shared config
 - **Web Search Integration** — `mu ask --search` flag that fetches Brave Search API results and injects them into the LLM prompt for up-to-date, cited answers
 - **Shared LLM Config** — `core/llm` package to deduplicate config loading/saving logic across LLM-using commands
+- **git review agent** — Multi-turn tool-calling code review agent with 4 tools (read_file, read_diff, search_code, read_function); agent loop via `core/openai.ChatWithTools()`; output rendered via `glamour` + `less -R` pager; reviews saved to `~/.cache/mu/git_reviews/` with YAML front matter; `mu git review --list` for browsing
+- **git-config.json** — Unified config replacing `commit-config.json`: `providers` array with named LLM providers, `commit`/`review` module configs referencing providers; automatic migration from old config

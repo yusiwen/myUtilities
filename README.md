@@ -634,7 +634,11 @@ mu proxy db --port 1521 \
 mu run --commands "echo hello" --commands "ls -la"
 ```
 
-### git commit — AI-generated conventional commit messages
+### git — Git utilities with AI
+
+Subcommands: `commit`, `review`, `ignore`.
+
+#### git commit — AI-generated conventional commit messages
 
 Generates a conventional commit message from staged changes using an LLM.
 
@@ -655,14 +659,106 @@ mu git commit --verbose
 mu git commit --dry-run
 ```
 
-Configuration at `~/.config/mu/commit-config.json`:
+#### git review — AI-powered code review (Agent mode)
+
+Analyzes local changes using a multi-turn LLM agent. The agent can read files, search
+code, and inspect diffs before producing a structured markdown review.
+
+```bash
+# Review unstaged changes
+mu git review
+
+# Review staged changes
+mu git review --staged
+
+# Branch comparison
+mu git review --base origin/main
+
+# Chinese output
+mu git review --lang cn
+
+# Extra context for the reviewer
+mu git review --context "focus on error handling"
+
+# List saved reviews (current project only)
+mu git review --list
+
+# List all saved reviews
+mu git review --list --list-all
+
+# Limit tool call rounds
+mu git review --max-turns 10
+```
+
+The review is rendered with syntax highlighting via `glamour`, paginated through
+`less -R` (or `$PAGER`), and saved to:
+
+```
+~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md
+```
+
+Saved files include YAML front matter with review metadata (commit, branch, diff stat,
+strategy, timestamp, etc.).
+
+#### git ignore — Download .gitignore templates
+
+Downloads .gitignore templates from the [github/gitignore](https://github.com/github/gitignore) repository.
+
+```bash
+# List available templates
+mu git ignore list
+
+# Auto-detect language and download template
+mu git ignore
+
+# Download a specific template
+mu git ignore Go
+
+# Merge with existing .gitignore
+mu git ignore Python --merge
+```
+
+### Configuration
+
+LLM settings shared by `git commit` and `git review` are stored in `~/.config/mu/git-config.json`:
 
 ```json
 {
-  "base_url": "https://api.deepseek.com/v1",
-  "api_key": "sk-xxx",
-  "model": "deepseek-v4-flash"
+  "providers": [
+    {
+      "name": "default",
+      "base_url": "https://api.deepseek.com/v1",
+      "api_key": "sk-xxx",
+      "model": "deepseek-v4-flash"
+    }
+  ],
+  "commit": {
+    "provider": "default",
+    "lang": "en"
+  },
+  "review": {
+    "provider": "default",
+    "lang": "cn",
+    "reviews_dir": "~/.cache/mu/git_reviews"
+  }
 }
+```
+
+Configure via `mu set git`:
+
+```bash
+# Add a provider
+mu set git provider add --name default --base-url <url> --api-key <key> --model <model>
+
+# Remove a provider
+mu set git provider rm --name <name>
+
+# List providers
+mu set git provider list
+
+# Configure module defaults
+mu set git commit --provider default --lang en
+mu set git review --provider default --lang cn --reviews-dir ~/reviews
 ```
 
 ### watch — Watch resources for changes
