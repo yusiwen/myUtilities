@@ -141,7 +141,7 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
-	reviewContent, err := agent.run()
+	reviewContent, _, err := agent.run()
 	elapsed := time.Since(start)
 
 	if err != nil {

@@ -7,9 +7,12 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/briandowns/spinner"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
+	"golang.org/x/term"
 )
 
 const reviewAgentPrompt = `You are a senior software engineer conducting a thorough code review on a git diff.
@@ -39,6 +42,7 @@ type reviewAgent struct {
 	verbose        bool
 	progressWriter io.Writer
 	diffArgs       []string
+	spinner        *spinner.Spinner
 }
 
 func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []string, lang, context, repoName, branchName, commitHash string, maxTurns int, verbose bool) (*reviewAgent, error) {
@@ -66,6 +70,22 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 			initMsg.WriteString(f + "\n")
 		}
 		initMsg.WriteString("```\n\n")
+	}
+
+	for _, name := range []string{"CODEBASE.md", "AGENTS.md", "CONTRIBUTING.md"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			continue
+		}
+		content := strings.TrimSpace(string(data))
+		if content == "" {
+			continue
+		}
+		const maxCtxLen = 50000
+		if len([]rune(content)) > maxCtxLen {
+			content = string([]rune(content)[:maxCtxLen]) + "\n...(truncated at 50000 chars)"
+		}
+		initMsg.WriteString(fmt.Sprintf("### %s\n\n```\n%s\n```\n\n", name, content))
 	}
 
 	if context != "" {
@@ -151,6 +171,14 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 		},
 	}
 
+	var spin *spinner.Spinner
+	if term.IsTerminal(int(os.Stderr.Fd())) {
+		spin = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+		spin.Color("fgHiWhite")
+		spin.Suffix = ""
+		spin.Writer = os.Stderr
+	}
+
 	return &reviewAgent{
 		client:         client,
 		messages:       messages,
@@ -159,32 +187,47 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 		verbose:        verbose,
 		progressWriter: os.Stderr,
 		diffArgs:       diffArgs,
+		spinner:        spin,
 	}, nil
 }
 
 func (a *reviewAgent) progressf(format string, args ...any) {
+	a.stopSpinner()
 	msg := fmt.Sprintf(format, args...)
 	fmt.Fprintln(a.progressWriter, faint(msg))
 }
 
-func (a *reviewAgent) run() (string, error) {
+func (a *reviewAgent) startSpinner() {
+	if a.spinner != nil {
+		a.spinner.Start()
+	}
+}
+
+func (a *reviewAgent) stopSpinner() {
+	if a.spinner != nil {
+		a.spinner.Stop()
+	}
+}
+
+func (a *reviewAgent) run() (string, int, error) {
 	statLine := coregit.PlainDiffStat(a.diffArgs)
 	if statLine == "" {
 		statLine = "no changes"
 	}
 	a.progressf("Reviewing diff: %s", statLine)
 
+	a.startSpinner()
 	for turn := 1; turn <= a.maxTurns; turn++ {
 		resp, err := a.client.ChatWithTools(a.messages, a.tools)
 		if err != nil {
-			return "", fmt.Errorf("agent error at turn %d: %w", turn, err)
+			return "", 0, fmt.Errorf("agent error at turn %d: %w", turn, err)
 		}
 
 		if len(resp.ToolCalls) == 0 {
 			a.progressf("Step %d:", turn)
 			a.progressf("  Producing final review (%d chars)", len(resp.Content))
 			a.progressf("Complete: %d rounds", turn)
-			return resp.Content, nil
+			return resp.Content, turn, nil
 		}
 
 		asstMsg := openai.Message{
@@ -205,8 +248,11 @@ func (a *reviewAgent) run() (string, error) {
 				Content:    truncateToolResult(result),
 			})
 		}
+		a.startSpinner()
 	}
+
 	// Max turns reached — force finalize
+	a.stopSpinner()
 	a.messages = append(a.messages, openai.Message{
 		Role:    "system",
 		Content: "You have reached the maximum number of tool calls. Produce your final review now using only the information you have gathered so far. Do not make additional tool calls.",
@@ -214,16 +260,16 @@ func (a *reviewAgent) run() (string, error) {
 
 	resp, err := a.client.ChatWithTools(a.messages, nil)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 
 	if resp.Content == "" {
 		a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
-		return "\n\n> ⚠ Review reached maximum turns. Some details may be incomplete.\n", nil
+		return "\n\n> ⚠ Review reached maximum turns. Some details may be incomplete.\n", a.maxTurns, nil
 	}
 
 	a.progressf("Complete: %d rounds (max reached)", a.maxTurns)
-	return resp.Content + "\n\n> ⚠ Review reached maximum turns (" + fmt.Sprintf("%d", a.maxTurns) + "). Some details may be incomplete.\n", nil
+	return resp.Content + "\n\n> ⚠ Review reached maximum turns (" + fmt.Sprintf("%d", a.maxTurns) + "). Some details may be incomplete.\n", a.maxTurns, nil
 }
 
 func (a *reviewAgent) executeTool(tc openai.ToolCall) string {
@@ -367,9 +413,13 @@ func toolSearch(pattern, path string) string {
 	cmd := exec.Command("git", args...)
 	out, err := cmd.Output()
 	if err != nil {
-		return "" // git grep exits 1 when no match
+		return "no matches found"
 	}
-	return strings.TrimSpace(string(out))
+	result := strings.TrimSpace(string(out))
+	if result == "" {
+		return "no matches found"
+	}
+	return result
 }
 
 func toolReadFunction(path string, line int) string {
