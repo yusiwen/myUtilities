@@ -27,10 +27,18 @@ You have access to tools to gather more context from the codebase. Use them stra
 6. Once you have enough information, produce your final review without calling any tools
 
 Your final review must include these sections:
-## 变更概述
-## 文件级分析
-## 关注点
-## 值得肯定的方面
+
+## Changes Overview
+Brief summary of what changes this diff introduces and the overall purpose.
+
+## File-by-File Analysis
+For each changed file: what changed, why, and potential impact on the codebase.
+
+## Issues and Concerns
+Potential bugs, security risks, performance issues, maintainability improvements, or best practice violations.
+
+## Positive Observations
+Well-structured changes, good naming, proper error handling, effective patterns.
 
 Be specific — reference code snippets with line numbers when discussing issues.`
 
@@ -99,9 +107,9 @@ func newReviewAgent(client *openai.Client, diff *coregit.DiffResult, diffArgs []
 	sysPrompt := reviewAgentPrompt
 	switch lang {
 	case "cn":
-		sysPrompt += "\n\nLanguage: Write the review in Chinese (Simplified Chinese)."
+		sysPrompt += "\n\nLanguage: Write the review in Chinese (Simplified Chinese). Section titles must be in the same language."
 	default:
-		sysPrompt += "\n\nLanguage: Write the review in English."
+		sysPrompt += "\n\nLanguage: Write the review in English. Section titles must be in the same language."
 	}
 
 	messages := []openai.Message{
