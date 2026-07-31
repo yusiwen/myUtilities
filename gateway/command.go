@@ -12,6 +12,7 @@ import (
 	"github.com/yusiwen/myUtilities/budget"
 	"github.com/yusiwen/myUtilities/core/store"
 	coresv "github.com/yusiwen/myUtilities/core/svcreg"
+	corewol "github.com/yusiwen/myUtilities/core/wol"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/es"
@@ -217,7 +218,7 @@ func (o *Options) configPath(name string) string {
 }
 
 func (o *Options) Run() error {
-	wolCfg, err := wol.LoadConfig(o.configPath("wol-config.json"))
+	wolCfg, err := corewol.LoadConfig(o.configPath("wol-config.json"))
 	if err != nil {
 		return fmt.Errorf("gateway: failed to load WOL config: %v", err)
 	}

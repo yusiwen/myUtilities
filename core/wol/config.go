@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-type WOLConfig struct {
+type Config struct {
 	Server    string `json:"server"`
 	DBPath    string `json:"db_path"`
 	Port      int    `json:"port"`
@@ -18,7 +18,7 @@ type WOLConfig struct {
 	Hostname  string `json:"hostname"`
 }
 
-func resolveConfigPath(raw string) (string, error) {
+func ResolveConfigPath(raw string) (string, error) {
 	path := raw
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -34,22 +34,22 @@ func resolveConfigPath(raw string) (string, error) {
 	return path, nil
 }
 
-func LoadConfig(configPath string) (*WOLConfig, error) {
-	path, err := resolveConfigPath(configPath)
+func LoadConfig(configPath string) (*Config, error) {
+	path, err := ResolveConfigPath(configPath)
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &WOLConfig{
+			return &Config{
 				DBPath: "~/.config/mu/bolt.db",
 				Port:   8080,
 			}, nil
 		}
 		return nil, fmt.Errorf("failed to read config: %v", err)
 	}
-	var cfg WOLConfig
+	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -62,7 +62,22 @@ func LoadConfig(configPath string) (*WOLConfig, error) {
 	return &cfg, nil
 }
 
-func SetConfigValue(cfg *WOLConfig, key, value string) error {
+func SaveConfig(configPath string, cfg *Config) error {
+	path, err := ResolveConfigPath(configPath)
+	if err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
+	return nil
+}
+
+func SetConfigValue(cfg *Config, key, value string) error {
 	switch strings.ToLower(key) {
 	case "server":
 		cfg.Server = value
@@ -86,7 +101,7 @@ func SetConfigValue(cfg *WOLConfig, key, value string) error {
 	return nil
 }
 
-func GetConfigValue(cfg *WOLConfig, key string) (string, bool) {
+func GetConfigValue(cfg *Config, key string) (string, bool) {
 	switch strings.ToLower(key) {
 	case "server":
 		return cfg.Server, true
@@ -103,19 +118,4 @@ func GetConfigValue(cfg *WOLConfig, key string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func saveConfig(configPath string, cfg *WOLConfig) error {
-	path, err := resolveConfigPath(configPath)
-	if err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write config: %v", err)
-	}
-	return nil
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/core/config"
+	corewol "github.com/yusiwen/myUtilities/core/wol"
 )
 
 type wolSetter struct{}
@@ -50,7 +51,7 @@ func (o *WolSetOptions) Run() error {
 		path = "~/.config/mu/wol-config.json"
 	}
 
-	cfg, err := LoadConfig(path)
+	cfg, err := corewol.LoadConfig(path)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -74,5 +75,5 @@ func (o *WolSetOptions) Run() error {
 		cfg.Hostname = o.Hostname
 	}
 
-	return saveConfig(path, cfg)
+	return corewol.SaveConfig(path, cfg)
 }
