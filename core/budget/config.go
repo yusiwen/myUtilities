@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-type BudgetConfig struct {
+type Config struct {
 	Providers map[string]ProviderConfig `json:"providers"`
 	DebugLog  bool                      `json:"debug_log"`
 }
@@ -19,7 +19,7 @@ type ProviderConfig struct {
 	TopUpURL        string `json:"top_up_url,omitempty"`
 }
 
-func defaultConfigPath() (string, error) {
+func DefaultConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("unable to find home directory: %w", err)
@@ -31,17 +31,17 @@ func defaultConfigPath() (string, error) {
 	return filepath.Join(dir, "budget-config.json"), nil
 }
 
-func loadConfig(configPath string) (*BudgetConfig, error) {
+func LoadConfig(configPath string) (*Config, error) {
 	path := configPath
 	if path == "" {
 		var err error
-		path, err = defaultConfigPath()
+		path, err = DefaultConfigPath()
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	cfg := &BudgetConfig{}
+	cfg := &Config{}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -57,7 +57,7 @@ func loadConfig(configPath string) (*BudgetConfig, error) {
 	return cfg, nil
 }
 
-func resolveAPIKey(provider string, flagKey string, cfg *BudgetConfig) (string, error) {
+func ResolveAPIKey(provider string, flagKey string, cfg *Config) (string, error) {
 	if flagKey != "" {
 		return flagKey, nil
 	}

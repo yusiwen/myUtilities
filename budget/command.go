@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
+	corebudget "github.com/yusiwen/myUtilities/core/budget"
 	"github.com/yusiwen/myUtilities/core/budget/providers"
 )
 
@@ -27,17 +26,8 @@ type ServeOptions struct {
 	Port int `help:"Port to listen on." default:"8095"`
 }
 
-type balanceResult struct {
-	providers.BalanceInfo
-	Error string `json:"error,omitempty"`
-}
-
-type packageProvider interface {
-	GetPackages(ctx context.Context) ([]providers.PackageInstance, error)
-}
-
 func (o *BalanceOptions) Run() error {
-	cfg, err := loadConfig("")
+	cfg, err := corebudget.LoadConfig("")
 	if err != nil {
 		return err
 	}
@@ -45,197 +35,20 @@ func (o *BalanceOptions) Run() error {
 	ctx := context.Background()
 
 	if o.Provider != "" {
-		return queryOne(ctx, o.Provider, o.Key, cfg)
-	}
-	return queryAll(ctx, o.Key, cfg)
-}
-
-func (o *ServeOptions) Run() error {
-	mux := http.NewServeMux()
-	mux.Handle("/", FrontendHandler())
-	RegisterHandlers(mux, "")
-	fmt.Printf("Budget server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
-}
-
-func RegisterHandlers(mux *http.ServeMux, configPath string) {
-	debugLog("RegisterHandlers: registering GET /api/budget/balance, config=%s", configPath)
-	mux.HandleFunc("/api/budget/balance", func(w http.ResponseWriter, r *http.Request) {
-		handleBalance(w, r, configPath)
-	})
-}
-
-func handleBalance(w http.ResponseWriter, r *http.Request, configPath string) {
-	debugLog("handleBalance: called, method=%s", r.Method)
-	if r.Method != http.MethodGet {
-		http.Error(w, `{"error":"GET required"}`, http.StatusMethodNotAllowed)
-		return
-	}
-
-	cfg, err := loadConfig(configPath)
-	if err != nil {
-		debugLog("handleBalance: loadConfig failed: %v", err)
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
-		return
-	}
-	debugLog("handleBalance: config loaded, providers=%d, debug_log=%v", len(cfg.Providers), cfg.DebugLog)
-
-	start := time.Now()
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	results := fetchBalances(ctx, "", cfg)
-	elapsed := time.Since(start)
-
-	debugLog("handleBalance: fetchBalances done, %d results, elapsed=%v", len(results), elapsed)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
-	debugLog("handleBalance: response written, done")
-}
-
-func applyTopUpURL(info *providers.BalanceInfo, pc *ProviderConfig) {
-	if pc != nil && pc.TopUpURL != "" {
-		if info.Extra == nil {
-			info.Extra = make(map[string]string)
-		}
-		info.Extra["top_up_url"] = pc.TopUpURL
-	}
-}
-
-func fetchBalances(ctx context.Context, flagKey string, cfg *BudgetConfig) []balanceResult {
-	allNames := allConfiguredProviders(cfg, flagKey)
-	if len(allNames) == 0 {
-		allNames = []string{"deepseek", "openrouter"}
-	}
-	logd(cfg, "fetchBalances: start, names=%v", allNames)
-
-	type indexedResult struct {
-		name string
-		r    balanceResult
-	}
-	ch := make(chan indexedResult, len(allNames))
-	for _, name := range allNames {
-		go func(name string) {
-			logd(cfg, "fetchBalances: goroutine [%s] start", name)
-			pc := getProviderConfig(name, cfg)
-
-			var key string
-			var p providers.Provider
-			if name == "aliyun" {
-				p = createProvider(name, pc)
-				if p == nil {
-					ch <- indexedResult{name, balanceResult{
-						BalanceInfo: providers.BalanceInfo{Provider: name},
-						Error:       fmt.Sprintf("aliyun: access_key_id and access_key_secret required in config"),
-					}}
-					return
-				}
-			} else {
-				var err error
-				key, err = resolveAPIKey(name, flagKey, cfg)
-				if err != nil {
-					logd(cfg, "fetchBalances: goroutine [%s] resolveAPIKey failed: %v", name, err)
-					ch <- indexedResult{name, balanceResult{
-						BalanceInfo: providers.BalanceInfo{Provider: name},
-						Error:       err.Error(),
-					}}
-					return
-				}
-				logd(cfg, "fetchBalances: goroutine [%s] key resolved", name)
-				p = createProvider(name, nil)
-			}
-			if p == nil {
-				logd(cfg, "fetchBalances: goroutine [%s] unknown provider", name)
-				ch <- indexedResult{name, balanceResult{
-					BalanceInfo: providers.BalanceInfo{Provider: name},
-					Error:       fmt.Sprintf("unknown provider: %s", name),
-				}}
-				return
-			}
-			logd(cfg, "fetchBalances: goroutine [%s] calling GetBalance", name)
-			info, err := p.GetBalance(ctx, key)
-			if err != nil {
-				logd(cfg, "fetchBalances: goroutine [%s] GetBalance failed: %v", name, err)
-				ch <- indexedResult{name, balanceResult{
-					BalanceInfo: providers.BalanceInfo{Provider: name},
-					Error:       err.Error(),
-				}}
-				return
-			}
-			logd(cfg, "fetchBalances: goroutine [%s] GetBalance ok, total=%.2f", name, info.Total)
-			applyTopUpURL(info, pc)
-			if name == "aliyun" {
-				if pp, ok := p.(packageProvider); ok {
-					pkgs, pkgErr := pp.GetPackages(ctx)
-					if pkgErr != nil {
-						logd(cfg, "fetchBalances: goroutine [%s] GetPackages failed: %v", name, pkgErr)
-					} else {
-						logd(cfg, "fetchBalances: goroutine [%s] GetPackages ok, %d packages", name, len(pkgs))
-						if len(pkgs) > 0 {
-							data, _ := json.Marshal(pkgs)
-							info.Extra["packages"] = string(data)
-						}
-					}
-				}
-			}
-			ch <- indexedResult{name, balanceResult{BalanceInfo: *info}}
-		}(name)
-	}
-
-	var results []balanceResult
-	for i := range allNames {
-		r := <-ch
-		logd(cfg, "fetchBalances: received %d/%d (%s)", i+1, len(allNames), r.name)
-		if r.r.Provider != "" {
-			results = append(results, r.r)
-		}
-	}
-	logd(cfg, "fetchBalances: done, %d results", len(results))
-	return results
-}
-
-func logd(cfg *BudgetConfig, format string, args ...interface{}) {
-	if cfg != nil && cfg.DebugLog {
-		debugLog(format, args...)
-	}
-}
-
-func queryOne(ctx context.Context, name string, flagKey string, cfg *BudgetConfig) error {
-	pc := getProviderConfig(name, cfg)
-	if name == "aliyun" {
-		p := createProvider(name, pc)
-		if p == nil {
-			return fmt.Errorf("aliyun: access_key_id and access_key_secret required in config")
-		}
-		info, err := p.GetBalance(ctx, "")
+		info, err := corebudget.FetchBalance(ctx, o.Provider, o.Key, cfg)
 		if err != nil {
 			return err
 		}
-		applyTopUpURL(info, pc)
-		fetchPackages(ctx, info, p)
 		printBalance(*info)
-	} else {
-		key, err := resolveAPIKey(name, flagKey, cfg)
-		if err != nil {
-			return err
-		}
-		p := createProvider(name, nil)
-		if p == nil {
-			return fmt.Errorf("unknown provider: %s", name)
-		}
-		info, err := p.GetBalance(ctx, key)
-		if err != nil {
-			return err
-		}
-		applyTopUpURL(info, pc)
-		printBalance(*info)
+		return nil
 	}
-	return nil
+	return o.queryAll(ctx, cfg)
 }
 
-func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
-	allNames := allConfiguredProviders(cfg, flagKey)
+func (o *BalanceOptions) queryAll(ctx context.Context, cfg *corebudget.Config) error {
+	allNames := corebudget.AllConfiguredProviders(cfg, o.Key)
 	if len(allNames) == 0 {
-		path, _ := defaultConfigPath()
+		path, _ := corebudget.DefaultConfigPath()
 		return fmt.Errorf(
 			"no configured providers found\nCreate %s with your API keys:\n"+
 				`  {"providers": {"deepseek": {"api_key": "sk-xxx"}, "openrouter": {"api_key": "sk-or-v1-xxx"}}}`,
@@ -245,35 +58,7 @@ func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
 
 	var errs []string
 	for _, name := range allNames {
-		pc := getProviderConfig(name, cfg)
-		var info *providers.BalanceInfo
-		var err error
-		if name == "aliyun" {
-			p := createProvider(name, pc)
-			if p == nil {
-				errs = append(errs, fmt.Sprintf("%s: access_key_id and access_key_secret required", name))
-				continue
-			}
-			info, err = p.GetBalance(ctx, "")
-			if err == nil {
-				applyTopUpURL(info, pc)
-				fetchPackages(ctx, info, p)
-			}
-		} else {
-			key, keyErr := resolveAPIKey(name, flagKey, cfg)
-			if keyErr != nil {
-				errs = append(errs, fmt.Sprintf("%s: %v", name, keyErr))
-				continue
-			}
-			p := createProvider(name, nil)
-			if p == nil {
-				continue
-			}
-			info, err = p.GetBalance(ctx, key)
-			if err == nil {
-				applyTopUpURL(info, pc)
-			}
-		}
+		info, err := corebudget.FetchBalance(ctx, name, o.Key, cfg)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%s: %v", name, err))
 			continue
@@ -287,56 +72,17 @@ func queryAll(ctx context.Context, flagKey string, cfg *BudgetConfig) error {
 	return nil
 }
 
-func fetchPackages(ctx context.Context, info *providers.BalanceInfo, p providers.Provider) {
-	if pp, ok := p.(packageProvider); ok {
-		pkgs, err := pp.GetPackages(ctx)
-		if err == nil && len(pkgs) > 0 {
-			data, _ := json.Marshal(pkgs)
-			info.Extra["packages"] = string(data)
-		}
-	}
+func (o *ServeOptions) Run() error {
+	mux := http.NewServeMux()
+	mux.Handle("/", FrontendHandler())
+	RegisterHandlers(mux, "")
+	fmt.Printf("Budget server listening on :%d\n", o.Port)
+	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
-func createProvider(name string, pc *ProviderConfig) providers.Provider {
-	switch name {
-	case "deepseek":
-		return providers.NewDeepSeek()
-	case "openrouter":
-		return providers.NewOpenRouter()
-	case "aliyun":
-		if pc != nil && pc.AccessKeyID != "" && pc.AccessKeySecret != "" {
-			return providers.NewAliyun(pc.AccessKeyID, pc.AccessKeySecret)
-		}
-		return nil
-	default:
-		return nil
-	}
-}
-
-func getProviderConfig(name string, cfg *BudgetConfig) *ProviderConfig {
-	if cfg == nil || cfg.Providers == nil {
-		return nil
-	}
-	if pc, ok := cfg.Providers[name]; ok {
-		return &pc
-	}
-	return nil
-}
-
-func allConfiguredProviders(cfg *BudgetConfig, flagKey string) []string {
-	if flagKey != "" {
-		return []string{"deepseek", "openrouter"}
-	}
-	if cfg == nil || cfg.Providers == nil || len(cfg.Providers) == 0 {
-		return nil
-	}
-	var names []string
-	for name := range cfg.Providers {
-		if name == "deepseek" || name == "openrouter" || name == "aliyun" {
-			names = append(names, name)
-		}
-	}
-	return names
+// RegisterHandlers registers the budget API routes on the given mux.
+func RegisterHandlers(mux *http.ServeMux, configPath string) {
+	corebudget.RegisterHandlers(mux, configPath, corebudget.DebugLog)
 }
 
 func printBalance(info providers.BalanceInfo) {
@@ -422,11 +168,3 @@ func currencySymbol(code string) string {
 		return ""
 	}
 }
-
-func init() {
-	if os.Getenv("NO_COLOR") != "" {
-		noColor = true
-	}
-}
-
-var noColor bool

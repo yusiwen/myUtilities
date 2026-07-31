@@ -37,7 +37,8 @@ func ensureLogger() {
 	})
 }
 
-func debugLog(format string, args ...interface{}) {
+// DebugLog writes to the budget log file (or stderr as fallback).
+func DebugLog(format string, args ...interface{}) {
 	ensureLogger()
 	if debugLogger != nil {
 		debugLogger.Printf("budget: "+format, args...)
