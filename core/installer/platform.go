@@ -12,7 +12,7 @@ var (
 	checksumRe = regexp.MustCompile(`(checksums|sha256sums)`)
 )
 
-func getOS(s string) string {
+func GetOS(s string) string {
 	s = strings.ToLower(s)
 	o := posixOSRe.FindString(s)
 	if o == "mac" || o == "osx" {
@@ -24,12 +24,11 @@ func getOS(s string) string {
 	return o
 }
 
-func getArch(s string) string {
+func GetArch(s string) string {
 	s = strings.ToLower(s)
 	a := archRe.FindString(s)
-	//arch modifications
 	if a == "64" || a == "x86_64" || a == "" {
-		a = "amd64" //default
+		a = "amd64"
 	} else if a == "32" || a == "686" {
 		a = "386"
 	} else if a == "aarch64" {
@@ -38,11 +37,11 @@ func getArch(s string) string {
 	return a
 }
 
-func getFileExt(s string) string {
+func GetFileExt(s string) string {
 	return fileExtRe.FindString(s)
 }
 
-func splitHalf(s, by string) (string, string) {
+func SplitHalf(s, by string) (string, string) {
 	i := strings.Index(s, by)
 	if i == -1 {
 		return s, ""
