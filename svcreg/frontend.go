@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 )
 
 type FrontendOptions struct {
@@ -12,11 +14,11 @@ type FrontendOptions struct {
 }
 
 func (o *FrontendOptions) Run() error {
-	RestoreState("")
+	coresv.RestoreState("")
 	addr := fmt.Sprintf(":%d", o.Port)
-	client := &Client{Server: o.Server}
+	client := &coresv.Client{Server: o.Server}
 	mux := http.NewServeMux()
-	RegisterProxyAPI(mux, client)
+	coresv.RegisterProxyAPI(mux, client)
 	mux.Handle("/", FrontendHandler())
 	log.Printf("Service Registry frontend on %s, backend %s", addr, o.Server)
 	return http.ListenAndServe(addr, mux)

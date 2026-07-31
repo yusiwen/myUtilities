@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 )
 
 type Options struct {
@@ -19,7 +21,7 @@ type StatusOptions struct {
 }
 
 func (o *StatusOptions) Run() error {
-	client := &Client{Server: o.Server}
+	client := &coresv.Client{Server: o.Server}
 	ver, svcCount, upCount, instCount, err := client.Status()
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", o.Server, err)
@@ -57,7 +59,7 @@ type ListServicesCmd struct {
 }
 
 func (c *ListServicesCmd) Run() error {
-	client := &Client{Server: c.Server}
+	client := &coresv.Client{Server: c.Server}
 	services, err := client.GetServices()
 	if err != nil {
 		return fmt.Errorf("get services: %w", err)
@@ -88,7 +90,7 @@ type ListInstancesCmd struct {
 }
 
 func (c *ListInstancesCmd) Run() error {
-	client := &Client{Server: c.Server}
+	client := &coresv.Client{Server: c.Server}
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 	fmt.Fprintln(w, "SERVICE ID\tAPP ID\tNAME\tVERSION\tENV\tINSTANCE ID\tHOST\tSTATUS\tENDPOINTS")
 

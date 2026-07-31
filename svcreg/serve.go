@@ -22,7 +22,7 @@ type ServeOptions struct {
 }
 
 func (o *ServeOptions) resolveConfig() {
-	cfg, err := LoadConfig(o.Config)
+	cfg, err := coresv.LoadConfig(o.Config)
 	if err != nil {
 		log.Printf("Warning: could not load config: %v", err)
 		return
@@ -50,7 +50,7 @@ func (o *ServeOptions) Run() error {
 	handler.RegisterRoutes(mux)
 
 	if o.Web {
-		RegisterProxyAPI(mux, &Client{Server: "http://" + addr})
+		coresv.RegisterProxyAPI(mux, &coresv.Client{Server: "http://" + addr})
 		mux.Handle("/", FrontendHandler())
 	}
 

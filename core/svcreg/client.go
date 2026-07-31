@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-
-	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 )
 
+// Client is an HTTP client for the ServiceCenter-compatible registry API.
 type Client struct {
 	Server string
 }
@@ -44,32 +43,32 @@ func (c *Client) GetVersion() (map[string]interface{}, error) {
 	return v, err
 }
 
-func (c *Client) GetServices() ([]*coresv.MicroService, error) {
-	var resp coresv.GetServicesResponse
+func (c *Client) GetServices() ([]*MicroService, error) {
+	var resp GetServicesResponse
 	if err := c.get("/v4/default/registry/microservices", &resp); err != nil {
 		return nil, err
 	}
 	if resp.Services == nil {
-		return []*coresv.MicroService{}, nil
+		return []*MicroService{}, nil
 	}
 	return resp.Services, nil
 }
 
-func (c *Client) GetService(serviceId string) (*coresv.MicroService, error) {
-	var resp coresv.GetServiceResponse
+func (c *Client) GetService(serviceId string) (*MicroService, error) {
+	var resp GetServiceResponse
 	if err := c.get("/v4/default/registry/microservices/"+serviceId, &resp); err != nil {
 		return nil, err
 	}
 	return resp.Service, nil
 }
 
-func (c *Client) GetInstances(serviceId string) ([]*coresv.MicroServiceInstance, error) {
-	var resp coresv.GetInstancesResponse
+func (c *Client) GetInstances(serviceId string) ([]*MicroServiceInstance, error) {
+	var resp GetInstancesResponse
 	if err := c.get("/v4/default/registry/microservices/"+serviceId+"/instances", &resp); err != nil {
 		return nil, err
 	}
 	if resp.Instances == nil {
-		return []*coresv.MicroServiceInstance{}, nil
+		return []*MicroServiceInstance{}, nil
 	}
 	return resp.Instances, nil
 }

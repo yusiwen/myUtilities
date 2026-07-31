@@ -51,7 +51,8 @@ type adminState struct {
 	Config adminConfig `json:"config"`
 }
 
-type serverManager struct {
+// ServerManager manages the lifecycle of an svcreg serve subprocess.
+type ServerManager struct {
 	mu      sync.Mutex
 	cmd     *exec.Cmd
 	pidFile string
@@ -60,7 +61,9 @@ type serverManager struct {
 	pid     int
 }
 
-var mgr = newServerManager()
+var mgr = NewServerManager()
+
+var stateDir string
 
 func adminStatePath() string {
 	if stateDir != "" {
@@ -73,12 +76,11 @@ func adminStatePath() string {
 	return filepath.Join(home, ".config", "mu", "svcreg-admin.json")
 }
 
-func newServerManager() *serverManager {
-	return &serverManager{pidFile: adminStatePath()}
+func NewServerManager() *ServerManager {
+	return &ServerManager{pidFile: adminStatePath()}
 }
 
-var stateDir string
-
+// RestoreState restores a previously running server from its state file.
 func RestoreState(configDir string) {
 	if configDir != "" {
 		stateDir = configDir
@@ -88,7 +90,7 @@ func RestoreState(configDir string) {
 	mgr.restoreState()
 }
 
-func (m *serverManager) restoreState() {
+func (m *ServerManager) restoreState() {
 	data, err := os.ReadFile(m.pidFile)
 	if err != nil {
 		log.Printf("svcreg: restoreState read %s: %v", m.pidFile, err)
@@ -121,7 +123,7 @@ func (m *serverManager) restoreState() {
 	log.Printf("svcreg: restoreState SUCCESS (PID: %d, port: %d)", state.PID, state.Config.Port)
 }
 
-func (m *serverManager) saveState() {
+func (m *ServerManager) saveState() {
 	state := adminState{PID: m.pid, Config: m.config}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -138,7 +140,7 @@ func (m *serverManager) saveState() {
 	}
 }
 
-func (m *serverManager) saveClearedState() {
+func (m *ServerManager) saveClearedState() {
 	state := adminState{PID: -1, Config: adminConfig{}}
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
@@ -151,11 +153,11 @@ func (m *serverManager) saveClearedState() {
 	os.WriteFile(m.pidFile, data, 0600)
 }
 
-func (m *serverManager) logPath() string {
+func (m *ServerManager) logPath() string {
 	return expandTilde(m.config.DBPath) + ".log"
 }
 
-func (m *serverManager) readLogs() []string {
+func (m *ServerManager) readLogs() []string {
 	path := m.logPath()
 	f, err := os.Open(path)
 	if err != nil {
@@ -173,7 +175,8 @@ func (m *serverManager) readLogs() []string {
 	return lines
 }
 
-func (m *serverManager) status() map[string]interface{} {
+// Status returns the current server manager state.
+func (m *ServerManager) Status() map[string]interface{} {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return map[string]interface{}{
@@ -184,7 +187,8 @@ func (m *serverManager) status() map[string]interface{} {
 	}
 }
 
-func (m *serverManager) start(cfg adminConfig) error {
+// Start launches a new svcreg serve subprocess.
+func (m *ServerManager) Start(cfg adminConfig) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -242,7 +246,8 @@ func (m *serverManager) start(cfg adminConfig) error {
 	return nil
 }
 
-func (m *serverManager) stop() error {
+// Stop terminates the running server subprocess.
+func (m *ServerManager) Stop() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -267,7 +272,8 @@ func (m *serverManager) stop() error {
 	return nil
 }
 
-func registerAdminAPI(mux *http.ServeMux, client *Client) {
+// RegisterAdminAPI registers the admin lifecycle endpoints.
+func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 	if mgr.running && mgr.config.Port > 0 {
 		client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
 	}
@@ -284,16 +290,16 @@ func registerAdminAPI(mux *http.ServeMux, client *Client) {
 		if mgr.running {
 			client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
 		}
-		json.NewEncoder(w).Encode(mgr.status())
+		json.NewEncoder(w).Encode(mgr.Status())
 	})
 	mux.HandleFunc("/api/svcreg/admin/start", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			writeProxyError(w, fmt.Errorf("POST required"))
+			WriteProxyError(w, fmt.Errorf("POST required"))
 			return
 		}
 		var cfg adminConfig
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-			writeProxyError(w, fmt.Errorf("invalid config: %w", err))
+			WriteProxyError(w, fmt.Errorf("invalid config: %w", err))
 			return
 		}
 		if cfg.Port == 0 {
@@ -305,8 +311,8 @@ func registerAdminAPI(mux *http.ServeMux, client *Client) {
 		if cfg.DBPath == "" {
 			cfg.DBPath = "~/.config/mu/svcreg.db"
 		}
-		if err := mgr.start(cfg); err != nil {
-			writeProxyError(w, err)
+		if err := mgr.Start(cfg); err != nil {
+			WriteProxyError(w, err)
 			return
 		}
 		client.Server = fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
@@ -315,11 +321,11 @@ func registerAdminAPI(mux *http.ServeMux, client *Client) {
 	})
 	mux.HandleFunc("/api/svcreg/admin/stop", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			writeProxyError(w, fmt.Errorf("POST required"))
+			WriteProxyError(w, fmt.Errorf("POST required"))
 			return
 		}
-		if err := mgr.stop(); err != nil {
-			writeProxyError(w, err)
+		if err := mgr.Stop(); err != nil {
+			WriteProxyError(w, err)
 			return
 		}
 		client.Server = "http://127.0.0.1:30100"

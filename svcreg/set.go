@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/core/config"
+	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 )
 
 type svcregSetter struct{}
@@ -47,7 +48,7 @@ func (o *ConfigSetOptions) Run() error {
 		path = "~/.config/mu/svcreg-config.json"
 	}
 
-	cfg, err := LoadConfig(path)
+	cfg, err := coresv.LoadConfig(path)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -62,5 +63,5 @@ func (o *ConfigSetOptions) Run() error {
 		cfg.DBPath = o.DBPath
 	}
 
-	return SaveConfig(path, cfg)
+	return coresv.SaveConfig(path, cfg)
 }

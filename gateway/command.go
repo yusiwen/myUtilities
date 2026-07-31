@@ -11,6 +11,7 @@ import (
 
 	"github.com/yusiwen/myUtilities/budget"
 	"github.com/yusiwen/myUtilities/core/store"
+	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 	"github.com/yusiwen/myUtilities/crypto"
 	"github.com/yusiwen/myUtilities/diff"
 	"github.com/yusiwen/myUtilities/es"
@@ -332,9 +333,9 @@ func (o *Options) Run() error {
 	network.RegisterHandlers(mux)
 	log.Printf("Gateway:   /network/* -> Network Tools frontend")
 
-	svcregClient := &svcreg.Client{Server: o.SvcregServer}
-	svcreg.RestoreState(o.ConfigDir)
-	svcreg.RegisterProxyAPI(mux, svcregClient)
+	svcregClient := &coresv.Client{Server: o.SvcregServer}
+	coresv.RestoreState(o.ConfigDir)
+	coresv.RegisterProxyAPI(mux, svcregClient)
 	mux.Handle("/svcreg/", http.StripPrefix("/svcreg", withGateway(svcreg.FrontendHandler())))
 	log.Printf("Gateway:   /svcreg/* -> Service Registry frontend (backend: %s)", o.SvcregServer)
 

@@ -14,7 +14,7 @@ type Config struct {
 	DBPath string `json:"db_path"`
 }
 
-func resolveConfigPath(raw string) (string, error) {
+func ResolveConfigPath(raw string) (string, error) {
 	path := raw
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -31,7 +31,7 @@ func resolveConfigPath(raw string) (string, error) {
 }
 
 func LoadConfig(configPath string) (*Config, error) {
-	path, err := resolveConfigPath(configPath)
+	path, err := ResolveConfigPath(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func LoadConfig(configPath string) (*Config, error) {
 }
 
 func SaveConfig(configPath string, cfg *Config) error {
-	path, err := resolveConfigPath(configPath)
+	path, err := ResolveConfigPath(configPath)
 	if err != nil {
 		return err
 	}
