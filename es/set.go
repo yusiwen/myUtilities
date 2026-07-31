@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/core/config"
+	corees "github.com/yusiwen/myUtilities/core/es"
 )
 
 type esSetter struct{}
@@ -47,7 +48,7 @@ func (o *ConfigSetOptions) Run() error {
 		path = "~/.config/mu/es-config.json"
 	}
 
-	cfg, err := loadConfig(path)
+	cfg, err := corees.LoadConfig(path)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -62,5 +63,5 @@ func (o *ConfigSetOptions) Run() error {
 		cfg.Password = o.Password
 	}
 
-	return saveConfig(path, cfg)
+	return corees.SaveConfig(path, cfg)
 }

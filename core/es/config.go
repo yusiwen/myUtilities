@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-type ESConfig struct {
+type Config struct {
 	Host     string `json:"host"`
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
 
-func resolveConfigPath(raw string) (string, error) {
+func ResolveConfigPath(raw string) (string, error) {
 	path := raw
 	if strings.HasPrefix(path, "~/") {
 		home, err := os.UserHomeDir()
@@ -30,19 +30,19 @@ func resolveConfigPath(raw string) (string, error) {
 	return path, nil
 }
 
-func loadConfig(configPath string) (*ESConfig, error) {
-	path, err := resolveConfigPath(configPath)
+func LoadConfig(configPath string) (*Config, error) {
+	path, err := ResolveConfigPath(configPath)
 	if err != nil {
 		return nil, err
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return &ESConfig{Host: "http://localhost:9200"}, nil
+			return &Config{Host: "http://localhost:9200"}, nil
 		}
 		return nil, fmt.Errorf("failed to read config: %v", err)
 	}
-	var cfg ESConfig
+	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
@@ -52,8 +52,8 @@ func loadConfig(configPath string) (*ESConfig, error) {
 	return &cfg, nil
 }
 
-func saveConfig(configPath string, cfg *ESConfig) error {
-	path, err := resolveConfigPath(configPath)
+func SaveConfig(configPath string, cfg *Config) error {
+	path, err := ResolveConfigPath(configPath)
 	if err != nil {
 		return err
 	}
@@ -67,7 +67,7 @@ func saveConfig(configPath string, cfg *ESConfig) error {
 	return nil
 }
 
-func maskedPassword(cfg *ESConfig) *ESConfig {
+func MaskedConfig(cfg *Config) *Config {
 	masked := *cfg
 	if masked.Password != "" {
 		masked.Password = "***"

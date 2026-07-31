@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/yusiwen/myUtilities/budget"
+	corees "github.com/yusiwen/myUtilities/core/es"
 	"github.com/yusiwen/myUtilities/core/store"
 	coresv "github.com/yusiwen/myUtilities/core/svcreg"
 	corewol "github.com/yusiwen/myUtilities/core/wol"
@@ -238,7 +239,7 @@ func (o *Options) Run() error {
 		Token:     wolCfg.Token,
 	}
 
-	esState := es.NewServerState(o.configPath("es-config.json"))
+	esState := corees.NewServerState(o.configPath("es-config.json"))
 	if err := esState.LoadConfig(); err != nil {
 		log.Printf("Gateway: warning: could not load ES config: %v", err)
 	}

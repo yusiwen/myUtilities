@@ -11,7 +11,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
-func newESClient(cfg *ESConfig) (*elasticsearch.Client, error) {
+func NewClient(cfg *Config) (*elasticsearch.Client, error) {
 	if cfg.Host == "" {
 		return nil, fmt.Errorf("ES host not configured")
 	}
@@ -28,7 +28,7 @@ func newESClient(cfg *ESConfig) (*elasticsearch.Client, error) {
 	return elasticsearch.NewClient(esCfg)
 }
 
-func esPing(es *elasticsearch.Client) (map[string]interface{}, error) {
+func Ping(es *elasticsearch.Client) (map[string]interface{}, error) {
 	res, err := es.Info()
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to ES: %v", err)
@@ -45,7 +45,7 @@ func esPing(es *elasticsearch.Client) (map[string]interface{}, error) {
 	return info, nil
 }
 
-func esListIndices(es *elasticsearch.Client) ([]string, error) {
+func ListIndices(es *elasticsearch.Client) ([]string, error) {
 	res, err := es.Cat.Indices(es.Cat.Indices.WithFormat("json"), es.Cat.Indices.WithH("index"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to list indices: %v", err)
@@ -68,7 +68,7 @@ func esListIndices(es *elasticsearch.Client) ([]string, error) {
 	return indices, nil
 }
 
-func esSearch(es *elasticsearch.Client, index string, body map[string]interface{}) (map[string]interface{}, error) {
+func Search(es *elasticsearch.Client, index string, body map[string]interface{}) (map[string]interface{}, error) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(body); err != nil {
 		return nil, fmt.Errorf("failed to encode search body: %v", err)
