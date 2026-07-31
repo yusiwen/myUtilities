@@ -4,11 +4,12 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"github.com/ryanolee/go-chaff"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ryanolee/go-chaff"
 )
 
 const schema = `{
@@ -19,9 +20,43 @@ const schema = `{
 	"required": ["id", "name"]
 }`
 
-var data map[string][]interface{}
+type MockServer struct {
+	data map[string][]interface{}
+}
 
-func loadFile(fileName string) error {
+type queryRequest struct {
+	PageNo   int `json:"pageNo"`
+	PageSize int `json:"pageSize"`
+}
+
+// NewMockServer generates data from CSV files (semi-colon separated) or random data of the given size.
+func NewMockServer(size int, csvFiles string) (*MockServer, error) {
+	data := make(map[string][]interface{})
+
+	if csvFiles != "" {
+		files := strings.Split(csvFiles, ";")
+		for _, file := range files {
+			if err := loadFile(data, file); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		if err := loadRandomData(data, size); err != nil {
+			return nil, err
+		}
+	}
+
+	return &MockServer{data: data}, nil
+}
+
+// Handler returns the HTTP mux for the mock query server.
+func (s *MockServer) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/mock/query/{rs}", s.queryHandler)
+	return mux
+}
+
+func loadFile(data map[string][]interface{}, fileName string) error {
 	file, err := os.Open(fileName)
 	if err != nil {
 		return err
@@ -51,7 +86,7 @@ func loadFile(fileName string) error {
 	return nil
 }
 
-func loadRandomData(size int) error {
+func loadRandomData(data map[string][]interface{}, size int) error {
 	data["default"] = make([]interface{}, size)
 	d := data["default"]
 	for i := 0; i < size; i++ {
@@ -67,61 +102,7 @@ func loadRandomData(size int) error {
 	return nil
 }
 
-func (o *MockServerOptions) generateData() error {
-	data = make(map[string][]interface{})
-
-	if o.CsvFiles != "" {
-		files := strings.Split(o.CsvFiles, ";")
-		for _, file := range files {
-			err := loadFile(file)
-			if err != nil {
-				return err
-			}
-		}
-	} else {
-		err := loadRandomData(o.Size)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type Result struct {
-	Data interface{} `json:"Data"`
-}
-
-type MockResponse struct {
-	Response
-	Result Result `json:"Result"`
-}
-
-func (o *MockServerOptions) Run() error {
-	if o.Size > 10000 {
-		return fmt.Errorf("size to large, max 10000")
-	}
-
-	err := o.generateData()
-	if err != nil {
-		return err
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/mock/query/{rs}", o.queryHandler)
-
-	fmt.Printf("Server listening at :%d\n", o.Port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux); err != nil {
-		return fmt.Errorf("server listen failed: %v", err)
-	}
-	return nil
-}
-
-type queryRequest struct {
-	PageNo   int `json:"pageNo"`
-	PageSize int `json:"pageSize"`
-}
-
-func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request) {
+func (s *MockServer) queryHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, `{"Status": {"Code": "1", "Message": "POST method only"}}`, http.StatusOK)
 		return
@@ -141,7 +122,7 @@ func (o *MockServerOptions) queryHandler(w http.ResponseWriter, r *http.Request)
 	if len(rsName) == 0 {
 		rsName = "default"
 	}
-	d := data[rsName]
+	d := s.data[rsName]
 
 	maxPageNo := (len(d) + pageSize - 1) / pageSize
 	fmt.Println("len(d): ", len(d))

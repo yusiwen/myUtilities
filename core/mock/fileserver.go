@@ -9,24 +9,26 @@ import (
 	"path/filepath"
 )
 
-func (o FileServerOptions) Run() error {
-	// Make a local directory
-	if err := os.MkdirAll(o.LocalDir, os.ModePerm); err != nil {
-		return fmt.Errorf("create local directory failed: %v", err)
-	}
-
-	http.HandleFunc("/api/mock/file", o.uploadHandler)
-	http.HandleFunc("/api/mock/file-error/unknown-fields", o.uploadUnknownHandler)
-	http.HandleFunc("/api/mock/file-error/missing-fields", o.uploadMissingHandler)
-
-	fmt.Printf("Server listening at :%d\n", o.Port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", o.Port), nil); err != nil {
-		return fmt.Errorf("server listen failed: %v", err)
-	}
-	return nil
+type FileServer struct {
+	LocalDir    string
+	FormKey     string
+	MaxFileSize int64
 }
 
-func (o FileServerOptions) uploadUnknownHandler(w http.ResponseWriter, r *http.Request) {
+func NewFileServer(localDir, formKey string, maxFileSize int64) *FileServer {
+	return &FileServer{LocalDir: localDir, FormKey: formKey, MaxFileSize: maxFileSize}
+}
+
+// Handler returns the HTTP mux for the file upload server.
+func (f *FileServer) Handler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/mock/file", f.uploadHandler)
+	mux.HandleFunc("/api/mock/file-error/unknown-fields", f.uploadUnknownHandler)
+	mux.HandleFunc("/api/mock/file-error/missing-fields", f.uploadMissingHandler)
+	return mux
+}
+
+func (f *FileServer) uploadUnknownHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{
@@ -36,7 +38,7 @@ func (o FileServerOptions) uploadUnknownHandler(w http.ResponseWriter, r *http.R
     }`)
 }
 
-func (o FileServerOptions) uploadMissingHandler(w http.ResponseWriter, r *http.Request) {
+func (f *FileServer) uploadMissingHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{
@@ -44,7 +46,7 @@ func (o FileServerOptions) uploadMissingHandler(w http.ResponseWriter, r *http.R
     }`)
 }
 
-func (o FileServerOptions) uploadHandler(w http.ResponseWriter, r *http.Request) {
+func (f *FileServer) uploadHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	if r.Method != http.MethodPost {
@@ -52,14 +54,14 @@ func (o FileServerOptions) uploadHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, o.MaxFileSize*1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, f.MaxFileSize*1024*1024)
 
-	if err := r.ParseMultipartForm(o.MaxFileSize * 1024 * 1024); err != nil {
+	if err := r.ParseMultipartForm(f.MaxFileSize * 1024 * 1024); err != nil {
 		http.Error(w, fmt.Sprintf(`{"code": "0", "msg": "request body too large: %v"}`, err), http.StatusOK)
 		return
 	}
 
-	file, header, err := r.FormFile(o.FormKey)
+	file, header, err := r.FormFile(f.FormKey)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"code": "0", "msg": "no files in request: %v"}`, err), http.StatusOK)
 		return
@@ -71,7 +73,7 @@ func (o FileServerOptions) uploadHandler(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	dstPath := filepath.Join(o.LocalDir, filepath.Base(header.Filename))
+	dstPath := filepath.Join(f.LocalDir, filepath.Base(header.Filename))
 	dstFile, err := os.Create(dstPath)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"code": "0", "msg": "create file failed: %v"}`, err), http.StatusOK)

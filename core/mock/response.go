@@ -7,3 +7,12 @@ type Status struct {
 type Response struct {
 	Status Status `json:"Status"`
 }
+
+type Result struct {
+	Data interface{} `json:"Data"`
+}
+
+type MockResponse struct {
+	Response
+	Result Result `json:"Result"`
+}

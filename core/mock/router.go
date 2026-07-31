@@ -61,6 +61,11 @@ func NewDynamicRouter(endpoints []*ManagedEndpoint, admin http.Handler, verbose 
 	}
 }
 
+// SetAdmin sets the admin handler served under /__admin.
+func (r *DynamicRouter) SetAdmin(admin http.Handler) {
+	r.admin = admin
+}
+
 func (r *DynamicRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if strings.HasPrefix(req.URL.Path, "/__admin") {
 		r.admin.ServeHTTP(w, req)
