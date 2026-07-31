@@ -1,17 +1,12 @@
 package crypto
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
@@ -178,7 +173,7 @@ func (o *EncodeOptions) Run() error {
 	if err != nil {
 		return err
 	}
-	result, err := encode(o.Type, input)
+	result, err := corecrypto.Encode(o.Type, input)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
@@ -191,7 +186,7 @@ func (o *DecodeOptions) Run() error {
 	if err != nil {
 		return err
 	}
-	result, err := decode(o.Type, input)
+	result, err := corecrypto.Decode(o.Type, input)
 	if err != nil {
 		return fmt.Errorf("decode: %w", err)
 	}
@@ -204,73 +199,19 @@ func jwtFormat(typ string, data interface{}) string {
 	return fmt.Sprintf("%s:\n  %s", typ, strings.ReplaceAll(string(b), "\n", "\n  "))
 }
 
-func detectAlg(token string) string {
-	parts := strings.SplitN(token, ".", 2)
-	if len(parts) < 2 {
-		return "HS256"
-	}
-	h, err := base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return "HS256"
-	}
-	var hdr struct {
-		Alg string `json:"alg"`
-	}
-	json.Unmarshal(h, &hdr)
-	if hdr.Alg == "" {
-		return "HS256"
-	}
-	return hdr.Alg
-}
-
-func decodeJWT(token string) (header, payload []byte, sig string, err error) {
-	parts := strings.SplitN(token, ".", 3)
-	if len(parts) != 3 {
-		return nil, nil, "", fmt.Errorf("invalid JWT: expected 3 parts separated by dots")
-	}
-	header, err = base64.RawURLEncoding.DecodeString(parts[0])
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("decode header: %w", err)
-	}
-	payload, err = base64.RawURLEncoding.DecodeString(parts[1])
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("decode payload: %w", err)
-	}
-	sig = parts[2]
-	return header, payload, sig, nil
-}
-
-func verifyJWT(signingInput, sigB64 string, key []byte, alg string) bool {
-	sig, err := base64.RawURLEncoding.DecodeString(sigB64)
-	if err != nil {
-		return false
-	}
-	var h hash.Hash
-	switch alg {
-	case "HS384":
-		h = hmac.New(sha512.New384, key)
-	case "HS512":
-		h = hmac.New(sha512.New, key)
-	default:
-		h = hmac.New(sha256.New, key)
-	}
-	h.Write([]byte(signingInput))
-	return hmac.Equal(sig, h.Sum(nil))
-}
-
 func (o *JwtDecodeOptions) Run() error {
-	header, payload, sig, err := decodeJWT(o.Token)
+	jwt, err := corecrypto.DecodeJWT(o.Token)
 	if err != nil {
 		return err
 	}
-	sigHex := hex.EncodeToString([]byte(sig))
+	sigHex := hex.EncodeToString([]byte(jwt.Signature))
 	if len(sigHex) > 32 {
 		sigHex = sigHex[:32] + "..."
 	}
 
 	var h, p interface{}
-	json.Unmarshal(header, &h)
-	json.Unmarshal(payload, &p)
+	json.Unmarshal(jwt.Header, &h)
+	json.Unmarshal(jwt.Payload, &p)
 
 	fmt.Println(jwtFormat("Header", h))
 	fmt.Println()
@@ -282,7 +223,7 @@ func (o *JwtDecodeOptions) Run() error {
 }
 
 func (o *JwtVerifyOptions) Run() error {
-	header, payload, sig, err := decodeJWT(o.Token)
+	jwt, err := corecrypto.DecodeJWT(o.Token)
 	if err != nil {
 		return err
 	}
@@ -301,20 +242,21 @@ func (o *JwtVerifyOptions) Run() error {
 
 	alg := o.Alg
 	if alg == "" {
-		alg = detectAlg(o.Token)
+		alg = corecrypto.DetectAlg(o.Token)
 	}
 	alg = strings.ToUpper(alg)
 	if alg != "HS256" && alg != "HS384" && alg != "HS512" {
 		return fmt.Errorf("unsupported algorithm: %s", alg)
 	}
 
-	parts := strings.SplitN(o.Token, ".", 3)
-	signingInput := parts[0] + "." + parts[1]
-	valid := verifyJWT(signingInput, sig, keyBytes, alg)
+	valid, err := corecrypto.VerifyJWT(o.Token, keyBytes, alg)
+	if err != nil {
+		return err
+	}
 
 	var h, p interface{}
-	json.Unmarshal(header, &h)
-	json.Unmarshal(payload, &p)
+	json.Unmarshal(jwt.Header, &h)
+	json.Unmarshal(jwt.Payload, &p)
 
 	fmt.Println(jwtFormat("Header", h))
 	fmt.Println()
@@ -494,119 +436,9 @@ func (o *ServeOptions) Run() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
+// RegisterHandlers registers the crypto API routes on the given mux.
 func RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/api/crypto/passwd", handlePasswd)
-	mux.HandleFunc("/api/crypto/cipher", handleCipher)
-	mux.HandleFunc("/api/crypto/encode", handleEncode)
-	mux.HandleFunc("/api/crypto/decode", handleDecode)
-	mux.HandleFunc("/api/crypto/jwt/decode", handleJwtDecode)
-	mux.HandleFunc("/api/crypto/jwt/verify", handleJwtVerify)
-}
-
-func handlePasswd(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Length  int   `json:"length"`
-		Digits  *bool `json:"digits,omitempty"`
-		Special bool  `json:"special"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-	if req.Length < 8 {
-		req.Length = 8
-	}
-	includeDigits := true
-	if req.Digits != nil {
-		includeDigits = *req.Digits
-	}
-	pw, err := corecrypto.GeneratePasswordWithOpts(corecrypto.PasswordOptions{
-		Length:         req.Length,
-		IncludeDigits:  includeDigits,
-		IncludeSpecial: req.Special,
-	})
-	if err != nil {
-		http.Error(w, fmt.Sprintf("generate password: %v", err), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"password": pw})
-}
-
-func handleCipher(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Cipher    string `json:"cipher"`
-		Mode      string `json:"mode"`
-		Op        string `json:"op"`
-		Key       string `json:"key"`
-		IV        string `json:"iv"`
-		Input     string `json:"input"`
-		InputHex  bool   `json:"inputHex"`
-		OutputHex bool   `json:"outputHex"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	var c corecrypto.Cipher
-	switch req.Cipher {
-	case "aes":
-		c = &corecrypto.AESCipher{}
-	case "des":
-		c = &corecrypto.DESCipher{}
-	case "3des":
-		c = &corecrypto.TripleDESCipher{}
-	case "sm4":
-		c = &corecrypto.SM4Cipher{}
-	default:
-		http.Error(w, "unsupported cipher", http.StatusBadRequest)
-		return
-	}
-
-	key := padOrTruncate([]byte(req.Key), c.KeySize())
-	var iv []byte
-	if req.Mode == "cbc" {
-		iv = padOrTruncate([]byte(req.IV), c.BlockSize())
-	}
-
-	data := []byte(req.Input)
-	if req.InputHex {
-		d, err := hex.DecodeString(req.Input)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("invalid hex input: %v", err), http.StatusBadRequest)
-			return
-		}
-		data = d
-	}
-
-	mode := corecrypto.CipherMode(req.Mode)
-	var result []byte
-	var err error
-	if req.Op == "encrypt" {
-		result, err = c.Encrypt(key, iv, data, mode)
-	} else {
-		result, err = c.Decrypt(key, iv, data, mode)
-	}
-	if err != nil {
-		http.Error(w, fmt.Sprintf("%s operation failed: %v", req.Op, err), http.StatusBadRequest)
-		return
-	}
-
-	out := string(result)
-	if req.OutputHex {
-		out = hex.EncodeToString(result)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"result": out})
+	corecrypto.RegisterHandlers(mux)
 }
 
 func resolveInput(text string) ([]byte, error) {
@@ -617,190 +449,6 @@ func resolveInput(text string) ([]byte, error) {
 		return io.ReadAll(os.Stdin)
 	}
 	return nil, fmt.Errorf("input required; pipe input or provide as argument")
-}
-
-func encode(typ string, data []byte) (string, error) {
-	switch typ {
-	case "base64":
-		return base64.StdEncoding.EncodeToString(data), nil
-	case "base64url":
-		return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(data), nil
-	case "hex":
-		return hex.EncodeToString(data), nil
-	case "url":
-		return url.QueryEscape(string(data)), nil
-	}
-	return "", fmt.Errorf("unknown encoding type: %s", typ)
-}
-
-func decode(typ string, data []byte) (string, error) {
-	switch typ {
-	case "base64":
-		d, err := base64.StdEncoding.DecodeString(string(data))
-		if err != nil {
-			return "", err
-		}
-		return string(d), nil
-	case "base64url":
-		d, err := base64.URLEncoding.WithPadding(base64.NoPadding).DecodeString(string(data))
-		if err != nil {
-			return "", err
-		}
-		return string(d), nil
-	case "hex":
-		d, err := hex.DecodeString(string(data))
-		if err != nil {
-			return "", err
-		}
-		return string(d), nil
-	case "url":
-		d, err := url.QueryUnescape(string(data))
-		if err != nil {
-			return "", err
-		}
-		return d, nil
-	}
-	return "", fmt.Errorf("unknown encoding type: %s", typ)
-}
-
-func handleEncode(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Type  string `json:"type"`
-		Input string `json:"input"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-	result, err := encode(req.Type, []byte(req.Input))
-	if err != nil {
-		http.Error(w, fmt.Sprintf("encode: %v", err), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"result": result})
-}
-
-func handleDecode(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Type  string `json:"type"`
-		Input string `json:"input"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-	result, err := decode(req.Type, []byte(req.Input))
-	if err != nil {
-		http.Error(w, fmt.Sprintf("decode: %v", err), http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"result": result})
-}
-
-func handleJwtDecode(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Token string `json:"token"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-	header, payload, sig, err := decodeJWT(req.Token)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("decode: %v", err), http.StatusBadRequest)
-		return
-	}
-	var h, p interface{}
-	json.Unmarshal(header, &h)
-	json.Unmarshal(payload, &p)
-	sigHex := hex.EncodeToString([]byte(sig))
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"header":       h,
-		"payload":      p,
-		"signature":    sig,
-		"signatureHex": sigHex,
-	})
-}
-
-func handleJwtVerify(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "POST required", http.StatusMethodNotAllowed)
-		return
-	}
-	var req struct {
-		Token  string `json:"token"`
-		Key    string `json:"key"`
-		KeyB64 bool   `json:"keyB64"`
-		Alg    string `json:"alg"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
-		return
-	}
-	if req.Alg == "" {
-		req.Alg = detectAlg(req.Token)
-	}
-
-	var keyBytes []byte
-	if req.KeyB64 {
-		var err error
-		keyBytes, err = base64.StdEncoding.DecodeString(req.Key)
-		if err != nil {
-			http.Error(w, fmt.Sprintf("invalid base64 key: %v", err), http.StatusBadRequest)
-			return
-		}
-	} else {
-		keyBytes = []byte(req.Key)
-	}
-
-	header, payload, sig, err := decodeJWT(req.Token)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("decode: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	parts := strings.SplitN(req.Token, ".", 3)
-	signingInput := parts[0] + "." + parts[1]
-	valid := verifyJWT(signingInput, sig, keyBytes, req.Alg)
-
-	var h, p interface{}
-	json.Unmarshal(header, &h)
-	json.Unmarshal(payload, &p)
-	sigHex := hex.EncodeToString([]byte(sig))
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"header":       h,
-		"payload":      p,
-		"signature":    sig,
-		"signatureHex": sigHex,
-		"valid":        valid,
-	})
-}
-
-func padOrTruncate(data []byte, size int) []byte {
-	if len(data) < size {
-		padded := make([]byte, size)
-		copy(padded, data)
-		return padded
-	}
-	return data[:size]
 }
 
 func writeOutput(data []byte, file string) error {
