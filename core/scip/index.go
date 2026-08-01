@@ -258,13 +258,13 @@ func isFunctionKind(kind string) bool {
 	}[kind]
 }
 
-// SymbolInfoAt returns hover info for the first symbol found at path/line.
+// SymbolInfoAt returns hover info for the primary symbol at path/line.
 func (ix *Index) SymbolInfoAt(path string, line int) *SymbolInfo {
-	symbols := ix.symbolsAt(path, line)
-	if len(symbols) == 0 {
+	sym := ix.primarySymbolAt(path, line)
+	if sym == "" {
 		return nil
 	}
-	return ix.symbolInfoFor(symbols[0])
+	return ix.symbolInfoFor(sym)
 }
 
 // SymbolsInRange returns hover info for all symbols occurring within the
