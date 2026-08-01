@@ -72,6 +72,10 @@ type Indexer struct {
     Requires     []string      // 运行时依赖，如 ["go"]（scip-go 内部跑 go list）
     OutputFormat string        // "scip"（单文件 index.scip）
     Disable      bool          // 需要构建系统（scip-java/clang），默认不启用
+    // 生成命令由这些字段数据驱动，便于支持不同 indexer 的 CLI：
+    Prefix     []string // 固定前置参数，如 ["scip"]（rust-analyzer scip）
+    OutputFlag string   // 指定输出路径的 flag，如 "-o"（scip-go）、"--output"（rust-analyzer）
+    Trailing   []string // 输出路径之后追加的参数，如 ["."]（rust-analyzer scip）
 }
 ```
 
@@ -79,10 +83,11 @@ type Indexer struct {
 
 | 语言 | Indexer | 仓库 | 分发 | 状态 |
 |------|---------|------|------|------|
-| Go | scip-go | `sourcegraph/scip-go` | GitHub release 二进制 | **启用（v1 唯一支持）** |
-| TypeScript/JS | scip-typescript | `sourcegraph/scip-typescript` | npm | 注册但需 Node，v2 |
-| Java | scip-java | `sourcegraph/scip-java` | GitHub release | 注册但需 JVM+构建，默认禁用 |
-| C/C++ | scip-clang | `sourcegraph/scip-clang` | GitHub release | 注册但需 compile_commands.json，默认禁用 |
+| Go | scip-go | `scip-code/scip-go` | GitHub release 二进制 | **启用（v1）** |
+| Rust | rust-analyzer（`scip` 子命令） | `rust-lang/rust-analyzer` | GitHub release 二进制（裸 `.gz`） | **启用（v1.5）** |
+| TypeScript/JS | scip-typescript | `scip-code/scip-typescript` | npm | 注册但需 Node，v2 |
+| Java | scip-java | `scip-code/scip-java` | GitHub release | 注册但需 JVM+构建，默认禁用 |
+| C/C++ | scip-clang | `scip-code/scip-clang` | GitHub release | 注册但需 compile_commands.json，默认禁用 |
 
 ## 2. 工具链 — `core/scip/toolchain.go`（treesitter-nvim 式自动安装）
 
@@ -107,12 +112,65 @@ type Indexer struct {
 ```
 go.mod                     → go
 *.go（大量）               → go
+Cargo.toml                 → rust
+*.rs（大量）               → rust
 package.json + tsconfig.json → typescript
 pom.xml                    → java
 compile_commands.json      → clang
 ```
 
 返回 `[]string`（一个仓库可多语言），未匹配到任何语言返回空（此时 review 不启用语义工具，静默回退）。
+
+## 3.1 Rust 支持方案
+
+### 调研结论
+
+- **没有独立的 scip-rust 二进制**：`scip-code/scip-rust` 仅是一个 shell 包装脚本
+  （release `v0.0.6` **无 release 资产**），底层命令就是 `rust-analyzer scip`。
+- **rust-analyzer 是可行的分发载体**：`rust-lang/rust-analyzer` 发布 GitHub release
+  二进制（如 `rust-analyzer-x86_64-unknown-linux-gnu.gz`，裸 `.gz` 单文件），且
+  `rust-analyzer scip` 支持 `--output PATH` 参数，可直接对接现有自动下载框架。
+- 包装脚本确认所需工具：`cargo`、`rustc`、`rust-analyzer` 三者必须在 PATH；
+  `rust-analyzer scip --output <path> <repoRoot>` 即完整索引命令。
+
+### 注册表条目
+
+```go
+{
+    Lang:       "rust",
+    Detect:     []string{"Cargo.toml", "*.rs"},
+    GitHubRepo: "rust-lang/rust-analyzer",
+    Version:    "2026-07-27",            // rust-analyzer 用日期标签
+    Install:    MethodGitHubRelease,
+    Requires:   []string{"cargo", "rustc"}, // rust-analyzer scip 需加载 workspace
+    BinaryName: "rust-analyzer",
+    OutputFile: "index.scip",
+    Prefix:     []string{"scip"},
+    OutputFlag: "--output",
+    Trailing:   []string{"."},
+}
+```
+
+生成命令展开为：`rust-analyzer scip --output <outPath> [-q] .`（cwd = repoRoot）。
+
+### 需要的基础设施改动
+
+| 改动 | 文件 | 说明 |
+|------|------|------|
+| 生成命令数据驱动 | `core/scip/runner.go` `generate()` | 目前硬编码 `scip-go -o <path> -q`；改为按 `Indexer.Prefix/OutputFlag/Trailing` 拼装，scip-go 对应 `Prefix=[] OutputFlag="-o" Trailing=[]`，行为不变 |
+| 支持裸 `.gz` 单文件二进制 | `core/scip/toolchain.go` `extractBinary()` | rust-analyzer 资产是裸 gzip 二进制而非 tar.gz；`.gz` 先试 tar 解析，失败则按单个二进制直接解压到目标名 |
+
+### 运行时前提与已知限制
+
+- 索引时 `cargo` + `rustc` 必须在 PATH（`rust-analyzer scip` 要解析 cargo workspace）
+- rust-analyzer 的 `scip` 子命令较新，宏/泛型的符号精度可能不如 scip-go 成熟
+- Windows 资产被现有 `core/installer` 过滤（所有 indexer 的既有约束）
+
+### 验证计划
+
+1. toolchain 单测：构造裸 `.gz` 二进制走解压路径
+2. registry 单测：`LookupLang("rust")` 存在且非 Disable
+3. 集成测试（可选）：临时 cargo 工程跑通 `EnsureIndex` + `FindDefinition`
 
 ## 4. 索引生成与缓存 — `core/scip/runner.go`
 
@@ -262,15 +320,17 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 4 | `core/git/agent.go` 接入（3 新工具 + read_function 升级 + 降级） | ~200 行 |
 | 5 | `scip/` CLI + `git-config.json` scip 配置 + review 集成（`--no-scip`/`--refresh-scip`） | ~250 行 |
 | 6 | README 文档 + `docs/tasks.md` 更新 + 全项目编译/测试/lint | — |
+| 7 | Rust 支持：registry 加 rust + `generate()` 数据驱动 + 裸 `.gz` 解压 | ~80 行 |
 
 ## 11. 风险与权衡
 
 | 风险 | 缓解 |
 |------|------|
-| indexer 分发方式不一（npm/pip/gem） | 注册表 `InstallMethod` 抽象；v1 仅承诺 GitHub release（Go/Java/Clang）；TS 走 npx 归入 v2 |
+| indexer 分发方式不一（npm/pip/gem） | 注册表 `InstallMethod` 抽象；v1 仅承诺 GitHub release（Go/Rust/Java/Clang）；TS 走 npx 归入 v2 |
 | scip-go 运行时需 `go` 在 PATH | `Requires` 字段 + preflight 检查，缺失时降级提示 |
+| rust-analyzer scip 运行时需 `cargo`+`rustc` | `Requires: ["cargo","rustc"]` + preflight 检查；rust-analyzer 自身自动下载 |
 | 首次 review 下载+索引延迟 | commit 缓存复用；verbose 打印进度；`--refresh-scip` 手动控制 |
-| 大仓 dirty 反复重索引 | 按 commit 缓存 + 仅 dirty 时重生成 working 索引 |
+| 大仓 dirty 反复重索引 | 按 commit 缓存 + 仅 dirty 时重生成 working 索引；dirty 时按源文件 mtime 新鲜度决定是否重建 |
 | 行号↔offset 转换错误 | 每文件缓存行起始 offset 表，单元测试覆盖多字节字符（中文注释） |
 | 与 `docs/tree-sitter-wasm-plan.md` 重叠 | SCIP 方案 supersede 该文件中的 Option A/C（find_definition 目标），完成后可在该文档标注已由 SCIP 实现 |
 
@@ -284,3 +344,4 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 4 | agent 工具接入 | ✅ |
 | 5 | CLI + 配置 | ✅ |
 | 6 | 文档 + 验证 | ✅ |
+| 7 | Rust 支持（registry + 数据驱动 generate + 裸 `.gz` 解压） | ⬜ 待实施 |
