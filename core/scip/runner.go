@@ -1,11 +1,13 @@
 package scip
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -107,13 +109,23 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 			return nil, err
 		}
 
+		needsGenerate := true
 		if !opts.Force && fileExists(path) {
-			tc.debugf("reusing cached %s index: %s", lang, path)
-		} else {
-			if _, err := os.Stat(path); err == nil && opts.Force {
+			// Commit-cached indexes are immutable. A dirty-tree "working" index
+			// is only reusable while no matching source file changed after it
+			// was generated.
+			if commit == workingCommit && indexStaleForLang(opts.RepoRoot, ix, path) {
+				tc.debugf("%s working index is stale, regenerating", lang)
+			} else {
+				needsGenerate = false
+				tc.debugf("reusing cached %s index: %s", lang, path)
+			}
+		}
+
+		if needsGenerate {
+			if opts.Force {
 				os.Remove(path)
 			}
-
 			bin, err := tc.Install(ix)
 			if err != nil {
 				if autoInstall {
@@ -131,8 +143,12 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 			}
 
 			if err := withLock(store.LockPath(project, lang), func() error {
-				if !opts.Force && fileExists(path) {
-					return nil
+				// Another process may have generated it while we waited for
+				// the lock; re-check before generating.
+				if fileExists(path) && !opts.Force {
+					if commit != workingCommit || !indexStaleForLang(opts.RepoRoot, ix, path) {
+						return nil
+					}
 				}
 				return generate(tc, ix, bin, opts.RepoRoot, path)
 			}); err != nil {
@@ -238,6 +254,87 @@ func currentCommit(repoRoot string) string {
 func repoDirty(repoRoot string) bool {
 	out := runGitIn(repoRoot, "status", "--porcelain")
 	return out != ""
+}
+
+// indexStaleForLang reports whether the cached index at cachePath is stale for
+// the indexer's language: any file matching the language that was modified
+// after the index was generated, or that was deleted, invalidates it. A
+// missing index is always considered stale.
+//
+// Staleness is mtime-based, which has filesystem-granularity limits (two
+// edits within one timestamp tick are not detected); on coarse filesystems
+// use --refresh-scip for a guaranteed rebuild.
+func indexStaleForLang(repoRoot string, ix *Indexer, cachePath string) bool {
+	cacheInfo, err := os.Stat(cachePath)
+	if err != nil {
+		return true
+	}
+	return hasLanguageChanges(repoRoot, ix, cacheInfo.ModTime())
+}
+
+// hasLanguageChanges reports whether a file matching the indexer's language was
+// deleted or modified after indexTime in the working tree.
+func hasLanguageChanges(repoRoot string, ix *Indexer, indexTime time.Time) bool {
+	for _, f := range changedFiles(repoRoot) {
+		if !fileMatchesIndexer(f, ix) {
+			continue
+		}
+		info, err := os.Stat(filepath.Join(repoRoot, f))
+		if err != nil {
+			// Deleted or unreadable → the stale index still contains symbols
+			// for this file, so it must be regenerated.
+			return true
+		}
+		if info.ModTime().After(indexTime) {
+			return true
+		}
+	}
+	return false
+}
+
+// fileMatchesIndexer reports whether a repo-relative path belongs to the
+// indexer's language, based on its Detect signals (base-name match or glob).
+func fileMatchesIndexer(relPath string, ix *Indexer) bool {
+	base := path.Base(relPath)
+	for _, sig := range ix.Detect {
+		if isGlob(sig) {
+			if ok, _ := path.Match(sig, base); ok {
+				return true
+			}
+			continue
+		}
+		if base == sig {
+			return true
+		}
+	}
+	return false
+}
+
+// changedFiles returns repo-relative paths of tracked modified and untracked
+// files in the working tree. Returns nil when not in a git repository.
+// Uses -z (NUL-separated) output so paths with special characters are not
+// C-style quoted; rename records contribute only their new path.
+func changedFiles(repoRoot string) []string {
+	cmd := exec.Command("git", "status", "--porcelain", "-z", "--untracked-files=all")
+	cmd.Dir = repoRoot
+	out, err := cmd.Output()
+	if err != nil {
+		return nil
+	}
+	parts := bytes.Split(out, []byte{0})
+	var files []string
+	for _, part := range parts {
+		if len(part) < 4 {
+			continue
+		}
+		if part[2] != ' ' {
+			// Old-path record of a rename; the new path was already collected
+			// from the preceding "XY <new>" status record.
+			continue
+		}
+		files = append(files, string(part[3:]))
+	}
+	return files
 }
 
 func fileExists(path string) bool {

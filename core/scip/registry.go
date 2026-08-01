@@ -45,7 +45,7 @@ type Indexer struct {
 var registry = []*Indexer{
 	{
 		Lang:       "go",
-		Detect:     []string{"go.mod", "*.go"},
+		Detect:     []string{"go.mod", "go.sum", "*.go"},
 		GitHubRepo: "scip-code/scip-go",
 		Version:    "v0.2.7",
 		Install:    MethodGitHubRelease,

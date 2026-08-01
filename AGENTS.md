@@ -161,6 +161,7 @@ The `core/` directory contains reusable business logic:
   - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version); Go is enabled, TS/Java/C registered for future use
   - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`
   - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
+  - Dirty-tree freshness: `working.scip` is reused only if no matching changed source file (via `git status --porcelain`) is newer than it; `--refresh-scip` forces a rebuild. Clean trees always reuse the immutable per-commit index.
   - Consumed by `core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 
 ### Command Packages
@@ -199,7 +200,7 @@ The `core/` directory contains reusable business logic:
     - Output rendered via `glamour` + `less -R` pager
     - Reviews saved to `~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md`
     - Shared config with `commit` via `git-config.json`
-    - Optional SCIP semantic tools via `core/scip` (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); controlled by `--no-scip`/`--scip-refresh` and `review.scip` config
+    - Optional SCIP semantic tools via `core/scip` (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
 
 - `scip/` - SCIP semantic code intelligence command
   - `install <lang>` — treesitter-nvim-style auto-download of an indexer binary

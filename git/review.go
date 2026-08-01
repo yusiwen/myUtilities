@@ -102,7 +102,7 @@ func (o *ReviewOptions) Run() error {
 				RepoRoot:    ".",
 				CacheDir:    scipCfg.CacheDir,
 				AutoInstall: autoInstall,
-				Force:       o.ScipRefresh,
+				Force:       o.RefreshScip,
 				Verbose:     o.Verbose,
 			})
 			if err != nil {

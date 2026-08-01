@@ -216,7 +216,7 @@ mu scip purge
 
 # review 时显式控制
 mu git review --no-scip           # 禁用语义工具
-mu git review --scip-refresh      # 强制重新生成（大仓 dirty 时用）
+mu git review --refresh-scip      # 强制重新生成（大仓 dirty 时用）
 ```
 
 注册到 `myutilities.go`：
@@ -260,7 +260,7 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 2 | `core/scip/detect.go` + `runner.go`（语言检测 + commit 缓存 + 锁） | ~200 行 |
 | 3 | `core/scip/index.go` + `index_test.go`（SCIP 加载 + 4 个查询 API） | ~350 行 |
 | 4 | `core/git/agent.go` 接入（3 新工具 + read_function 升级 + 降级） | ~200 行 |
-| 5 | `scip/` CLI + `git-config.json` scip 配置 + review 集成（`--no-scip`/`--scip-refresh`） | ~250 行 |
+| 5 | `scip/` CLI + `git-config.json` scip 配置 + review 集成（`--no-scip`/`--refresh-scip`） | ~250 行 |
 | 6 | README 文档 + `docs/tasks.md` 更新 + 全项目编译/测试/lint | — |
 
 ## 11. 风险与权衡
@@ -269,7 +269,7 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 |------|------|
 | indexer 分发方式不一（npm/pip/gem） | 注册表 `InstallMethod` 抽象；v1 仅承诺 GitHub release（Go/Java/Clang）；TS 走 npx 归入 v2 |
 | scip-go 运行时需 `go` 在 PATH | `Requires` 字段 + preflight 检查，缺失时降级提示 |
-| 首次 review 下载+索引延迟 | commit 缓存复用；verbose 打印进度；`--scip-refresh` 手动控制 |
+| 首次 review 下载+索引延迟 | commit 缓存复用；verbose 打印进度；`--refresh-scip` 手动控制 |
 | 大仓 dirty 反复重索引 | 按 commit 缓存 + 仅 dirty 时重生成 working 索引 |
 | 行号↔offset 转换错误 | 每文件缓存行起始 offset 表，单元测试覆盖多字节字符（中文注释） |
 | 与 `docs/tree-sitter-wasm-plan.md` 重叠 | SCIP 方案 supersede 该文件中的 Option A/C（find_definition 目标），完成后可在该文档标注已由 SCIP 实现 |

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // These tests verify every query API in core/scip against a real SCIP index
@@ -243,5 +244,80 @@ func TestIntegrationOffByOne(t *testing.T) {
 	}
 	if len(defs) != 0 {
 		t.Fatalf("expected no definitions beyond EOF, got %+v", defs)
+	}
+}
+
+// TestIntegrationWorkingIndexStaleness verifies that on a dirty working tree
+// the cached "working" index is regenerated only when a matching source file
+// changed after the index was built, and reused otherwise.
+func TestIntegrationWorkingIndexStaleness(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module probe\n\ngo 1.21\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "test@example.com")
+	git("config", "user.name", "test")
+	git("add", "-A")
+	git("commit", "-qm", "init")
+
+	cacheDir := filepath.Join(t.TempDir(), "cache")
+	opts := EnsureOptions{RepoRoot: dir, CacheDir: cacheDir, AutoInstall: true, Out: io.Discard}
+	if _, err := EnsureIndex(opts); err != nil {
+		t.Skipf("skipping (index build unavailable): %v", err)
+	}
+	workPath := NewIndexStore(cacheDir).IndexPath(repoProject(dir), "go", workingCommit)
+
+	// Modify main.go → dirty tree, generates a working index.
+	time.Sleep(10 * time.Millisecond)
+	write := func(s string) {
+		if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(s), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("package main\n\nfunc main() { println(1) }\n")
+	if _, err := EnsureIndex(opts); err != nil {
+		t.Skipf("skipping (index build unavailable): %v", err)
+	}
+	stat1, err := os.Stat(workPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Change main.go again → the working index is stale and must be rebuilt.
+	time.Sleep(10 * time.Millisecond)
+	write("package main\n\nfunc main() { println(2) }\n")
+	if _, err := EnsureIndex(opts); err != nil {
+		t.Fatal(err)
+	}
+	stat2, err := os.Stat(workPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stat2.ModTime().After(stat1.ModTime()) {
+		t.Fatalf("expected working index regenerated when source changed (before=%v after=%v)", stat1.ModTime(), stat2.ModTime())
+	}
+
+	// No further change → the cached working index is reused as-is.
+	reused := stat2.ModTime()
+	if _, err := EnsureIndex(opts); err != nil {
+		t.Fatal(err)
+	}
+	stat3, err := os.Stat(workPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stat3.ModTime().Equal(reused) {
+		t.Fatalf("expected working index reused when unchanged (before=%v after=%v)", reused, stat3.ModTime())
 	}
 }

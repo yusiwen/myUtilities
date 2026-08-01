@@ -693,7 +693,7 @@ mu git review --max-turns 10
 mu git review --no-scip
 
 # Force regeneration of the SCIP index
-mu git review --scip-refresh
+mu git review --refresh-scip
 ```
 
 The review is rendered with syntax highlighting via `glamour`, paginated through
