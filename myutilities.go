@@ -20,6 +20,7 @@ import (
 	"github.com/yusiwen/myUtilities/proxy"
 	"github.com/yusiwen/myUtilities/qrcode"
 	"github.com/yusiwen/myUtilities/runner"
+	"github.com/yusiwen/myUtilities/scip"
 	"github.com/yusiwen/myUtilities/serve"
 	"github.com/yusiwen/myUtilities/svcreg"
 	"github.com/yusiwen/myUtilities/watch"
@@ -49,5 +50,6 @@ type MyUtilities struct {
 	Ask        ask.Options                 `cmd:"" name:"ask" help:"Ask LLM questions."`
 	Budget     budget.Options              `cmd:"" name:"budget" help:"Query LLM API usage and balance."`
 	Metrics    metrics.Options             `cmd:"" name:"metrics" help:"Time-series metrics collection and querying."`
+	Scip       scip.Options                `cmd:"" name:"scip" help:"SCIP semantic code intelligence."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

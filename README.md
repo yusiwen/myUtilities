@@ -688,6 +688,12 @@ mu git review --list --list-all
 
 # Limit tool call rounds
 mu git review --max-turns 10
+
+# Disable SCIP semantic tools (e.g. on very large repos)
+mu git review --no-scip
+
+# Force regeneration of the SCIP index
+mu git review --scip-refresh
 ```
 
 The review is rendered with syntax highlighting via `glamour`, paginated through
@@ -699,6 +705,57 @@ The review is rendered with syntax highlighting via `glamour`, paginated through
 
 Saved files include YAML front matter with review metadata (commit, branch, diff stat,
 strategy, timestamp, etc.).
+
+#### SCIP semantic code intelligence
+
+`git review` uses **SCIP** (Sourcegraph's language-agnostic symbol index, the successor
+to LSIF) to give the review agent precise semantic understanding of the codebase.
+The agent gains four semantic tools:
+
+| Tool | Purpose |
+|------|---------|
+| `find_references` | All usages/call sites of a symbol across the repo — assess the impact of changing or deleting a function |
+| `find_definition` | Jump to the definition of a symbol referenced in the diff |
+| `symbol_info` | Hover-style signature, kind, and doc comment |
+| `read_function` | Reads the exact enclosing function body (upgraded from a fixed ±30-line window) |
+
+Indexers are installed **on demand, treesitter-nvim style**: on the first review the
+language is auto-detected from the repo (e.g. `go.mod`), the matching indexer binary is
+downloaded from a GitHub release into `~/.cache/mu/scip/tools/`, and the index is built
+and cached per commit in `~/.cache/mu/scip/index/`. Dirty working trees use a `working`
+index. Missing indexers, failed generation, or unsupported languages degrade gracefully
+to the plain text tools.
+
+SCIP management commands:
+
+```bash
+# Install the indexer for a language (auto-downloaded)
+mu scip install go
+
+# List available / installed indexers
+mu scip list
+
+# Build the index for the current repo
+mu scip index
+
+# Remove all cached indexers and indexes
+mu scip purge
+```
+
+Configuration lives in `git-config.json` under the `review.scip` key:
+
+```json
+{
+  "review": {
+    "provider": "default",
+    "lang": "en",
+    "scip": { "enabled": true, "auto_install": true, "cache_dir": "" }
+  }
+}
+```
+
+`cache_dir` defaults to `~/.cache/mu/scip`. Disabling `enabled` or `auto_install` makes
+reviews silently fall back to text tools.
 
 #### git ignore — Download .gitignore templates
 

@@ -11,6 +11,7 @@ import (
 
 	"github.com/briandowns/spinner"
 	"github.com/yusiwen/myUtilities/core/openai"
+	"github.com/yusiwen/myUtilities/core/scip"
 	"github.com/yusiwen/myUtilities/core/term"
 	xterm "golang.org/x/term"
 )
@@ -51,6 +52,7 @@ type ReviewAgent struct {
 	progressWriter io.Writer
 	diffArgs       []string
 	spinner        *spinner.Spinner
+	indexSet       *scip.IndexSet
 }
 
 type AgentResult struct {
@@ -59,7 +61,7 @@ type AgentResult struct {
 	MaxReached bool
 }
 
-func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, lang, context, repoName, branchName, commitHash string, maxTurns int, verbose bool) (*ReviewAgent, error) {
+func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, lang, context, repoName, branchName, commitHash string, maxTurns int, verbose bool, indexSet *scip.IndexSet) (*ReviewAgent, error) {
 	nameStatus, _ := GetNameStatus(diffArgs)
 
 	var initMsg strings.Builder
@@ -106,6 +108,11 @@ func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, 
 		initMsg.WriteString("### Additional Context\n\n")
 		initMsg.WriteString(context)
 		initMsg.WriteString("\n\n")
+	}
+
+	if indexSet != nil {
+		initMsg.WriteString("### Semantic Code Intelligence\n\n")
+		initMsg.WriteString("A SCIP semantic index is available. Use **find_definition** and **find_references** to resolve symbols precisely across the repository (find_references is especially useful to assess the impact of signature changes or deletions). Use **symbol_info** for signatures and docs. Lines are 1-based.\n\n")
 	}
 
 	initMsg.WriteString("Review the changes above. Use the available tools to read diffs and examine files, then produce your final review.")
@@ -185,6 +192,56 @@ func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, 
 		},
 	}
 
+	if indexSet != nil {
+		tools = append(tools, []openai.ToolDef{
+			{
+				Type: "function",
+				Function: openai.ToolFunction{
+					Name:        "find_references",
+					Description: "Find all usages/call sites of the symbol at the given line across the whole repository (including other files). Use this to assess the impact of changing or deleting a function, method, or type.",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"path": map[string]any{"type": "string", "description": "File path relative to repo root"},
+							"line": map[string]any{"type": "integer", "description": "1-based line number of the symbol"},
+						},
+						"required": []string{"path", "line"},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: openai.ToolFunction{
+					Name:        "find_definition",
+					Description: "Jump to the definition of the symbol(s) referenced on the given line. Returns file:line locations and symbol names. Use this to understand what a referenced function or type is.",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"path": map[string]any{"type": "string", "description": "File path relative to repo root"},
+							"line": map[string]any{"type": "integer", "description": "1-based line number of the symbol usage"},
+						},
+						"required": []string{"path", "line"},
+					},
+				},
+			},
+			{
+				Type: "function",
+				Function: openai.ToolFunction{
+					Name:        "symbol_info",
+					Description: "Return hover-style information (signature, kind, doc comment) for the symbol at the given line.",
+					Parameters: map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"path": map[string]any{"type": "string", "description": "File path relative to repo root"},
+							"line": map[string]any{"type": "integer", "description": "1-based line number of the symbol"},
+						},
+						"required": []string{"path", "line"},
+					},
+				},
+			},
+		}...)
+	}
+
 	var spin *spinner.Spinner
 	if xterm.IsTerminal(int(os.Stderr.Fd())) {
 		spin = spinner.New(spinner.CharSets[14], 100*time.Millisecond)
@@ -202,6 +259,7 @@ func NewReviewAgent(client *openai.Client, diff *DiffResult, diffArgs []string, 
 		progressWriter: os.Stderr,
 		diffArgs:       diffArgs,
 		spinner:        spin,
+		indexSet:       indexSet,
 	}, nil
 }
 
@@ -329,7 +387,37 @@ func (a *ReviewAgent) executeTool(tc openai.ToolCall) string {
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 			return fmt.Sprintf("error parsing args: %s", err)
 		}
-		return toolReadFunction(args.Path, args.Line)
+		return a.toolReadFunction(args.Path, args.Line)
+
+	case "find_references":
+		var args struct {
+			Path string `json:"path"`
+			Line int    `json:"line"`
+		}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			return fmt.Sprintf("error parsing args: %s", err)
+		}
+		return a.toolFindReferences(args.Path, args.Line)
+
+	case "find_definition":
+		var args struct {
+			Path string `json:"path"`
+			Line int    `json:"line"`
+		}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			return fmt.Sprintf("error parsing args: %s", err)
+		}
+		return a.toolFindDefinition(args.Path, args.Line)
+
+	case "symbol_info":
+		var args struct {
+			Path string `json:"path"`
+			Line int    `json:"line"`
+		}
+		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+			return fmt.Sprintf("error parsing args: %s", err)
+		}
+		return a.toolSymbolInfo(args.Path, args.Line)
 
 	default:
 		return fmt.Sprintf("unknown tool: %s", tc.Function.Name)
@@ -357,7 +445,7 @@ func formatToolArgs(name, argsJSON string) string {
 		return args.Path
 	case "search_code":
 		return args.Pattern
-	case "read_function":
+	case "read_function", "find_references", "find_definition", "symbol_info":
 		return fmt.Sprintf("%s:%d", args.Path, args.Line)
 	}
 	return ""
@@ -439,7 +527,23 @@ func toolSearch(pattern, path string) string {
 	return result
 }
 
-func toolReadFunction(path string, line int) string {
+const functionContextLines = 80
+
+// toolReadFunction reads the enclosing function body when a SCIP index is
+// available, falling back to a ±30 line window around the change.
+func (a *ReviewAgent) toolReadFunction(path string, line int) string {
+	if a.indexSet != nil {
+		if ix, ok := a.indexSet.IndexFor(path); ok {
+			if start := ix.EnclosingDefLine(path, line); start > 0 {
+				end := start + functionContextLines
+				return toolReadFile(path, start, end)
+			}
+		}
+	}
+	return toolReadFunctionFallback(path, line)
+}
+
+func toolReadFunctionFallback(path string, line int) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Sprintf("error reading %q: %s", path, err)
@@ -461,6 +565,75 @@ func toolReadFunction(path string, line int) string {
 	sb.WriteString(fmt.Sprintf("file: %s (lines %d-%d of %d)\n", path, start+1, end, totalLines))
 	for i := start; i < end; i++ {
 		sb.WriteString(fmt.Sprintf("%d: %s\n", i+1, lines[i]))
+	}
+	return sb.String()
+}
+
+/* ─── SCIP Semantic Tools ─── */
+
+func (a *ReviewAgent) toolFindReferences(path string, line int) string {
+	if a.indexSet == nil {
+		return "error: semantic index is not available. Use search_code instead."
+	}
+	locs, err := a.indexSet.FindReferences(path, line)
+	if err != nil {
+		return fmt.Sprintf("error: %s", err)
+	}
+	if len(locs) == 0 {
+		return fmt.Sprintf("no references found for the symbol at %s:%d", path, line)
+	}
+	return formatLocations("references", path, line, locs)
+}
+
+func (a *ReviewAgent) toolFindDefinition(path string, line int) string {
+	if a.indexSet == nil {
+		return "error: semantic index is not available. Use search_code instead."
+	}
+	locs, err := a.indexSet.FindDefinition(path, line)
+	if err != nil {
+		return fmt.Sprintf("error: %s", err)
+	}
+	if len(locs) == 0 {
+		return fmt.Sprintf("no definition found for the symbol at %s:%d", path, line)
+	}
+	return formatLocations("definitions", path, line, locs)
+}
+
+func (a *ReviewAgent) toolSymbolInfo(path string, line int) string {
+	if a.indexSet == nil {
+		return "error: semantic index is not available."
+	}
+	info, err := a.indexSet.SymbolInfoAt(path, line)
+	if err != nil {
+		return fmt.Sprintf("error: %s", err)
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("symbol: %s\n", info.Symbol))
+	if info.DisplayName != "" {
+		sb.WriteString(fmt.Sprintf("name: %s\n", info.DisplayName))
+	}
+	if info.Kind != "" {
+		sb.WriteString(fmt.Sprintf("kind: %s\n", info.Kind))
+	}
+	if info.Signature != "" {
+		sb.WriteString(fmt.Sprintf("signature: %s\n", info.Signature))
+	}
+	if info.Documentation != "" {
+		sb.WriteString("documentation:\n")
+		sb.WriteString(info.Documentation)
+	}
+	return sb.String()
+}
+
+func formatLocations(kind, path string, line int, locs []scip.Location) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("%s for symbol at %s:%d (%d locations):\n", kind, path, line, len(locs)))
+	for _, loc := range locs {
+		role := "usage"
+		if loc.IsDef {
+			role = "definition"
+		}
+		fmt.Fprintf(&sb, "  %s:%d:%d [%s] %s\n", loc.Path, loc.Line, loc.Character, role, loc.Symbol)
 	}
 	return sb.String()
 }

@@ -15,10 +15,17 @@ type Provider struct {
 	Model   string `json:"model"`
 }
 
+type ScipConfig struct {
+	Enabled     *bool  `json:"enabled,omitempty"`      // nil → enabled by default
+	AutoInstall *bool  `json:"auto_install,omitempty"` // nil → true
+	CacheDir    string `json:"cache_dir,omitempty"`    // empty → ~/.cache/mu/scip
+}
+
 type ModuleConfig struct {
-	Provider   string `json:"provider"`
-	Lang       string `json:"lang,omitempty"`
-	ReviewsDir string `json:"reviews_dir,omitempty"`
+	Provider   string     `json:"provider"`
+	Lang       string     `json:"lang,omitempty"`
+	ReviewsDir string     `json:"reviews_dir,omitempty"`
+	Scip       ScipConfig `json:"scip,omitempty"`
 }
 
 func (m *ModuleConfig) ReviewsDirPath() string {

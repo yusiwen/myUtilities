@@ -13,6 +13,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	coregit "github.com/yusiwen/myUtilities/core/git"
 	"github.com/yusiwen/myUtilities/core/openai"
+	"github.com/yusiwen/myUtilities/core/scip"
 	"github.com/yusiwen/myUtilities/core/term"
 	xterm "golang.org/x/term"
 )
@@ -89,6 +90,30 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
+	var indexSet *scip.IndexSet
+	if !o.NoScip {
+		scipCfg := moduleCfg.Scip
+		if scipCfg.Enabled == nil || *scipCfg.Enabled {
+			autoInstall := true
+			if scipCfg.AutoInstall != nil {
+				autoInstall = *scipCfg.AutoInstall
+			}
+			indexSet, err = scip.EnsureIndex(scip.EnsureOptions{
+				RepoRoot:    ".",
+				CacheDir:    scipCfg.CacheDir,
+				AutoInstall: autoInstall,
+				Force:       o.ScipRefresh,
+				Verbose:     o.Verbose,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s\n", term.Faint("scip: "+err.Error()+" (falling back to text tools)"))
+				indexSet = nil
+			} else if indexSet != nil && o.Verbose {
+				fmt.Fprintf(os.Stderr, "%s\n", term.Faint("scip indexes: "+strings.Join(indexSet.Langs(), ", ")))
+			}
+		}
+	}
+
 	var diffArgs []string
 	if o.Staged {
 		diffArgs = append(diffArgs, "--staged")
@@ -137,7 +162,7 @@ func (o *ReviewOptions) Run() error {
 
 	maxTurns := o.MaxTurns
 	start := time.Now()
-	agent, err := coregit.NewReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose)
+	agent, err := coregit.NewReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose, indexSet)
 	if err != nil {
 		return err
 	}

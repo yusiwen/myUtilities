@@ -66,6 +66,7 @@ myutilities.go
 ├── Runner (cmd: run)           - Command runner with display
 ├── Wol (cmd: wol)              - Wake-on-LAN HTTP server with agent
 ├── Crypto (cmd: crypto)        - Crypto utilities
+├── Scip (cmd: scip)            - SCIP semantic code intelligence (indexers + index)
 ├── Gateway (cmd: gateway)      - Unified gateway server
 ├── Es (cmd: es)                - Elasticsearch query tool
 ├── Git (cmd: git)              - Git utilities (ignore, commit, review)
@@ -154,6 +155,13 @@ The `core/` directory contains reusable business logic:
   - `GetNameStatus(args)` — generic `--name-status` for arbitrary diff args
   - `GetUntrackedFiles()` — returns list of untracked files
   - `RepoName()`, `CurrentBranch()`, `ShortCommit()` — repo metadata helpers
+- `core/scip/` - SCIP semantic code intelligence
+  - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
+  - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
+  - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version); Go is enabled, TS/Java/C registered for future use
+  - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`
+  - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
+  - Consumed by `core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 
 ### Command Packages
 
@@ -191,6 +199,13 @@ The `core/` directory contains reusable business logic:
     - Output rendered via `glamour` + `less -R` pager
     - Reviews saved to `~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md`
     - Shared config with `commit` via `git-config.json`
+    - Optional SCIP semantic tools via `core/scip` (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); controlled by `--no-scip`/`--scip-refresh` and `review.scip` config
+
+- `scip/` - SCIP semantic code intelligence command
+  - `install <lang>` — treesitter-nvim-style auto-download of an indexer binary
+  - `list` — available/installed indexers
+  - `index` — build the index for the current repo
+  - `purge` — remove cached indexers and indexes
 
 ## Web Frontend Architecture
 
