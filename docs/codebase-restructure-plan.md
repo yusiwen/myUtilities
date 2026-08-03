@@ -25,7 +25,7 @@
 
 **操作步骤：**
 
-1. 新建 `core/version/version.go`:
+1. 新建 `internal/core/version/version.go`:
    ```go
    package version
 
@@ -39,17 +39,17 @@
 2. 删除根目录 `version.go`（原 `package main`）
 
 3. 修改 `main.go`:
-   - 添加 import `v "github.com/yusiwen/myUtilities/core/version"`
+   - 添加 import `v "github.com/yusiwen/myUtilities/internal/core/version"`
    - 所有 `Version` / `CommitSHA` / `BuildTime` 改为 `v.Version` / `v.CommitSHA` / `v.BuildTime`
 
 4. 修改 `Makefile`:
-   - `main.Version` → `github.com/yusiwen/myUtilities/core/version.Version`
-   - `main.CommitSHA` → `github.com/yusiwen/myUtilities/core/version.CommitSHA`
-   - `main.BuildTime` → `github.com/yusiwen/myUtilities/core/version.BuildTime`
+   - `main.Version` → `github.com/yusiwen/myUtilities/internal/core/version.Version`
+   - `main.CommitSHA` → `github.com/yusiwen/myUtilities/internal/core/version.CommitSHA`
+   - `main.BuildTime` → `github.com/yusiwen/myUtilities/internal/core/version.BuildTime`
 
 5. 验证：`make build && ./bin/mu --version`
 
-**涉及文件：** `core/version/version.go`（新建）、`main.go`（修改）、`Makefile`（修改）
+**涉及文件：** `internal/core/version/version.go`（新建）、`main.go`（修改）、`Makefile`（修改）
 
 ---
 
@@ -163,9 +163,12 @@
 
 ### 3-⑤ 迁移到 cmd/ + internal/
 
+> ✅ **已完成**（2026-08-03）。详细执行方案与进度见 [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)。
+> 实际规模修正：~180 个 .go 文件、23 个命令包、23 个 core 子包、12 个前端模块、42 个文件 / 103 处 import 改写。
+
 **目标：** 解决 D，将项目调整为标准 Go 项目布局。
 
-**目标布局：**
+**实际落地布局：**
 
 ```
 myUtilities/                     (go.mod)
@@ -177,31 +180,29 @@ myUtilities/                     (go.mod)
 │   ├── gateway/  wol/  es/  ...
 │   ├── crypto/  diff/  k8s/  ...
 │   └── core/                    (internal/core/)
-│       ├── crypto/  gitcore/  cmdrunner/  proxycore/  ...
+│       ├── crypto/  git/  runner/  proxy/  ...
 │       └── net/  openai/  store/  watcher/
-├── pkg/                          (外部可导入)
-│   └── version/                  (从 core/version/ 移出，供外部引用)
 ├── web/                          (前端资源)
 │   └── shared/frontend/
 ├── Makefile
 └── README.md
 ```
 
-**影响评估：**
+**影响评估（实际）：**
 
 | 方面 | 影响 |
 |------|------|
-| 文件移动 | ~50+ 个 Go 文件，~10 个 frontend 目录 |
-| import 路径 | 所有 `github.com/yusiwen/myUtilities/gateway` → `github.com/yusiwen/myUtilities/internal/gateway` |
-| `//go:embed` | 不改变（路径相对于文件自身，文件跟着目录走） |
-| Makefile | `go build -o bin/mu .` → `go build -o bin/mu ./cmd/mu/` |
-| ldflags | 不改变（版本包路径已在 Phase 1 固定）|
+| 文件移动 | ~180 个 Go 文件，12 个 frontend 目录（含 dist，`git mv` OS rename 一并移动），web/shared |
+| import 路径 | 全部 `github.com/yusiwen/myUtilities/X` → `.../internal/X`，103 处（含 core 深层路径与测试文件） |
+| `//go:embed` | 不改变（路径相对于文件自身，文件跟着目录走；含 `mock/oauth` 的 templates+static） |
+| Makefile | `go build -o bin/mu .` → `./cmd/mu/`（GOBUILD + default 两处） |
+| ldflags | 不改变（`-X main.*`，main 包仍在 cmd/mu） |
 | `install.sh` | 不改变（只引用二进制） |
 | CLI 命令 | 不改变 |
 | Web UI 路由 | 不改变 |
 | 用户可见行为 | 无变化 |
 
-**决策分析：** 此项目是 CLI 工具 + Web UI，不会作为库被外部导入。`internal/` 的保护价值有限。`cmd/mu/` 的好处是入口清晰，但代价是约 50 个文件的 import 路径变更和回归测试成本。
+**决策分析：** 此项目是 CLI 工具 + Web UI，不会作为库被外部导入。`internal/` 的保护价值有限。`cmd/mu/` 的好处是入口清晰，但代价是约 180 个文件的 import 路径变更和回归测试成本。
 
 **建议：** 等 Phase 1 + 2 完成后评估是否仍需要做 Phase 3。如果 Phase 2（解决包名冲突）已经大幅改善代码结构，Phase 3 可酌情降级或跳过。
 
@@ -236,12 +237,12 @@ myUtilities/                     (go.mod)
 | 1-② | 修复文件名 | 6 | ~10min | 🟢 低 |
 | 1-③ | 清理 TODO | 1 | ~5min | 🟢 低 |
 | 2-④ | 包名冲突 | 6-8 | ~2h | 🟡 中 |
-| 3-⑤ | 标准布局 | ~50+ | ~1d | 🔴 高 |
+| 3-⑤ | 标准布局 | ~180 | ~1d | 🔴 高 |
 | 4-⑥ | 命名收尾 | 5-10 | ~1h | 🟢 低 |
 
 ## 建议执行顺序
 
 1. **Phase 1** — Quick Wins，立即可做，风险低
 2. **Phase 2** — 包名冲突，解决最大痛点
-3. **(讨论) Phase 3** — 标准布局，评估 ROI 后决定
+3. **Phase 3** — 标准布局 ✅ 已完成（见 [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)）
 4. **Phase 4** — 命名收尾，最后补完

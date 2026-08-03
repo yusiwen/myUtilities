@@ -1,6 +1,6 @@
 # cmd/ + internal/ 布局重构计划
 
-> 状态：待执行
+> 状态：✅ 已完成
 > 关联：`docs/codebase-restructure-plan.md` Phase 3-⑤（本计划为其细化执行版）
 > 目标：将 myUtilities 调整为标准 Go 项目布局（cmd/ + internal/），编译为单一 standalone executable。
 
@@ -54,36 +54,36 @@ myUtilities/
 
 ### Commit 1 — 目录迁移 + import 重写
 
-- [ ] `mkdir -p cmd/mu && git mv main.go myutilities.go version.go cmd/mu/`
-- [ ] 23 个命令包 `git mv` 到 `internal/`
-- [ ] `git mv core internal/core`
-- [ ] `git mv shared web/shared`
-- [ ] 全局 sed 重写 import（42 文件 / 103 处加 `internal/` 前缀）
-- [ ] 验证：`go build ./cmd/mu` + `go vet ./...` + `go test ./...`
+- [x] `mkdir -p cmd/mu && git mv main.go myutilities.go version.go cmd/mu/`
+- [x] 23 个命令包 `git mv` 到 `internal/`
+- [x] `git mv core internal/core`
+- [x] `git mv shared web/shared`
+- [x] 全局 sed 重写 import（42 文件 / 103 处加 `internal/` 前缀）
+- [x] 验证：`go build ./cmd/mu` + `go vet ./...` + `go test ./...`
 
 ### Commit 2 — 构建系统
 
-- [ ] Makefile **两处独立构建路径**：
+- [x] Makefile **两处独立构建路径**：
   - `GOBUILD`（line 21）`go build ... .` → `./cmd/mu`（平台 target 全部复用此变量，无需逐个改）
   - `default:`（line 32）单独 `go build -o bin/mu .` → `./cmd/mu`（保持无 ldflags 注入版本的既有行为）
-- [ ] Makefile：`FRONTEND_DIRS`（12 项）+ 12 个 `*_FRONTEND_DIR` 加 `internal/` 前缀
-- [ ] Makefile：`THEME_PARTIAL`/`COMMON_PARTIAL` → `web/shared/frontend/`
-- [ ] .gitignore：**24 行** frontend 条目（12 模块 × `node_modules/` + `dist/`）→ `internal/*/frontend/...`；其余条目（`tmp/`、`hosts.json`、`mu` 等）与目录无关，不动
-- [ ] 验证：`make build` + `./bin/mu --help` + `./bin/mu --version` 冒烟
+- [x] Makefile：`FRONTEND_DIRS`（12 项）+ 12 个 `*_FRONTEND_DIR` 加 `internal/` 前缀
+- [x] Makefile：`THEME_PARTIAL`/`COMMON_PARTIAL` → `web/shared/frontend/`
+- [x] .gitignore：**24 行** frontend 条目（12 模块 × `node_modules/` + `dist/`）→ `internal/*/frontend/...`；其余条目（`tmp/`、`hosts.json`、`mu` 等）与目录无关，不动
+- [x] 验证：`make build` + `./bin/mu --help` + `./bin/mu --version` 冒烟
 
 ### Commit 3 — 文档
 
-- [ ] AGENTS.md：项目布局图、core/→internal/core/、shared partials 路径
-- [ ] README.md：**确认无需更新**（12 处 `core/`/`wol/` 等匹配均为 API 路由/URL，无源码布局引用）
-- [ ] CODEBASE.md：目录树更新
-- [ ] docs/codebase-restructure-plan.md：Phase 3 标记完成、修正影响评估
-- [ ] docs/tasks.md：勾选布局重构项
-- [ ] 验证：grep 确认无 `myUtilities/<pkg>` 旧路径残留于文档
+- [x] AGENTS.md：项目布局图、core/→internal/core/、shared partials 路径
+- [x] README.md：**确认无需更新**（12 处 `core/`/`wol/` 等匹配均为 API 路由/URL，无源码布局引用）
+- [x] CODEBASE.md：目录树更新
+- [x] docs/codebase-restructure-plan.md：Phase 3 标记完成、修正影响评估
+- [x] docs/tasks.md：勾选布局重构项
+- [x] 验证：grep 确认无 `myUtilities/<pkg>` 旧路径残留于文档
 
 ### 收尾
 
-- [ ] 删除根目录 `~/` 残留目录（untracked）、`myUtilities` 编译产物（git 已忽略）
-- [ ] CI（`make all`）最终验证
+- [x] 删除根目录 `~/` 残留目录（untracked）、`myUtilities` 编译产物（git 已忽略）
+- [x] CI（`make all`）最终验证（本地 `make build` 全流程 + go build/vet/test 通过）
 
 ## 风险与缓解
 
@@ -98,8 +98,8 @@ myUtilities/
 
 ## 进度
 
-- [ ] 前置：提交当前改动
-- [ ] Commit 1：目录迁移 + import 重写
-- [ ] Commit 2：构建系统
-- [ ] Commit 3：文档
-- [ ] 收尾：清理 + CI 验证
+- [x] 前置：提交当前改动
+- [x] Commit 1：目录迁移 + import 重写
+- [x] Commit 2：构建系统
+- [x] Commit 3：文档
+- [x] 收尾：清理 + CI 验证

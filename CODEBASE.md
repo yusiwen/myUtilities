@@ -14,11 +14,11 @@
 
 | File | Purpose |
 |---|---|
-| `main.go:14` | `main()` — parses CLI with Kong, dispatches to subcommands |
-| `myutilities.go:13` | `MyUtilities` struct — defines top-level subcommands |
-| `version.go:3` | Build-time injected vars: `Version`, `CommitSHA`, `BuildTime` |
+| `cmd/mu/main.go:16` | `main()` — parses CLI with Kong, dispatches to subcommands |
+| `cmd/mu/myutilities.go:13` | `MyUtilities` struct — defines top-level subcommands |
+| `cmd/mu/version.go:3` | Build-time injected vars: `Version`, `CommitSHA`, `BuildTime` |
 
-**Commands registered** (`myutilities.go`):
+**Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `proxy`, `run`, `wol`, `es`
 
 ---
@@ -27,7 +27,7 @@
 
 - Build output: `bin/mu-<platform>`
 - Version/commit/time injected via `-ldflags`
-- Frontend: builds Svelte apps under `wol/frontend` and `es/frontend` via `npm run build`, embeds with `//go:embed`
+- Frontend: builds Svelte apps under `internal/wol/frontend` and `internal/es/frontend` via `npm run build`, embeds with `//go:embed`
 - Supported platforms: darwin (amd64/arm64), linux (386/amd64/armv5-v8/mips*), freebsd (386/amd64/arm64), windows (386/amd64/arm64/arm32v7)
 
 ---
@@ -36,64 +36,71 @@
 
 ```
 .
-├── main.go                  # Entry point
-├── myutilities.go           # CLI command definitions
-├── version.go               # Build-time version vars
-├── Makefile                 # Cross-compilation builds
-├── core/                    # Shared business logic
-│   ├── net/                 #  Network utilities
-│   │   ├── wol.go           #  SendWOL() — magic packet sender
-│   │   ├── interface.go     #  IPFromInterface(), SelectBestInterfaceForWOL(), GetOutboundMAC()
-│   │   ├── interfaces.go    #  GetInterfaceDetails(), type detection, WOL suitability
-│   │   └── validation.go    #  ValidHostname(), ValidMAC()
-│   ├── proxy/               # Database proxy abstractions
-│   │   ├── Proxy.go         #  Proxy interface, BackendConfig, BackendStatus, DefaultProxy
-│   │   └── db/DBProxy.go    #  OracleProxy — TCP proxy with health checks & failover
-│   ├── runner/              # Command execution engine
-│   │   └── CommandRunner.go #  Runs bash commands with real-time colored output, buffer mgmt
-│   ├── store/               # BoltDB key-value store
-│   │   └── store.go         #  CRUD for MAC aliases, boot/shutdown event recording
-│   └── watcher/             # K8s-style watch system
-│       ├── watcher.go       #  WatchServer, Watcher interface, event dispatch
-│       ├── event.go         #  Event types, EventStore
-│       ├── FileWatcher.go   #  Polls local files for changes (MD5 checksum)
-│       └── GitWatcher.go    #  Polls remote Git repo for new commits, pulls changes
-├── installer/               # GitHub release installer
-│   ├── options.go           #  Flags: repo, output, token, os/arch override
-│   ├── command.go           #  Run() — fetches releases, generates shell install scripts
-│   ├── search.go            #  imFeelingLuck() — auto-discovers repo via DuckDuckGo/Google
-│   ├── strings.go           #  Regex helpers: getOS, getArch, getFileExt
-│   └── templates/
-│       ├── templates.go     #  Embeds install.sh.tmpl
-│       └── install.sh.tmpl  #  Shell script template for curl/untar install
-├── mock/                    # Mock servers for testing
-│   ├── options.go           #  Subcommands: file-server, mock-server, oauth-server
-│   ├── fileserver.go        #  File upload server (multipart form)
-│   ├── mockserver.go        #  HTTP mock with CSV or random generated data (chaff)
-│   ├── oauthserver.go       #  Delegates to mock/oauth/ package
-│   └── response.go          #  Response/Status structs
-├── proxy/                   # Database proxy CLI
-│   ├── options.go           #  Flags: host/port, db routes, health-check params
-│   └── dbproxy.go           #  Run() — parses options, starts OracleProxy
-├── runner/                  # Command runner CLI
-│   ├── options.go           #  Embed: []Command from core/runner
-│   └── runner.go            #  Run() — creates CommandRunner, executes commands
-├── wol/                     # Wake-on-LAN HTTP server + agent
-│   ├── options.go           #  Subcommands: serve, agent, interfaces
-│   ├── command.go           #  Serve: WOL API, alias CRUD, boot/shutdown notify
-│   │                       #  Agent: boot/shutdown/register with retry backoff
-│   │                       #  Interfaces: list network interfaces with WOL suitability
-│   └── embed.go             #  Embeds frontend/dist/* Svelte app
-├── es/                      # Elasticsearch query tool
-│   ├── options.go           #  Subcommands: set (host/user/password), serve
-│   ├── command.go           #  Serve: HTTP server with /api/status, /api/indices, /api/search, /api/config
-│   ├── client.go            #  go-elasticsearch client: newESClient, esPing, esListIndices, esSearch
-│   ├── config.go            #  ESConfig, load/save JSON config, maskedPassword
-│   └── embed.go             #  Embeds frontend/dist/* Svelte app
-├── install.sh               # Quick install script for the tool itself
+├── cmd/
+│   └── mu/
+│       ├── main.go            # main() — parses CLI with Kong, dispatches to subcommands
+│       ├── myutilities.go     # MyUtilities struct — defines top-level subcommands
+│       └── version.go         # Build-time version vars (injected via ldflags)
+├── internal/                  # All application packages (not externally importable)
+│   ├── core/                  # Shared business logic
+│   │   ├── net/               #  Network utilities
+│   │   │   ├── wol.go         #  SendWOL() — magic packet sender
+│   │   │   ├── interface.go   #  IPFromInterface(), SelectBestInterfaceForWOL(), GetOutboundMAC()
+│   │   │   ├── interfaces.go  #  GetInterfaceDetails(), type detection, WOL suitability
+│   │   │   └── validation.go  #  ValidHostname(), ValidMAC()
+│   │   ├── proxy/             # Database proxy abstractions
+│   │   │   ├── proxy.go       #  Proxy interface, BackendConfig, BackendStatus, DefaultProxy
+│   │   │   └── db/dbproxy.go  #  OracleProxy — TCP proxy with health checks & failover
+│   │   ├── runner/            # Command execution engine
+│   │   │   └── commandrunner.go  #  Runs bash commands with real-time colored output, buffer mgmt
+│   │   ├── store/             # BoltDB key-value store
+│   │   │   └── store.go       #  CRUD for MAC aliases, boot/shutdown event recording
+│   │   └── watcher/           # K8s-style watch system
+│   │       ├── watcher.go     #  WatchServer, Watcher interface, event dispatch
+│   │       ├── event.go       #  Event types, EventStore
+│   │       ├── filewatcher.go #  Polls local files for changes (MD5 checksum)
+│   │       └── gitwatcher.go  #  Polls remote Git repo for new commits, pulls changes
+│   ├── installer/             # GitHub release installer
+│   │   ├── options.go         #  Flags: repo, output, token, os/arch override
+│   │   ├── command.go         #  Run() — fetches releases, generates shell install scripts
+│   │   ├── search.go          #  imFeelingLuck() — auto-discovers repo via DuckDuckGo/Google
+│   │   ├── strings.go         #  Regex helpers: getOS, getArch, getFileExt
+│   │   └── templates/
+│   │       ├── templates.go   #  Embeds install.sh.tmpl
+│   │       └── install.sh.tmpl  #  Shell script template for curl/untar install
+│   ├── mock/                  # Mock servers for testing
+│   │   ├── options.go         #  Subcommands: file-server, mock-server, oauth-server
+│   │   ├── fileserver.go      #  File upload server (multipart form)
+│   │   ├── mockserver.go      #  HTTP mock with CSV or random generated data (chaff)
+│   │   ├── oauthserver.go     #  Delegates to mock/oauth/ package
+│   │   └── response.go        #  Response/Status structs
+│   ├── proxy/                 # Database proxy CLI
+│   │   ├── options.go         #  Flags: host/port, db routes, health-check params
+│   │   └── dbproxy.go         #  Run() — parses options, starts OracleProxy
+│   ├── runner/                # Command runner CLI
+│   │   ├── options.go         #  Embed: []Command from internal/core/runner
+│   │   └── runner.go          #  Run() — creates CommandRunner, executes commands
+│   ├── wol/                   # Wake-on-LAN HTTP server + agent
+│   │   ├── options.go         #  Subcommands: serve, agent, interfaces
+│   │   ├── command.go         #  Serve: WOL API, alias CRUD, boot/shutdown notify
+│   │   │                      #  Agent: boot/shutdown/register with retry backoff
+│   │   │                      #  Interfaces: list network interfaces with WOL suitability
+│   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
+│   ├── es/                    # Elasticsearch query tool
+│   │   ├── options.go         #  Subcommands: set (host/user/password), serve
+│   │   ├── command.go         #  Serve: HTTP server with /api/status, /api/indices, /api/search, /api/config
+│   │   ├── client.go          #  go-elasticsearch client: newESClient, esPing, esListIndices, esSearch
+│   │   ├── config.go          #  ESConfig, load/save JSON config, maskedPassword
+│   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
+│   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
+│   ├── k8s/  metrics/  misc/  network/  qrcode/  scip/  serve/  svcreg/  watch/
+│   └── (modules with a web UI also contain a `frontend/` dir, embedded via `//go:embed`)
+├── web/
+│   └── shared/frontend/       # Shared theme/common partials injected into all frontends
+├── install.sh                 # Quick install script for the tool itself
 ├── go.mod / go.sum
 ├── renovate.json
-├── AGENTS.md                # Agent guidance for this project
+├── AGENTS.md                  # Agent guidance for this project
 ├── README.md
 ├── .github/
 ├── .gitattributes
@@ -120,7 +127,7 @@
 
 ## Key API Routes
 
-### WOL Server (`wol/command.go`)
+### WOL Server (`internal/wol/command.go`)
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/wake/{hostname}` | Send WOL magic packet |
@@ -129,7 +136,7 @@
 | DELETE | `/api/aliases/{name}` | Delete alias |
 | GET/POST | `/api/notify/{hostname}` | Boot/shutdown events |
 
-### ES UI (`es/command.go`)
+### ES UI (`internal/es/command.go`)
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/status` | ES connection status |
@@ -137,12 +144,12 @@
 | POST | `/api/search` | Execute ES query |
 | GET/PUT | `/api/config` | View/update ES connection config |
 
-### Mock Server (`mock/mockserver.go`)
+### Mock Server (`internal/mock/mockserver.go`)
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/mock/query/{rs}` | Paginated mock data query |
 
-### File Server (`mock/fileserver.go`)
+### File Server (`internal/mock/fileserver.go`)
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/mock/file` | File upload |

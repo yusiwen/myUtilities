@@ -8,7 +8,7 @@ This is a Go project using a Makefile for builds:
 
 ```bash
 # Build for current platform
-go build -o bin/mu
+go build -o bin/mu ./cmd/mu
 
 # Build for specific platforms
 make linux-amd64      # Linux x86_64
@@ -30,10 +30,10 @@ Builds output to `bin/` directory with naming pattern `mu-<platform>`.
 go test ./...
 
 # Run tests for a specific package
-go test ./core/watcher/
+go test ./internal/core/watcher/
 
 # Run a single test function
-go test -run TestFunctionName ./core/watcher/
+go test -run TestFunctionName ./internal/core/watcher/
 ```
 
 ## Lint Commands
@@ -50,16 +50,16 @@ This is a CLI tool named `mu` (myUtilities) built with the Kong CLI framework. T
 
 ### Entry Point
 
-- `main.go` - Entry point using Kong for CLI parsing. Version info is injected at build time via ldflags.
-- `myutilities.go` - Defines the root command structure with subcommands
-- `version.go` - Version variables (populated by Makefile during build)
+- `cmd/mu/main.go` - Entry point using Kong for CLI parsing. Version info is injected at build time via ldflags.
+- `cmd/mu/myutilities.go` - Defines the root command structure with subcommands
+- `cmd/mu/version.go` - Version variables (populated by Makefile during build)
 
 ### Command Structure
 
 Commands are organized in separate packages, each with an `options.go` defining flags and a `Run()` method:
 
 ```
-myutilities.go
+cmd/mu/myutilities.go
 ├── Installer (cmd: install)    - Install binaries from GitHub releases
 ├── Mocker (cmd: mock)          - Mock servers for testing
 ├── Proxy (cmd: proxy)          - Database proxy
@@ -75,23 +75,23 @@ myutilities.go
 
 ### Design Convention
 
-Command packages (`<cmd>/`) are **CLI wrappers only**. They handle:
+Command packages (under `internal/<cmd>/`) are **CLI wrappers only**. They handle:
 
 - CLI flag definitions (Kong struct tags)
 - Configuration loading
 - User interaction (prompts, confirmations, colored output)
 - Delegation to core packages
 
-Business logic, API clients, and platform operations belong in `core/` packages, exposed as
+Business logic, API clients, and platform operations belong in `internal/core/` packages, exposed as
 public functions and structs so they can be reused across commands or tested independently.
 
-Example — `git/` → `core/openai/` + `core/git/`:
+Example — `internal/git/` → `internal/core/openai/` + `internal/core/git/`:
 
-- `git/commit.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
-- `core/git/agent.go` — Multi-turn agent loop with `ChatWithTools`, 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info)
-- `git/config.go` — `GitConfig` with `providers` array, `commit`/`review` module configs; `git-config.json`
-- `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`
-- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`, `ResolveRev()`, `IsDirty()`; `noChangesErr()` hints at untracked/staged files on an empty diff
+- `internal/git/commit.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
+- `internal/core/git/agent.go` — Multi-turn agent loop with `ChatWithTools`, 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info)
+- `internal/git/config.go` — `GitConfig` with `providers` array, `commit`/`review` module configs; `git-config.json`
+- `internal/core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`
+- `internal/core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`, `ResolveRev()`, `IsDirty()`; `noChangesErr()` hints at untracked/staged files on an empty diff
 
 ### Configuration File Convention
 
@@ -123,31 +123,31 @@ config path parameter and fall back to the default only when empty.
 
 ### Core Packages
 
-The `core/` directory contains reusable business logic:
+The `internal/core/` directory contains reusable business logic:
 
-- `core/proxy/` - Proxy abstractions and database-specific implementations
+- `internal/core/proxy/` - Proxy abstractions and database-specific implementations
   - `Proxy.go` - Base proxy interface and `DefaultProxy` struct
   - `db/DBProxy.go` - Oracle database proxy with health checks
-- `core/runner/` - Command execution with real-time output display
+- `internal/core/runner/` - Command execution with real-time output display
   - `CommandRunner.go` - Runs bash commands with colored output and buffer management
-- `core/watcher/` - Event-driven resource watching system
+- `internal/core/watcher/` - Event-driven resource watching system
   - Implements a Kubernetes-style watch pattern with `WatchServer`, `EventStore`
   - `Watcher` interface for pluggable resource monitors
-- `core/net/` - Network utilities
+- `internal/core/net/` - Network utilities
   - `SendWOL()` - Wake-on-LAN magic packet sender
   - `GetInterfaceDetails()`, `SelectBestInterfaceForWOL()` - Network interface discovery
   - `GetOutboundMAC()` - Resolves the MAC address of the interface used to reach a given server via UDP route lookup
   - `ValidHostname()`, `ValidMAC()` - Input validation
-- `core/store/` - BoltDB key-value store
+- `internal/core/store/` - BoltDB key-value store
   - `Store` struct with mutex-guarded BoltDB operations
   - Buckets: `Aliases` (hostname→MAC), `Boot` (boot timestamps), `Status` (boot/shutdown state)
-- `core/openai/` - OpenAI-compatible chat completions API client
+- `internal/core/openai/` - OpenAI-compatible chat completions API client
   - `Client` struct with `ChatCompletion(systemPrompt, userPrompt)` → `*ChatResult`
   - `ChatWithTools(messages, tools)` → `*ChatResponse` with `ToolCalls` for agent loops
   - `ChatResult` includes content, prompt tokens, completion tokens, total tokens
   - `ChatResponse` extends `ChatResult` with `ToolCalls []ToolCall`
   - Types: `Message`, `ToolDef`, `ToolFunction`, `ToolCall`, `ToolCallFunc`
-- `core/git/` - Git operations
+- `internal/core/git/` - Git operations
   - `CheckPreflight()` — verifies git is installed and in a repository
   - `GetStagedDiff()` — returns staged diff + stat with truncation
   - `GetStagedNameStatus()` — returns `git diff --staged --name-status`
@@ -155,59 +155,59 @@ The `core/` directory contains reusable business logic:
   - `GetNameStatus(args)` — generic `--name-status` for arbitrary diff args
   - `GetUntrackedFiles()` — returns list of untracked files
   - `RepoName()`, `CurrentBranch()`, `ShortCommit()` — repo metadata helpers
-- `core/scip/` - SCIP semantic code intelligence
-  - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
+- `internal/core/scip/` - SCIP semantic code intelligence
+  - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `internal/core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
   - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version, `AssetName` for OS/arch-less launchers, data-driven `Prefix`/`OutputFlag`/`QuietFlag`/`Trailing` args, `FailHard`); Go and Java are enabled (Java is `FailHard`), TS/C registered for future use
   - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`
   - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
   - Dirty-tree freshness: `working.scip` is reused only if no matching changed source file (via `git status --porcelain`) is newer than it; `--refresh-scip` forces a rebuild. Clean trees always reuse the immutable per-commit index.
   - Indexer output is captured to a temp file (`runIndexer`); on failure `extractError` shows relevant lines and the full log is retained with its path. Stale/forced rebuilds print a visible reason line + spinner (`newIndexSpinner`, TTY only).
-  - `AssetName` downloads (OS/arch-less launchers like scip-java) are SHA256-verified via the companion `.sha256` release asset; `core/installer.AssetByURL` resolves URL + checksum, `fetchChecksum` parses it
-  - Build failures return an `IndexError{Lang, Err, Hard}`; `FailHard` languages (Java) abort `git review` via `git/review.go`, while Go falls back to text tools.
-  - Consumed by `core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
+  - `AssetName` downloads (OS/arch-less launchers like scip-java) are SHA256-verified via the companion `.sha256` release asset; `internal/core/installer.AssetByURL` resolves URL + checksum, `fetchChecksum` parses it
+  - Build failures return an `IndexError{Lang, Err, Hard}`; `FailHard` languages (Java) abort `git review` via `internal/git/review.go`, while Go falls back to text tools.
+  - Consumed by `internal/core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 
 ### Command Packages
 
-- `installer/` - GitHub release installer
+- `internal/installer/` - GitHub release installer
   - Fetches releases from GitHub API
   - Generates shell install scripts via templates
   - Supports asset selection by OS/arch
   - `templates/install.sh.tmpl` - Shell script template
-  - `core/installer` also exposes `AssetByURL` (resolve an asset by exact name + its SHA256 companion checksum, used by `core/scip` for OS/arch-less launchers)
+  - `internal/core/installer` also exposes `AssetByURL` (resolve an asset by exact name + its SHA256 companion checksum, used by `internal/core/scip` for OS/arch-less launchers)
 
-- `mock/` - Mock servers for development/testing
+- `internal/mock/` - Mock servers for development/testing
   - `mock-server` - HTTP mock server with CSV data or random generated data
   - `file-server` - File upload server with multipart form support
   - `oauth-server` - OAuth2 mock server (delegates to `oauth/` package)
 
-- `proxy/` - Database proxy command
+- `internal/proxy/` - Database proxy command
   - Currently supports Oracle database proxy with failover
   - Health checks via TCP and SQL queries
 
-- `runner/` - Command runner
+- `internal/runner/` - Command runner
   - Executes bash commands sequentially
   - Displays real-time output with ANSI colors
 
-- `wol/` - Wake-on-LAN HTTP server and agent
+- `internal/wol/` - Wake-on-LAN HTTP server and agent
   - `serve` subcommand: HTTP server with Svelte frontend, alias CRUD, WOL magic packet sending
   - `agent` subcommand: sends boot/shutdown/register notifications to the WOL server with retry backoff
   - `interfaces` subcommand: lists available network interfaces with WOL suitability info
-  - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `wol/frontend/`)
+  - Embeds compiled Svelte frontend via `//go:embed` (requires `npm run build` in `internal/wol/frontend/`)
 
-- `git/` - Git utilities (ignore, commit, review)
+- `internal/git/` - Git utilities (ignore, commit, review)
   - `ignore` — Downloads .gitignore templates from GitHub
-  - `commit` — AI-generated conventional commit messages using `core/openai` + `core/git`
+  - `commit` — AI-generated conventional commit messages using `internal/core/openai` + `internal/core/git`
   - `review` — Multi-turn AI code review agent:
     - 7 tools: `read_file`, `read_diff`, `search_code`, `read_function`, `find_references`, `find_definition`, `symbol_info`
-    - Agent loop with `core/openai.ChatWithTools()`; tool results are `read_file`-cached per path/range (re-reads return a note, not content), identical calls within one step are deduped, and an "already-read files" system hint is injected as the read set grows
+    - Agent loop with `internal/core/openai.ChatWithTools()`; tool results are `read_file`-cached per path/range (re-reads return a note, not content), identical calls within one step are deduped, and an "already-read files" system hint is injected as the read set grows
     - Output rendered via `glamour` + `less -R` pager
     - Reviews saved to `~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md`
     - Shared config with `commit` via `git-config.json`
-    - Optional SCIP semantic tools via `core/scip` (upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
+    - Optional SCIP semantic tools via `internal/core/scip` (upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
     - Empty-diff errors hint at untracked (`git add -N`) and staged (`--staged`/`git reset`) files, consistent with `git diff` semantics
 
-- `scip/` - SCIP semantic code intelligence command
+- `internal/scip/` - SCIP semantic code intelligence command
   - `install <lang>` — treesitter-nvim-style auto-download of an indexer binary
   - `list` — available/installed indexers
   - `index` — build the index for the current repo
@@ -237,8 +237,8 @@ All frontends inject shared CSS/JS via placeholders at build time (handled by `m
 
 | File | Placeholder | Contents |
 |---|---|---|
-| `shared/frontend/theme-partial.html` | `<!-- inject:theme -->` | CSS variables (`--bg`, `--surface`, `--primary`, etc.), theme toggle JS, `.toggle-btn` styles |
-| `shared/frontend/common-partial.html` | `<!-- inject:common -->` | Shared class styles (`.home-link`, `.btn`, `.card`, `.msg`) |
+| `web/shared/frontend/theme-partial.html` | `<!-- inject:theme -->` | CSS variables (`--bg`, `--surface`, `--primary`, etc.), theme toggle JS, `.toggle-btn` styles |
+| `web/shared/frontend/common-partial.html` | `<!-- inject:common -->` | Shared class styles (`.home-link`, `.btn`, `.card`, `.msg`) |
 
 **Rules:**
 - Every `index.html` MUST contain both `<!-- inject:theme -->` and `<!-- inject:common -->` placeholders.
@@ -259,7 +259,7 @@ func FrontendHandler() http.Handler
 func RegisterHandlers(mux *http.ServeMux)
 ```
 
-`embed.go` follows this pattern (same as `wol/embed.go`, `mock/dynamic_admin.go`, etc.):
+`embed.go` follows this pattern (same as `internal/wol/embed.go`, `internal/mock/dynamic_admin.go`, etc.):
 
 ```go
 //go:embed frontend/dist
@@ -298,7 +298,7 @@ Every `App.svelte` MUST include:
 
 ### Gateway Integration
 
-In `gateway/command.go`, register the module following this pattern:
+In `internal/gateway/command.go`, register the module following this pattern:
 
 ```go
 import "github.com/yusiwen/myUtilities/<module>"
@@ -315,10 +315,10 @@ Also add a landing page card in the `landingPage()` function and a log entry lis
 When adding a new module with a web UI:
 
 1. `Makefile` — Add `<MODULE>_FRONTEND_DIR` variable and build step in `frontend` target.
-2. `.gitignore` — Add `frontend/node_modules/` and `frontend/dist/`.
-3. `gateway/command.go` — Import package, register frontend + API, add landing card, add log entry.
+2. `.gitignore` — Add `internal/<module>/frontend/node_modules/` and `internal/<module>/frontend/dist/`.
+3. `internal/gateway/command.go` — Import package, register frontend + API, add landing card, add log entry.
 4. `README.md` — Document CLI usage + `serve` subcommand + gateway route.
-5. `shared/frontend/` partials — No changes needed unless new CSS variables or shared classes are required.
+5. `web/shared/frontend/` partials — No changes needed unless new CSS variables or shared classes are required.
 
 ### Key Dependencies
 
@@ -338,7 +338,7 @@ The Makefile injects version info at build time:
 
 ### Testing
 
-Minimal test coverage currently exists. Only `core/watcher/watcher_test.go` contains tests.
+Minimal test coverage currently exists. Only `internal/core/watcher/watcher_test.go` contains tests.
 
 ## Release Process
 
