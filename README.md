@@ -710,6 +710,11 @@ mu git review --refresh-scip
 > defaults to `HEAD`). A dirty working tree during a committed-range review
 > prints a warning.
 
+> **Empty-diff hints:** like `git diff`, `git review` ignores untracked and
+> staged files by default. When there is nothing to review it explains why and
+> how to proceed: untracked files (`git add -N <file>` to include them), staged
+> files (`mu git review --staged`, or `git reset` to unstage).
+
 The review is rendered with syntax highlighting via `glamour`, paginated through
 `less -R` (or `$PAGER`), and saved to:
 

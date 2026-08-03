@@ -224,7 +224,7 @@ compile_commands.json      → clang
 
 | 改动 | 文件 | 说明 |
 |------|------|------|
-| 资产按名下载 | `core/scip/toolchain.go` | 新增 `Indexer.AssetName` 字段 + `Install()` 按名下载分支（跨平台 launcher，下载即用无需解压）；`core/installer` 新增 `AssetByURL` |
+| 资产按名下载 | `core/scip/toolchain.go` | 新增 `Indexer.AssetName` 字段 + `Install()` 按名下载分支（跨平台 launcher，下载即用无需解压）；`core/installer` 新增 `AssetByURL`（返回 URL + 伴生 `.sha256` 校验和）+ `fetchChecksum` |
 | 参数数据驱动 | `core/scip/runner.go` | `buildArgs()` 按 `Prefix/OutputFlag/QuietFlag/Trailing` 拼装；go 行为不变（`-o <path> -q`） |
 | 输出统一捕获 | `core/scip/runner.go` | `runIndexer()`：默认 indexer 输出进临时文件；`--verbose` 直接流式；失败保留文件 + 提取错误行 |
 | 构建信息行 + spinner | `core/scip/runner.go` | 构建/重建时打印一行 + spinner（非 TTY 仅打印行）；重建原因行（stale / forced） |
@@ -253,7 +253,7 @@ compile_commands.json      → clang
 
 1. toolchain 单测：按 `AssetName` 下载 JVM launcher 并校验可执行 ✅
 2. registry 单测：`LookupLang("java")` 存在、非 Disable、`FailHard=true` ✅
-3. `buildArgs` / `IndexError` 单测 ✅
+3. `buildArgs` / `IndexError` / SHA256 校验（好/坏校验和）单测 ✅
 4. 集成验证：临时 Maven 工程跑通 `EnsureIndex` + `FindDefinition` ✅（已实测，kind=StaticMethod、签名正确）
 
 ## 4. 索引生成与缓存 — `core/scip/runner.go`

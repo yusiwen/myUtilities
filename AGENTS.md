@@ -88,10 +88,10 @@ public functions and structs so they can be reused across commands or tested ind
 Example — `git/` → `core/openai/` + `core/git/`:
 
 - `git/commit.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
-- `git/review_agent.go` — Multi-turn agent loop with `ChatWithTools`, 4 tools (read_file, read_diff, search_code, read_function)
+- `core/git/agent.go` — Multi-turn agent loop with `ChatWithTools`, 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info)
 - `git/config.go` — `GitConfig` with `providers` array, `commit`/`review` module configs; `git-config.json`
 - `core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`
-- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`
+- `core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`, `ResolveRev()`, `IsDirty()`; `noChangesErr()` hints at untracked/staged files on an empty diff
 
 ### Configuration File Convention
 
@@ -163,6 +163,7 @@ The `core/` directory contains reusable business logic:
   - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
   - Dirty-tree freshness: `working.scip` is reused only if no matching changed source file (via `git status --porcelain`) is newer than it; `--refresh-scip` forces a rebuild. Clean trees always reuse the immutable per-commit index.
   - Indexer output is captured to a temp file (`runIndexer`); on failure `extractError` shows relevant lines and the full log is retained with its path. Stale/forced rebuilds print a visible reason line + spinner (`newIndexSpinner`, TTY only).
+  - `AssetName` downloads (OS/arch-less launchers like scip-java) are SHA256-verified via the companion `.sha256` release asset; `core/installer.AssetByURL` resolves URL + checksum, `fetchChecksum` parses it
   - Build failures return an `IndexError{Lang, Err, Hard}`; `FailHard` languages (Java) abort `git review` via `git/review.go`, while Go falls back to text tools.
   - Consumed by `core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 
@@ -173,6 +174,7 @@ The `core/` directory contains reusable business logic:
   - Generates shell install scripts via templates
   - Supports asset selection by OS/arch
   - `templates/install.sh.tmpl` - Shell script template
+  - `core/installer` also exposes `AssetByURL` (resolve an asset by exact name + its SHA256 companion checksum, used by `core/scip` for OS/arch-less launchers)
 
 - `mock/` - Mock servers for development/testing
   - `mock-server` - HTTP mock server with CSV data or random generated data
@@ -197,12 +199,13 @@ The `core/` directory contains reusable business logic:
   - `ignore` — Downloads .gitignore templates from GitHub
   - `commit` — AI-generated conventional commit messages using `core/openai` + `core/git`
   - `review` — Multi-turn AI code review agent:
-    - 4 tools: `read_file`, `read_diff`, `search_code`, `read_function`
-    - Agent loop with `core/openai.ChatWithTools()`
+    - 7 tools: `read_file`, `read_diff`, `search_code`, `read_function`, `find_references`, `find_definition`, `symbol_info`
+    - Agent loop with `core/openai.ChatWithTools()`; tool results are `read_file`-cached per path/range (re-reads return a note, not content), identical calls within one step are deduped, and an "already-read files" system hint is injected as the read set grows
     - Output rendered via `glamour` + `less -R` pager
     - Reviews saved to `~/.cache/mu/git_reviews/<project>_<branch>_<timestamp>.md`
     - Shared config with `commit` via `git-config.json`
-    - Optional SCIP semantic tools via `core/scip` (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
+    - Optional SCIP semantic tools via `core/scip` (upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
+    - Empty-diff errors hint at untracked (`git add -N`) and staged (`--staged`/`git reset`) files, consistent with `git diff` semantics
 
 - `scip/` - SCIP semantic code intelligence command
   - `install <lang>` — treesitter-nvim-style auto-download of an indexer binary
