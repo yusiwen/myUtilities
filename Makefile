@@ -1,27 +1,28 @@
 NAME=mu
 BINDIR=bin
+PKG=./cmd/mu
 VERSION=$(shell /usr/bin/git --no-pager describe --tags || echo "unknown version")
 COMMIT_SHA=$(shell /usr/bin/git --no-pager rev-parse --short HEAD)
 BUILDTIME=$(shell date -u)
-FRONTEND_DIR=wol/frontend
-ES_FRONTEND_DIR=es/frontend
-MOCK_FRONTEND_DIR=mock/frontend
-QRCODE_FRONTEND_DIR=qrcode/frontend
-JARINFO_FRONTEND_DIR=jarinfo/frontend
-CRYPTO_FRONTEND_DIR=crypto/frontend
-DIFF_FRONTEND_DIR=diff/frontend
-K8S_FRONTEND_DIR=k8s/frontend
-MISC_FRONTEND_DIR=misc/frontend
-NETWORK_FRONTEND_DIR=network/frontend
-SVCREG_FRONTEND_DIR=svcreg/frontend
-BUDGET_FRONTEND_DIR=budget/frontend
-THEME_PARTIAL=shared/frontend/theme-partial.html
-COMMON_PARTIAL=shared/frontend/common-partial.html
-FRONTEND_DIRS=wol es mock qrcode jarinfo crypto diff k8s misc network svcreg budget
+FRONTEND_DIR=internal/wol/frontend
+ES_FRONTEND_DIR=internal/es/frontend
+MOCK_FRONTEND_DIR=internal/mock/frontend
+QRCODE_FRONTEND_DIR=internal/qrcode/frontend
+JARINFO_FRONTEND_DIR=internal/jarinfo/frontend
+CRYPTO_FRONTEND_DIR=internal/crypto/frontend
+DIFF_FRONTEND_DIR=internal/diff/frontend
+K8S_FRONTEND_DIR=internal/k8s/frontend
+MISC_FRONTEND_DIR=internal/misc/frontend
+NETWORK_FRONTEND_DIR=internal/network/frontend
+SVCREG_FRONTEND_DIR=internal/svcreg/frontend
+BUDGET_FRONTEND_DIR=internal/budget/frontend
+THEME_PARTIAL=web/shared/frontend/theme-partial.html
+COMMON_PARTIAL=web/shared/frontend/common-partial.html
+FRONTEND_DIRS=internal/wol internal/es internal/mock internal/qrcode internal/jarinfo internal/crypto internal/diff internal/k8s internal/misc internal/network internal/svcreg internal/budget
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
 		-X "main.CommitSHA=$(COMMIT_SHA)" \
 		-X "main.BuildTime=$(BUILDTIME)" \
-		-w -s -buildid='
+		-w -s -buildid=' $(PKG)
 
 PLATFORM_LIST = \
 	darwin-arm64 \
@@ -29,7 +30,7 @@ PLATFORM_LIST = \
 	linux-arm64
 
 default:
-	CGO_ENABLED=0 go build -trimpath -o $(BINDIR)/$(NAME) .
+	CGO_ENABLED=0 go build -trimpath -o $(BINDIR)/$(NAME) $(PKG)
 
 .PHONY: inject-theme restore-theme
 
