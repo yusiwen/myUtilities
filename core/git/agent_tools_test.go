@@ -473,3 +473,51 @@ func TestAgentSemanticToolsConsistency(t *testing.T) {
 		t.Fatalf("semantic tool output must be deterministic:\n%q\n%q", first, second)
 	}
 }
+
+func TestNoChangesErrStaged(t *testing.T) {
+	// The staged branch is pure (no git subprocess) and deterministic.
+	err := noChangesErr([]string{"--staged"})
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	if !strings.Contains(err.Error(), "git add") {
+		t.Fatalf("expected a staging hint, got %q", err)
+	}
+}
+
+func TestReadFileCached(t *testing.T) {
+	writeScipTestFile(t, "_scip_cache.go", "package git\n\nfunc Alpha() {}\nfunc Beta() {}\n")
+	a := &ReviewAgent{}
+
+	first := a.readFileCached("_scip_cache.go", 0, 0)
+	if !strings.Contains(first, "func Alpha() {}") || strings.HasPrefix(first, "note:") {
+		t.Fatalf("first read should return full content, got %q", first)
+	}
+
+	// Same whole-file read → cached note, no content.
+	second := a.readFileCached("_scip_cache.go", 0, 0)
+	if !strings.HasPrefix(second, "note:") {
+		t.Fatalf("re-read should return a cache note, got %q", second)
+	}
+	if strings.Contains(second, "func Alpha") {
+		t.Fatalf("cache note must not repeat content, got %q", second)
+	}
+
+	// A range fully inside the already-read span is also served from cache.
+	third := a.readFileCached("_scip_cache.go", 2, 3)
+	if !strings.HasPrefix(third, "note:") {
+		t.Fatalf("sub-range of read file should be cached, got %q", third)
+	}
+
+	// A different file is not cached.
+	writeScipTestFile(t, "_scip_cache2.go", "package git\n\nfunc Gamma() {}\n")
+	other := a.readFileCached("_scip_cache2.go", 0, 0)
+	if !strings.Contains(other, "func Gamma") || strings.HasPrefix(other, "note:") {
+		t.Fatalf("different file should be read fresh, got %q", other)
+	}
+
+	// Missing file errors and is not cached.
+	if got := a.readFileCached("_scip_missing.go", 0, 0); !strings.Contains(got, "error reading") {
+		t.Fatalf("expected read error, got %q", got)
+	}
+}

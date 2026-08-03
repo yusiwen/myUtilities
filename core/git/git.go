@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +48,7 @@ func GetDiff(args []string) (*DiffResult, error) {
 	}
 
 	if strings.TrimSpace(diffOut) == "" {
-		return nil, fmt.Errorf("no changes to review")
+		return nil, noChangesErr(args)
 	}
 
 	return &DiffResult{
@@ -55,6 +56,42 @@ func GetDiff(args []string) (*DiffResult, error) {
 		Diff:   Truncate(diffOut, MaxDiffLength),
 		RawLen: len([]rune(diffOut)),
 	}, nil
+}
+
+// noChangesErr builds a helpful "no changes" error for an empty diff. Untracked
+// files are invisible to git diff; surface them so the user can include them.
+func noChangesErr(args []string) error {
+	staged := false
+	for _, a := range args {
+		if a == "--staged" {
+			staged = true
+			break
+		}
+	}
+	if staged {
+		return errors.New("no changes to review (stage files with 'git add' first)")
+	}
+	untracked := GetUntrackedFiles()
+	if len(untracked) == 0 {
+		if n := stagedChangesCount(); n > 0 {
+			return fmt.Errorf("no unstaged changes to review: %d file(s) are staged. Use 'mu git review --staged' to review them, or 'git reset' to unstage.", n)
+		}
+		return errors.New("no changes to review")
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "no changes to review: %d untracked file(s) are not included by git diff", len(untracked))
+	shown := 0
+	for _, f := range untracked {
+		if shown >= 3 {
+			fmt.Fprintf(&sb, "\n  ... and %d more", len(untracked)-shown)
+			break
+		}
+		fmt.Fprintf(&sb, "\n  - %s", f)
+		shown++
+	}
+	sb.WriteString("\nInclude them with 'git add -N <file>' (intent-to-add) or 'git add' before reviewing.")
+	return errors.New(sb.String())
 }
 
 func GetStagedDiff() (*DiffResult, error) {
@@ -138,6 +175,26 @@ func ShortCommit() string {
 	return strings.TrimSpace(out)
 }
 
+// ResolveRev resolves any git revision (hash, branch, tag, HEAD~n) to its full
+// commit hash, or "" when it cannot be resolved.
+func ResolveRev(rev string) string {
+	out, err := runGit("rev-parse", rev+"^{commit}")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// IsDirty reports whether the working tree has uncommitted changes
+// (tracked modifications, staged changes, or untracked files).
+func IsDirty() bool {
+	out, err := runGit("status", "--porcelain")
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(out) != ""
+}
+
 func PlainDiffStat(args []string) string {
 	statArgs := append([]string{"diff"}, args...)
 	statArgs = append(statArgs, "--stat")
@@ -181,4 +238,17 @@ func GetUntrackedFiles() []string {
 		return nil
 	}
 	return lines
+}
+
+// stagedChangesCount returns the number of files staged in the index.
+func stagedChangesCount() int {
+	out, err := runGit("diff", "--cached", "--name-only")
+	if err != nil {
+		return 0
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return 0
+	}
+	return len(lines)
 }

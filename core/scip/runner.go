@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/briandowns/spinner"
 	"github.com/yusiwen/myUtilities/core/term"
+	xterm "golang.org/x/term"
 )
 
 const workingCommit = "working"
@@ -110,16 +112,19 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 		}
 
 		needsGenerate := true
+		reason := ""
 		if !opts.Force && fileExists(path) {
 			// Commit-cached indexes are immutable. A dirty-tree "working" index
 			// is only reusable while no matching source file changed after it
 			// was generated.
 			if commit == workingCommit && indexStaleForLang(opts.RepoRoot, ix, path) {
-				tc.debugf("%s working index is stale, regenerating", lang)
+				reason = fmt.Sprintf("%s index is stale; rebuilding ...", LangDisplay(lang))
 			} else {
 				needsGenerate = false
 				tc.debugf("reusing cached %s index: %s", lang, path)
 			}
+		} else if opts.Force {
+			reason = fmt.Sprintf("Rebuilding %s index (--refresh-scip)", LangDisplay(lang))
 		}
 
 		if needsGenerate {
@@ -129,16 +134,16 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 			bin, err := tc.Install(ix)
 			if err != nil {
 				if autoInstall {
-					return nil, fmt.Errorf("install %s indexer: %w", lang, err)
+					return nil, indexErr(ix, fmt.Errorf("install %s indexer: %w", lang, err))
 				}
-				tc.logf(term.Faint("skipping %s: %s"), lang, err)
+				tc.logf(term.Faint("Skipping %s: %s"), LangDisplay(lang), err)
 				continue
 			}
 			if err := preflightRequires(ix); err != nil {
 				if autoInstall {
-					return nil, err
+					return nil, indexErr(ix, err)
 				}
-				tc.logf(term.Faint("skipping %s: %s"), lang, err)
+				tc.logf(term.Faint("Skipping %s: %s"), LangDisplay(lang), err)
 				continue
 			}
 
@@ -150,11 +155,11 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 						return nil
 					}
 				}
-				return generate(tc, ix, bin, opts.RepoRoot, path)
+				return generate(tc, ix, bin, opts.RepoRoot, path, reason)
 			}); err != nil {
-				tc.logf(term.Faint("indexing %s failed: %s"), lang, err)
+				tc.logf(term.Faint("Failed to build %s index: %s"), LangDisplay(lang), err)
 				if autoInstall {
-					return nil, err
+					return nil, indexErr(ix, err)
 				}
 				continue
 			}
@@ -162,7 +167,7 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 
 		loaded, err := Load(path)
 		if err != nil {
-			tc.logf(term.Faint("loading %s index failed: %s"), lang, err)
+			tc.logf(term.Faint("Failed to load %s index: %s"), LangDisplay(lang), err)
 			continue
 		}
 		set.Add(lang, loaded)
@@ -171,24 +176,200 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 	return set, nil
 }
 
-// generate runs the indexer binary and writes the index to outPath.
-func generate(tc *Toolchain, ix *Indexer, bin, repoRoot, outPath string) error {
-	tc.logf("Indexing %s ...", term.Bright(ix.Lang))
-	args := []string{"-o", outPath, "-q"}
-	if tc.Verbose {
-		args = []string{"-o", outPath}
+// IndexError describes a failed index build for a language. Hard marks an
+// unrecoverable failure that should abort the review instead of silently
+// falling back to text tools (e.g. scip-java runs a real build).
+type IndexError struct {
+	Lang string
+	Err  error
+	Hard bool
+}
+
+func (e *IndexError) Error() string {
+	return fmt.Sprintf("failed to build %s index: %v", e.Lang, e.Err)
+}
+
+func (e *IndexError) Unwrap() error { return e.Err }
+
+// indexErr wraps a per-language indexing failure, marking it hard when the
+// indexer's FailHard flag is set.
+func indexErr(ix *Indexer, err error) error {
+	return &IndexError{Lang: ix.Lang, Err: err, Hard: ix.FailHard}
+}
+
+// generate runs the indexer binary and writes the index to outPath. reason is
+// an optional visible line describing why the index is being (re)built.
+func generate(tc *Toolchain, ix *Indexer, bin, repoRoot, outPath, reason string) error {
+	start := time.Now()
+	text := "Building " + LangDisplay(ix.Lang) + " index ..."
+	if reason != "" {
+		text = reason
 	}
+	spin := newIndexSpinner(tc, text)
+	if spin != nil {
+		spin.Start()
+	} else {
+		tc.logf(term.Faint("%s"), text)
+	}
+
+	args := buildArgs(tc, ix, outPath)
+	res := runIndexer(tc, bin, args, repoRoot, outPath)
+
+	if spin != nil {
+		spin.Stop()
+	}
+	if res.Success {
+		tc.logf(term.Faint("%s index ready (%s)"), LangDisplay(ix.Lang), formatDuration(time.Since(start)))
+		return nil
+	}
+
+	var sb strings.Builder
+	sb.WriteString(ix.BinaryName + " indexer failed")
+	if res.Err != nil {
+		sb.WriteString(" (" + res.Err.Error() + ")")
+	}
+	if res.Log != "" {
+		sb.WriteString(": " + extractError(res.Log))
+	}
+	if res.LogPath != "" {
+		sb.WriteString(fmt.Sprintf("\nFull indexer log kept at: %s", res.LogPath))
+	}
+	return errors.New(sb.String())
+}
+
+// LangDisplay returns the display name for a language (e.g. "go" → "Go").
+func LangDisplay(lang string) string {
+	if lang == "" {
+		return lang
+	}
+	if n, ok := langDisplayNames[lang]; ok {
+		return n
+	}
+	return strings.ToUpper(lang[:1]) + lang[1:]
+}
+
+var langDisplayNames = map[string]string{
+	"go": "Go", "java": "Java", "rust": "Rust",
+	"typescript": "TypeScript", "c": "C",
+}
+
+// formatDuration renders a duration compactly, e.g. "850ms", "2.3s", "1m5s".
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Second:
+		return d.Round(time.Millisecond).String()
+	case d < time.Minute:
+		return d.Round(100 * time.Millisecond).String()
+	default:
+		return d.Round(time.Second).String()
+	}
+}
+
+// buildArgs constructs the indexer invocation from the data-driven fields:
+// <Prefix> <OutputFlag> <outPath> [<QuietFlag> when non-verbose] <Trailing>.
+func buildArgs(tc *Toolchain, ix *Indexer, outPath string) []string {
+	args := append([]string{}, ix.Prefix...)
+	args = append(args, ix.OutputFlag, outPath)
+	if !tc.Verbose && ix.QuietFlag != "" {
+		args = append(args, ix.QuietFlag)
+	}
+	args = append(args, ix.Trailing...)
+	return args
+}
+
+// newIndexSpinner returns a spinner writing to the toolchain writer when it is
+// an interactive terminal and verbose mode is off (verbose streams output live
+// and would interleave with the animation).
+func newIndexSpinner(tc *Toolchain, text string) *spinner.Spinner {
+	if tc.Verbose {
+		return nil
+	}
+	f, ok := tc.Out.(*os.File)
+	if !ok || !xterm.IsTerminal(int(f.Fd())) {
+		return nil
+	}
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = " " + text
+	s.Writer = tc.Out
+	s.Color("fgHiWhite")
+	return s
+}
+
+// IndexResult captures the outcome of an indexer invocation.
+type IndexResult struct {
+	Success bool
+	Err     error
+	Log     string
+	LogPath string
+}
+
+// runIndexer executes an indexer, capturing its stdout/stderr to a temp file
+// (streamed directly to the toolchain writer in verbose mode) and reporting
+// success based on the exit code and the presence of the produced index file.
+//
+// On failure the temp file is retained for diagnostics and its path is
+// returned; on success it is removed.
+func runIndexer(tc *Toolchain, bin string, args []string, repoRoot, outPath string) *IndexResult {
 	cmd := exec.Command(bin, args...)
 	cmd.Dir = repoRoot
-	cmd.Stdout = tc.Out
-	cmd.Stderr = tc.Out
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s indexer: %w", ix.BinaryName, err)
+
+	if tc.Verbose {
+		// Verbose: stream everything live, no temp file.
+		cmd.Stdout, cmd.Stderr = tc.Out, tc.Out
+		err := cmd.Run()
+		return &IndexResult{Success: err == nil && fileExists(outPath), Err: err}
 	}
-	if !fileExists(outPath) {
-		return fmt.Errorf("%s did not produce %s", ix.BinaryName, outPath)
+
+	// Default: capture all indexer output to a temp file.
+	tmp, err := os.CreateTemp("", "scip-index-*")
+	if err != nil {
+		return &IndexResult{Err: err}
 	}
-	return nil
+	cmd.Stdout, cmd.Stderr = tmp, tmp
+
+	runErr := cmd.Run()
+	tmp.Close()
+	logData, _ := os.ReadFile(tmp.Name())
+	success := runErr == nil && fileExists(outPath)
+
+	if !success {
+		return &IndexResult{
+			Success: false,
+			Err:     runErr,
+			Log:     strings.TrimSpace(string(logData)),
+			LogPath: tmp.Name(),
+		}
+	}
+	os.Remove(tmp.Name())
+	return &IndexResult{Success: true}
+}
+
+// extractError parses an indexer log and returns the most relevant error lines
+// (matching error-like keywords), falling back to the tail of the log.
+func extractError(log string) string {
+	lines := strings.Split(log, "\n")
+	var hits []string
+	seen := map[string]bool{}
+	for _, ln := range lines {
+		low := strings.ToLower(ln)
+		for _, kw := range []string{"error", "failed", "exception", "build failure", "caused by", "fatal"} {
+			if strings.Contains(low, kw) && !seen[low] {
+				seen[low] = true
+				hits = append(hits, strings.TrimSpace(ln))
+				break
+			}
+		}
+		if len(hits) >= 15 {
+			break
+		}
+	}
+	if len(hits) > 0 {
+		return strings.Join(hits, "\n")
+	}
+	if len(lines) > 15 {
+		return strings.Join(lines[len(lines)-15:], "\n")
+	}
+	return log
 }
 
 func preflightRequires(ix *Indexer) error {

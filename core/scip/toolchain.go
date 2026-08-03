@@ -105,22 +105,35 @@ func (tc *Toolchain) Install(ix *Indexer) (string, error) {
 		q.Release = "latest"
 	}
 
-	tc.logf("Resolving %s release %s ...", ix.GitHubRepo, q.Release)
-	result, err := client.QueryAssets(q)
-	if err != nil {
-		return "", fmt.Errorf("failed to query %s assets: %w", ix.GitHubRepo, err)
-	}
-
-	asset, ok := matchAsset(result.Assets)
-	if !ok {
-		return "", fmt.Errorf("no %s asset for %s/%s", ix.BinaryName, runtime.GOOS, runtime.GOARCH)
-	}
-	tc.debugf("asset: %s (%s) %s", asset.Name, asset.Key(), asset.URL)
-
 	binDir := filepath.Dir(tc.BinPath(ix))
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return "", err
 	}
+
+	var asset coreinst.Asset
+	if ix.AssetName != "" {
+		// Cross-platform launcher asset (no OS/arch in the name): resolve the
+		// browser download URL by exact name and install it directly.
+		tc.logf(term.Faint("Resolving %s release %s ..."), ix.GitHubRepo, q.Release)
+		url, sha, err := client.AssetByURL(user, program, q.Release, ix.AssetName)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve %s asset: %w", ix.AssetName, err)
+		}
+		asset = coreinst.Asset{Name: ix.AssetName, URL: url, Type: ".bin", SHA256: sha}
+	} else {
+		tc.logf(term.Faint("Resolving %s release %s ..."), ix.GitHubRepo, q.Release)
+		result, err := client.QueryAssets(q)
+		if err != nil {
+			return "", fmt.Errorf("failed to query %s assets: %w", ix.GitHubRepo, err)
+		}
+		var ok bool
+		asset, ok = matchAsset(result.Assets)
+		if !ok {
+			return "", fmt.Errorf("no %s asset for %s/%s", ix.BinaryName, runtime.GOOS, runtime.GOARCH)
+		}
+		tc.debugf("asset: %s (%s) %s", asset.Name, asset.Key(), asset.URL)
+	}
+
 	if err := tc.installAsset(asset, tc.BinPath(ix)); err != nil {
 		return "", err
 	}
@@ -128,7 +141,7 @@ func (tc *Toolchain) Install(ix *Indexer) (string, error) {
 		return "", err
 	}
 
-	tc.logf("%s %s installed to %s", term.Bright(ix.BinaryName), term.Faint(result.ResolvedRelease), term.Bright(tc.BinPath(ix)))
+	tc.logf("%s %s installed to %s", term.Faint(ix.BinaryName), term.Faint(q.Release), term.Bright(tc.BinPath(ix)))
 	return tc.BinPath(ix), nil
 }
 
@@ -160,7 +173,7 @@ func (tc *Toolchain) installAsset(a coreinst.Asset, dest string) error {
 
 // downloadVerified downloads url into dest and checks sha (if non-empty).
 func (tc *Toolchain) downloadVerified(url, sha, dest string) error {
-	tc.logf("Downloading %s ...", filepath.Base(url))
+	tc.logf(term.Faint("Downloading %s ..."), filepath.Base(url))
 	resp, err := download(url)
 	if err != nil {
 		return err

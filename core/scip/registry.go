@@ -38,6 +38,26 @@ type Indexer struct {
 	// (e.g. compile_commands.json, a JVM build). They are registered but
 	// not used by the auto-detection path.
 	Disable bool
+	// AssetName pins the exact GitHub release asset name to download,
+	// bypassing OS/arch name matching. Used by cross-platform launchers
+	// whose release assets do not encode the target platform.
+	AssetName string
+	// Prefix is the fixed leading subcommand arguments, e.g. ["index"] for
+	// "scip-java index".
+	Prefix []string
+	// OutputFlag is the CLI flag that takes the index output path, e.g.
+	// "-o" (scip-go) or "--output" (scip-java).
+	OutputFlag string
+	// QuietFlag is the CLI flag that suppresses indexer output, appended in
+	// non-verbose mode. Empty for indexers without one (output is captured
+	// to a temp file anyway).
+	QuietFlag string
+	// Trailing holds arguments appended after the output path.
+	Trailing []string
+	// FailHard marks indexers whose build failure aborts the review instead
+	// of silently falling back to text tools (e.g. scip-java runs a real
+	// build; a failure means semantic review is impossible).
+	FailHard bool
 }
 
 // registry holds the known indexers, ordered so that more specific or
@@ -52,11 +72,13 @@ var registry = []*Indexer{
 		Requires:   []string{"go"},
 		BinaryName: "scip-go",
 		OutputFile: "index.scip",
+		OutputFlag: "-o",
+		QuietFlag:  "-q",
 	},
 	{
 		Lang:       "typescript",
 		Detect:     []string{"tsconfig.json", "package.json"},
-		GitHubRepo: "sourcegraph/scip-typescript",
+		GitHubRepo: "scip-code/scip-typescript",
 		Install:    MethodNpm,
 		Requires:   []string{"node"},
 		BinaryName: "scip-typescript",
@@ -64,18 +86,22 @@ var registry = []*Indexer{
 	},
 	{
 		Lang:       "java",
-		Detect:     []string{"pom.xml", "build.gradle", "build.gradle.kts", "*.java"},
-		GitHubRepo: "sourcegraph/scip-java",
+		Detect:     []string{"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "gradlew", "*.java"},
+		GitHubRepo: "scip-code/scip-java",
+		Version:    "v0.13.1",
 		Install:    MethodGitHubRelease,
 		Requires:   []string{"java"},
 		BinaryName: "scip-java",
 		OutputFile: "index.scip",
-		Disable:    true,
+		AssetName:  "scip-java-v0.13.1",
+		Prefix:     []string{"index"},
+		OutputFlag: "--output",
+		FailHard:   true,
 	},
 	{
 		Lang:       "c",
 		Detect:     []string{"compile_commands.json"},
-		GitHubRepo: "sourcegraph/scip-clang",
+		GitHubRepo: "scip-code/scip-clang",
 		Install:    MethodGitHubRelease,
 		Requires:   []string{"clang"},
 		BinaryName: "scip-clang",

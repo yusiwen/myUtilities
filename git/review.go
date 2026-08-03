@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -90,6 +91,35 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
+	// Guard: committed ranges (--base/--target) are only correct when the
+	// target commit is the current HEAD. Every review context tool — read_file,
+	// read_function, search_code and the SCIP index — operates on the working
+	// tree, which always reflects HEAD. Diffing an arbitrary target would feed
+	// the model a diff for one commit while reading files/index of another.
+	if o.Base != "" {
+		target := o.Target
+		if target == "" {
+			target = "HEAD"
+		}
+		targetHash := coregit.ResolveRev(target)
+		headHash := coregit.ResolveRev("HEAD")
+		if targetHash != "" && headHash != "" && targetHash != headHash {
+			return fmt.Errorf("unsupported: --target %q resolves to %s, but the current HEAD is %s\n"+
+				"Review tools (read_file, read_function, search_code, and the SCIP index) read the\n"+
+				"working tree, which always reflects HEAD — reviewing a different target would produce\n"+
+				"inconsistent (potentially wrong) results.\n"+
+				"To review this range correctly:\n"+
+				"  git checkout %s\n"+
+				"  mu git review --base %s\n"+
+				"or drop --target to review up to the current HEAD.",
+				o.Target, shortHash(targetHash), shortHash(headHash), o.Target, o.Base)
+		}
+		if coregit.IsDirty() {
+			fmt.Fprintf(os.Stderr, "%s\n",
+				term.Faint("warning: working tree is dirty; context tools (read_file, SCIP index) include uncommitted changes that are not part of this committed diff. Consider 'git stash' first."))
+		}
+	}
+
 	var indexSet *scip.IndexSet
 	if !o.NoScip {
 		scipCfg := moduleCfg.Scip
@@ -106,6 +136,12 @@ func (o *ReviewOptions) Run() error {
 				Verbose:     o.Verbose,
 			})
 			if err != nil {
+				var idxErr *scip.IndexError
+				if errors.As(err, &idxErr) && idxErr.Hard {
+					// Fail fast: a hard indexer (e.g. scip-java) could not
+					// build its index, so semantic review is impossible.
+					return fmt.Errorf("cannot review: %w", err)
+				}
 				fmt.Fprintf(os.Stderr, "%s\n", term.Faint("scip: "+err.Error()+" (falling back to text tools)"))
 				indexSet = nil
 			} else if indexSet != nil && o.Verbose {
@@ -405,6 +441,14 @@ func buildReviewUserPrompt(strategy string, diff *coregit.DiffResult, userContex
 	}
 
 	return sb.String()
+}
+
+// shortHash returns the first 8 characters of a full commit hash.
+func shortHash(h string) string {
+	if len(h) > 8 {
+		return h[:8]
+	}
+	return h
 }
 
 func pagedOutput(content string) {

@@ -674,6 +674,9 @@ mu git review --staged
 # Branch comparison
 mu git review --base origin/main
 
+# Compare two commits (see warning below)
+mu git review --base <hashA> --target <hashB>
+
 # Chinese output
 mu git review --lang cn
 
@@ -695,6 +698,17 @@ mu git review --no-scip
 # Force regeneration of the SCIP index
 mu git review --refresh-scip
 ```
+
+> **`--target` consistency limitation:** `--base`/`--target` review committed
+> ranges via `git diff <base>..<target>`. The agent's context tools (`read_file`,
+> `read_function`, `search_code`, and the SCIP index) always operate on the
+> **working tree**, which reflects the current `HEAD`. Reviewing a range whose
+> `--target` is *not* the current `HEAD` would pair the target's diff with the
+> HEAD's file/index content, producing potentially wrong results — `mu git
+> review` therefore rejects it. To review an older target, first check it out
+> (`git checkout <hash>`) then run `mu git review --base <hash>` (target
+> defaults to `HEAD`). A dirty working tree during a committed-range review
+> prints a warning.
 
 The review is rendered with syntax highlighting via `glamour`, paginated through
 `less -R` (or `$PAGER`), and saved to:
@@ -720,17 +734,24 @@ The agent gains four semantic tools:
 | `read_function` | Reads the exact enclosing function body (upgraded from a fixed ±30-line window) |
 
 Indexers are installed **on demand, treesitter-nvim style**: on the first review the
-language is auto-detected from the repo (e.g. `go.mod`), the matching indexer binary is
-downloaded from a GitHub release into `~/.cache/mu/scip/tools/`, and the index is built
-and cached per commit in `~/.cache/mu/scip/index/`. Dirty working trees use a `working`
-index. Missing indexers, failed generation, or unsupported languages degrade gracefully
-to the plain text tools.
+language is auto-detected from the repo (e.g. `go.mod`, `pom.xml`), the matching indexer
+binary is downloaded from a GitHub release into `~/.cache/mu/scip/tools/`, and the index
+is built and cached per commit in `~/.cache/mu/scip/index/`. Dirty working trees use a
+`working` index (rebuilt when source files changed). A stale index is rebuilt with an
+explanatory line; building shows a spinner.
+
+Indexer output is captured to a temp file (streamed live with `--verbose`); on a failed
+build the error lines are extracted and the full log is kept, e.g.:
+`Full indexer log kept at: /tmp/scip-index-XXX`. Go failures degrade gracefully to text
+tools, while a **Java build failure aborts the review** (fail fast), since `scip-java`
+runs a real Maven/Gradle build.
 
 SCIP management commands:
 
 ```bash
 # Install the indexer for a language (auto-downloaded)
 mu scip install go
+mu scip install java
 
 # List available / installed indexers
 mu scip list
@@ -741,6 +762,16 @@ mu scip index
 # Remove all cached indexers and indexes
 mu scip purge
 ```
+
+**Java projects:** `scip-java` indexes by actually running the Maven/Gradle build
+(`clean verify -DskipTests` / `clean compileTestJava...`), so it needs:
+
+- JDK 17+ (`java` on `PATH`)
+- a Maven or Gradle project whose build can compile cleanly
+- network access to resolve dependencies on the first run (takes minutes)
+
+`git review` builds the Java index automatically when missing or stale (fail-fast on a
+failed build — see the retained-log hint above); use `--refresh-scip` to force a rebuild.
 
 Configuration lives in `git-config.json` under the `review.scip` key:
 

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -104,5 +105,29 @@ func TestBinaryCandidate(t *testing.T) {
 		if got := binaryCandidate(filepath.Base(name)); got != want {
 			t.Errorf("binaryCandidate(%q) = %v, want %v", name, got, want)
 		}
+	}
+}
+
+func TestJavaRegistryEnabled(t *testing.T) {
+	ix, ok := LookupLang("java")
+	if !ok {
+		t.Fatal("java indexer missing from registry")
+	}
+	if ix.Disable {
+		t.Fatal("java should be enabled")
+	}
+	if !ix.FailHard {
+		t.Fatal("java should be FailHard")
+	}
+	if ix.AssetName != "scip-java-v0.13.1" {
+		t.Fatalf("unexpected java AssetName: %q", ix.AssetName)
+	}
+	if strings.Join(ix.Prefix, " ") != "index" || ix.OutputFlag != "--output" {
+		t.Fatalf("unexpected java invocation fields: prefix=%v output=%q", ix.Prefix, ix.OutputFlag)
+	}
+	// java must be detectable
+	langs, err := DetectLangs(t.TempDir())
+	if err != nil || len(langs) != 0 {
+		t.Fatalf("empty dir should detect nothing, got %v (err=%v)", langs, err)
 	}
 }

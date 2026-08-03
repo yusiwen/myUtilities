@@ -215,6 +215,61 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 	return release, assets, nil
 }
 
+// AssetByURL returns the browser download URL and SHA256 checksum for a release
+// asset by exact name, without OS/arch filtering. The checksum is read from a
+// sibling "<name>.sha256" asset when present; it is empty otherwise. Used for
+// cross-platform launchers whose release assets do not encode the target
+// platform.
+func (c *Client) AssetByURL(user, program, release, name string) (string, string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", user, program, release)
+	var ghr ghRelease
+	if err := c.get(url, &ghr); err != nil {
+		return "", "", err
+	}
+	var downloadURL string
+	found := false
+	for _, a := range ghr.Assets {
+		if a.Name == name {
+			downloadURL = a.BrowserDownloadURL
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", "", fmt.Errorf("asset %q not found in %s/%s release %s", name, user, program, release)
+	}
+
+	sha := ""
+	for _, a := range ghr.Assets {
+		if a.Name == name+".sha256" {
+			sha = fetchChecksum(a.BrowserDownloadURL)
+			break
+		}
+	}
+	return downloadURL, sha, nil
+}
+
+// fetchChecksum downloads a sha256sum-format file and returns the hex digest.
+func fetchChecksum(url string) string {
+	resp, err := http.Get(url)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return ""
+	}
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ""
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
 type ghAssets []ghAsset
 
 func (as ghAssets) getSumIndex() (map[string]string, error) {

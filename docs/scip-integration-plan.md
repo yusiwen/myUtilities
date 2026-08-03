@@ -86,7 +86,7 @@ type Indexer struct {
 | Go | scip-go | `scip-code/scip-go` | GitHub release 二进制 | **启用（v1）** |
 | Rust | rust-analyzer（`scip` 子命令） | `rust-lang/rust-analyzer` | GitHub release 二进制（裸 `.gz`） | **启用（v1.5）** |
 | TypeScript/JS | scip-typescript | `scip-code/scip-typescript` | npm | 注册但需 Node，v2 |
-| Java | scip-java | `scip-code/scip-java` | GitHub release | 注册但需 JVM+构建，默认禁用 |
+| Java | scip-java | `scip-code/scip-java` | GitHub release（JVM launcher，资产无 OS/arch） | **已启用**：按名下载 + review 自动构建 |
 | C/C++ | scip-clang | `scip-code/scip-clang` | GitHub release | 注册但需 compile_commands.json，默认禁用 |
 
 ## 2. 工具链 — `core/scip/toolchain.go`（treesitter-nvim 式自动安装）
@@ -116,6 +116,8 @@ Cargo.toml                 → rust
 *.rs（大量）               → rust
 package.json + tsconfig.json → typescript
 pom.xml                    → java
+settings.gradle / gradlew / build.gradle(.kts) → java
+*.java（大量）             → java
 compile_commands.json      → clang
 ```
 
@@ -171,6 +173,88 @@ compile_commands.json      → clang
 1. toolchain 单测：构造裸 `.gz` 二进制走解压路径
 2. registry 单测：`LookupLang("rust")` 存在且非 Disable
 3. 集成测试（可选）：临时 cargo 工程跑通 `EnsureIndex` + `FindDefinition`
+
+## 3.2 Java 支持方案
+
+### 调研结论
+
+- **scip-java 是 JVM 应用**（Scala 编写，发布到 Maven Central `org.scip-code:scip-java`），
+  GitHub release 资产 `scip-java-v0.13.1` 是 Coursier 构建的**跨平台 JVM launcher**
+  （名字不含 OS/arch，仍依赖 JDK 17+ 运行）。
+- **与 Go 的本质差异**：`scip-java index` 会**真正执行构建**——
+  Gradle `clean compileTestJava...` / Maven `--batch-mode clean verify -DskipTests`，
+  有副作用（清编译缓存、下载全部依赖、向 cwd 写 `index.scip`），耗时分钟级。
+- **构建工具支持**：自动配置仅 Maven + Gradle（Java）；Kotlin 仅 Gradle；Bazel 需
+  特殊处理（`--bazel-scip-java-binary` 参数 / aspect）；Ant/Buck 不支持。
+- **JVM 选项**：JDK 17/21/25 需要 `--add-exports` 访问 javac 内部 API，launcher 已内置，
+  使用方无需手动配置。
+
+### 与 scip-go 的对比
+
+| 维度 | Go (scip-go) | Java (scip-java) |
+|------|-------------|-----------------|
+| 本体 | 原生二进制 | JVM launcher（跨平台，需 JDK 17+） |
+| 运行方式 | 只读跑 `go list`，秒级 | `index` 子命令执行真实构建，分钟级 |
+| 副作用 | 无 | 清编译缓存、下载依赖、cwd 写 `index.scip` |
+| 资产命名 | 带 OS/arch | 无 OS/arch（现有 `core/installer` 匹配会失效） |
+| 运行时依赖 | `go` | JDK 17+ + Maven/Gradle（或项目内 gradlew/mvnw） |
+
+### 注册表条目（已实现）
+
+```go
+{
+    Lang:       "java",
+    Detect:     []string{"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "gradlew", "*.java"},
+    GitHubRepo: "scip-code/scip-java",
+    Version:    "v0.13.1",
+    Install:    MethodGitHubRelease,
+    Requires:   []string{"java"},          // + 构建工具（mvn/gradle 或项目 wrapper，scip-java 自动检测）
+    BinaryName: "scip-java",
+    OutputFile: "index.scip",
+    Prefix:     []string{"index"},         // scip-java index
+    OutputFlag: "--output",                 // 已确认支持
+    AssetName:  "scip-java-v0.13.1",        // 无 OS/arch，按名下载
+    FailHard:   true,                       // 构建失败时 review 直接退出
+}
+```
+
+生成命令展开为：`scip-java index --output <outPath>`（cwd = repoRoot），indexer 输出捕获到临时文件。
+
+### 需要的基础设施改动（均已实现）
+
+| 改动 | 文件 | 说明 |
+|------|------|------|
+| 资产按名下载 | `core/scip/toolchain.go` | 新增 `Indexer.AssetName` 字段 + `Install()` 按名下载分支（跨平台 launcher，下载即用无需解压）；`core/installer` 新增 `AssetByURL` |
+| 参数数据驱动 | `core/scip/runner.go` | `buildArgs()` 按 `Prefix/OutputFlag/QuietFlag/Trailing` 拼装；go 行为不变（`-o <path> -q`） |
+| 输出统一捕获 | `core/scip/runner.go` | `runIndexer()`：默认 indexer 输出进临时文件；`--verbose` 直接流式；失败保留文件 + 提取错误行 |
+| 构建信息行 + spinner | `core/scip/runner.go` | 构建/重建时打印一行 + spinner（非 TTY 仅打印行）；重建原因行（stale / forced） |
+| 失败即退出 | `core/scip/runner.go` + `git/review.go` | `IndexError{Lang, Err, Hard}`；java `FailHard=true`，review 收到 Hard 错误直接 `return err`（fail fast），go 维持降级 |
+
+### 使用方需要具备的条件
+
+1. **JDK 17+**（scip-java 本体 + 被索引项目编译都需要）
+2. **Maven 或 Gradle 工程**：根目录有 `pom.xml` 或 `settings.gradle`/`gradlew`/`build.gradle(.kts)`
+3. **构建必须能跑通**（索引时实际执行编译类命令，编译失败则索引失败）
+4. **依赖可解析**：首次索引需联网下载项目全部外部依赖（Maven Central）
+5. **时间预期**：首次索引分钟级，不是 Go 的秒级体验
+6. `--add-exports` JVM 选项已内置在 launcher，**用户无需手动配置**
+7. Windows 仍受 `core/installer` 资产过滤约束（既有限制）
+
+### review 内 java 行为（已确认）
+
+| 场景 | 行为 |
+|------|------|
+| 无索引 | 直接构建（无确认），打印「Indexing java ...」+ spinner |
+| 索引过期 | 不提示，打印「Rebuilding java index: index is stale」直接重建 + spinner |
+| `--refresh-scip` | 打印「Rebuilding java index (forced by --refresh-scip)」强制重建 |
+| 构建失败 | **报错退出**，信息含失败原因 + `Full indexer log kept at: <path>` |
+
+### 验证计划
+
+1. toolchain 单测：按 `AssetName` 下载 JVM launcher 并校验可执行 ✅
+2. registry 单测：`LookupLang("java")` 存在、非 Disable、`FailHard=true` ✅
+3. `buildArgs` / `IndexError` 单测 ✅
+4. 集成验证：临时 Maven 工程跑通 `EnsureIndex` + `FindDefinition` ✅（已实测，kind=StaticMethod、签名正确）
 
 ## 4. 索引生成与缓存 — `core/scip/runner.go`
 
@@ -321,6 +405,7 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 5 | `scip/` CLI + `git-config.json` scip 配置 + review 集成（`--no-scip`/`--refresh-scip`） | ~250 行 |
 | 6 | README 文档 + `docs/tasks.md` 更新 + 全项目编译/测试/lint | — |
 | 7 | Rust 支持：registry 加 rust + `generate()` 数据驱动 + 裸 `.gz` 解压 | ~80 行 |
+| 8 | Java 支持：`AssetName` 按名下载 + registry 启用 + `generate()` 适配 + 自动构建/fail-fast | ~120 行 |
 
 ## 11. 风险与权衡
 
@@ -329,6 +414,9 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | indexer 分发方式不一（npm/pip/gem） | 注册表 `InstallMethod` 抽象；v1 仅承诺 GitHub release（Go/Rust/Java/Clang）；TS 走 npx 归入 v2 |
 | scip-go 运行时需 `go` 在 PATH | `Requires` 字段 + preflight 检查，缺失时降级提示 |
 | rust-analyzer scip 运行时需 `cargo`+`rustc` | `Requires: ["cargo","rustc"]` + preflight 检查；rust-analyzer 自身自动下载 |
+| scip-java 资产名无 OS/arch | `Indexer.AssetName` 按名下载分支，绕过 `core/installer` 的 OS/arch 过滤 |
+| scip-java 运行时需 JDK 17+ + 构建工具 | `Requires: ["java"]` + 构建工具/项目 wrapper 检测；缺失则跳过 Java 并提示 |
+| scip-java 每次索引执行全量构建（分钟级、有副作用） | review **自动构建**（无索引/过期即建，fail-fast），打印原因行 + spinner；`--refresh-scip` 强制重建；构建输出进临时文件 |
 | 首次 review 下载+索引延迟 | commit 缓存复用；verbose 打印进度；`--refresh-scip` 手动控制 |
 | 大仓 dirty 反复重索引 | 按 commit 缓存 + 仅 dirty 时重生成 working 索引；dirty 时按源文件 mtime 新鲜度决定是否重建 |
 | 行号↔offset 转换错误 | 每文件缓存行起始 offset 表，单元测试覆盖多字节字符（中文注释） |
@@ -345,3 +433,4 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 5 | CLI + 配置 | ✅ |
 | 6 | 文档 + 验证 | ✅ |
 | 7 | Rust 支持（registry + 数据驱动 generate + 裸 `.gz` 解压） | ⬜ 待实施 |
+| 8 | Java 支持（AssetName 下载 + buildArgs + 输出临时文件 + FailHard + spinner） | ✅ |

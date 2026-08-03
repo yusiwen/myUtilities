@@ -3,6 +3,7 @@ package scip
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	corescip "github.com/yusiwen/myUtilities/core/scip"
@@ -58,7 +59,7 @@ func (o ListOptions) Run() error {
 }
 
 func (o IndexOptions) Run() error {
-	_, err := corescip.EnsureIndex(corescip.EnsureOptions{
+	set, err := corescip.EnsureIndex(corescip.EnsureOptions{
 		RepoRoot:    ".",
 		CacheDir:    o.CacheDir,
 		AutoInstall: true,
@@ -69,7 +70,15 @@ func (o IndexOptions) Run() error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(os.Stderr, "SCIP index ready.")
+	if set == nil || len(set.Langs()) == 0 {
+		fmt.Fprintln(os.Stderr, term.Faint("No indexable languages detected."))
+		return nil
+	}
+	names := make([]string, 0, len(set.Langs()))
+	for _, l := range set.Langs() {
+		names = append(names, corescip.LangDisplay(l))
+	}
+	fmt.Fprintf(os.Stderr, "%s\n", term.Faint("Index ready: "+strings.Join(names, ", ")))
 	return nil
 }
 

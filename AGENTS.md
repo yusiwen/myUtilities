@@ -158,10 +158,12 @@ The `core/` directory contains reusable business logic:
 - `core/scip/` - SCIP semantic code intelligence
   - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
-  - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version); Go is enabled, TS/Java/C registered for future use
+  - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version, `AssetName` for OS/arch-less launchers, data-driven `Prefix`/`OutputFlag`/`QuietFlag`/`Trailing` args, `FailHard`); Go and Java are enabled (Java is `FailHard`), TS/C registered for future use
   - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`
   - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
   - Dirty-tree freshness: `working.scip` is reused only if no matching changed source file (via `git status --porcelain`) is newer than it; `--refresh-scip` forces a rebuild. Clean trees always reuse the immutable per-commit index.
+  - Indexer output is captured to a temp file (`runIndexer`); on failure `extractError` shows relevant lines and the full log is retained with its path. Stale/forced rebuilds print a visible reason line + spinner (`newIndexSpinner`, TTY only).
+  - Build failures return an `IndexError{Lang, Err, Hard}`; `FailHard` languages (Java) abort `git review` via `git/review.go`, while Go falls back to text tools.
   - Consumed by `core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 
 ### Command Packages

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,7 +54,12 @@ type ReviewAgent struct {
 	diffArgs       []string
 	spinner        *spinner.Spinner
 	indexSet       *scip.IndexSet
+	readCache      map[string][]readRange
+	hintCount      int
 }
+
+// readRange is an already-provided inclusive 1-based line range for a file.
+type readRange struct{ start, end int }
 
 type AgentResult struct {
 	Content    string
@@ -310,14 +316,37 @@ func (a *ReviewAgent) Run() (*AgentResult, error) {
 		a.messages = append(a.messages, asstMsg)
 
 		a.progressf("Step %d:", turn)
+		seen := map[string]string{}
 		for _, tc := range resp.ToolCalls {
 			args := formatToolArgs(tc.Function.Name, tc.Function.Arguments)
 			a.progressf("  %s(%s)", tc.Function.Name, args)
-			result := a.executeTool(tc)
+
+			key := tc.Function.Name + "\x00" + tc.Function.Arguments
+			result, dup := seen[key]
+			if !dup {
+				result = a.executeTool(tc)
+				seen[key] = result
+			} else {
+				result = "note: this exact call was already executed in this step; its result is above and unchanged."
+			}
 			a.messages = append(a.messages, openai.Message{
 				Role:       "tool",
 				ToolCallID: tc.ID,
 				Content:    truncateToolResult(result),
+			})
+		}
+		if len(a.readCache) > a.hintCount {
+			a.hintCount = len(a.readCache)
+			files := make([]string, 0, len(a.readCache))
+			for f := range a.readCache {
+				files = append(files, f)
+			}
+			sort.Strings(files)
+			a.messages = append(a.messages, openai.Message{
+				Role: "system",
+				Content: "Already-read files (full content is in this conversation; calling read_file on them returns a note, not new content): " +
+					strings.Join(files, ", ") +
+					". Do not call read_file on those files again. If you need more context, use read_diff, read_function, find_references, find_definition, symbol_info, or search_code, or request a line range you have not seen.",
 			})
 		}
 		a.startSpinner()
@@ -358,7 +387,7 @@ func (a *ReviewAgent) executeTool(tc openai.ToolCall) string {
 		if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
 			return fmt.Sprintf("error parsing args: %s", err)
 		}
-		return toolReadFile(args.Path, args.StartLine, args.EndLine)
+		return a.readFileCached(args.Path, args.StartLine, args.EndLine)
 
 	case "read_diff":
 		var args struct {
@@ -452,6 +481,49 @@ func formatToolArgs(name, argsJSON string) string {
 }
 
 /* ─── Tool Implementations ─── */
+
+// readFileCached serves read_file requests, returning a short note instead of
+// re-reading content that was already provided earlier in the conversation.
+// This avoids redundant token-heavy reads and wasteful round-trips.
+func (a *ReviewAgent) readFileCached(path string, startLine, endLine int) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Sprintf("error reading %q: %s", path, err)
+	}
+	lines := strings.Split(string(data), "\n")
+	totalLines := len(lines)
+
+	if startLine <= 0 {
+		startLine = 1
+	}
+	if endLine <= 0 || endLine > totalLines {
+		endLine = totalLines
+	}
+	if endLine < startLine {
+		endLine = startLine
+	}
+	if startLine > totalLines {
+		return fmt.Sprintf("file %q has %d lines, start_line %d out of range", path, totalLines, startLine)
+	}
+
+	if a.readCache == nil {
+		a.readCache = map[string][]readRange{}
+	}
+	for _, r := range a.readCache[path] {
+		if startLine >= r.start && endLine <= r.end {
+			return fmt.Sprintf("note: %q lines %d-%d were already read earlier; their content is in this conversation. Request a line range outside %d-%d only if you need more context.",
+				path, r.start, r.end, r.start, r.end)
+		}
+	}
+	a.readCache[path] = append(a.readCache[path], readRange{start: startLine, end: endLine})
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("file: %s (lines %d-%d of %d)\n", path, startLine, endLine, totalLines))
+	for i := startLine - 1; i < endLine && i < totalLines; i++ {
+		sb.WriteString(fmt.Sprintf("%d: %s\n", i+1, lines[i]))
+	}
+	return sb.String()
+}
 
 func toolReadFile(path string, startLine, endLine int) string {
 	data, err := os.ReadFile(path)
