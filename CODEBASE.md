@@ -19,7 +19,9 @@
 | `cmd/mu/version.go:3` | Build-time injected vars: `Version`, `CommitSHA`, `BuildTime` |
 
 **Commands registered** (`cmd/mu/myutilities.go`):
-`install`, `mock`, `proxy`, `run`, `wol`, `es`
+`install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
+`git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network`, `misc`, `crypto`,
+`ask`, `budget`, `metrics`, `scip`, `completion`
 
 ---
 

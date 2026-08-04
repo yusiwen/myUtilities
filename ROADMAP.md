@@ -42,7 +42,7 @@ mu encode jwt <token>
 
 ### 3. `mu tail` — File tail / log follower
 
-Exposes the existing `core/watcher.FileWatcher` as a CLI command. Follows a file
+Exposes the existing `internal/core/watcher.FileWatcher` as a CLI command. Follows a file
 and prints new lines as they are written.
 
 ```
@@ -50,7 +50,7 @@ mu tail app.log
 mu tail --lines 50 app.log
 ```
 
-**Depends on:** `core/watcher` (already exists)
+**Depends on:** `internal/core/watcher` (already exists)
 **Complexity:** Low (thin CLI wrapper over existing core package)
 
 ---
@@ -102,11 +102,11 @@ Resolution priority: `--key` flag → config file → OS keyring.
 Manager (Windows) via `github.com/zalando/go-keyring`.
 
 **Integration points:**
-- New `core/config.ModuleSetter` (`mu set`) command provides a unified interface
-- `core/secret/keyring.go` — `Set(service, key, value)`, `Get(service, key)`, `Delete(service, key)`
-- `budget/config.go` — `resolveAPIKey()` fallback to keyring
-- `git/commit.go` — API key resolution fallback
-- `ask/command.go` — API key resolution fallback
+- New `internal/core/config.ModuleSetter` (`mu set`) command provides a unified interface
+- `internal/core/secret/keyring.go` — `Set(service, key, value)`, `Get(service, key)`, `Delete(service, key)`
+- `internal/budget/config.go` — `resolveAPIKey()` fallback to keyring
+- `internal/git/commit.go` — API key resolution fallback
+- `internal/ask/command.go` — API key resolution fallback
 
 **Depends on:** `github.com/zalando/go-keyring` (pure Go, no CGO)
 **Complexity:** Medium (~200 lines core + ~100 lines CLI + 3 integration edits)

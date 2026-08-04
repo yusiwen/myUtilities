@@ -6,16 +6,24 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 
 ```bash
 # Build for current platform (automatically builds all Svelte frontends)
-make darwin-arm64
+make linux-amd64     # Linux x86_64
+make linux-arm64     # Linux ARM64
+make darwin-arm64    # macOS Apple Silicon
+make windows-amd64   # Windows x86_64
 
 # Build all common platforms
 make all
 
+# Quick build without frontends (no version injection)
+make
+
 # Build output is in bin/ directory
 ```
 
-> **Note:** The build automatically compiles five Svelte frontends: WOL, ES, Mock Dynamic, QR Code,
-> and JAR Analyzer. Ensure `npm` is installed before building.
+> **Note:** The build automatically compiles the Svelte frontends for all
+> web-enabled modules (WOL, ES, Mock Dynamic, QR Code, JAR Analyzer, Crypto,
+> Diff, K8s, Misc, Network, SvcReg, Budget). Ensure `npm` is installed before
+> building.
 
 ## Usage
 
@@ -180,7 +188,7 @@ recharge page in a new tab. The default URL can be overridden via the optional
 | OpenRouter | Management key → `GET /api/v1/credits`, fallback to `GET /api/v1/auth/key` | |
 | Aliyun | AK/SK HMAC-SHA1 signature | `QueryAccountBalance` + `QueryResourcePackageInstances` |
 
-API key fallback: `--key` flag → `budget-config.json` → `ask-config.json` → `commit-config.json`.
+API key resolution: `--key` flag → `budget-config.json → providers.<name>.api_key`.
 
 Debug logging can be enabled with `"debug_log": true` — writes to `~/.config/mu/budget.log`.
 
@@ -216,7 +224,30 @@ mu set watch --config-git-user myuser --config-git-password ghp_xxx
 mu set es --config-host https://es.example.com --config /etc/mu/es-config.json
 ```
 
-Available modules: ask, commit, es, svcreg, watch, wol.
+Available modules: ask, es, git, svcreg, watch, wol.
+
+### es — Elasticsearch query tool
+
+Query and explore Elasticsearch indices through a web UI. Connection settings are
+persisted in `~/.config/mu/es-config.json`.
+
+```bash
+# Configure the ES connection (or use mu set es)
+mu es set host http://localhost:9200
+mu es set user elastic
+mu es set password my-password
+
+# Serve web UI (standalone)
+mu es serve --port 8084
+```
+
+The web UI provides:
+- **Status** — connection health check against the configured host
+- **Indices** — browse index list with document counts
+- **Search** — run arbitrary ES queries and view results
+
+Also available in the gateway at `/es/`. Connection info is masked in config
+displays (password never shown in plaintext).
 
 ### k8s — Kubernetes utilities
 
@@ -534,7 +565,7 @@ By default, module configs are read from `~/.config/mu/`:
 ├── mock-config.json     (optional, auto-created on first start)
 ├── budget-config.json
 ├── ask-config.json
-├── commit-config.json
+├── git-config.json
 ├── svcreg-config.json
 └── watch.json
 ```
@@ -619,6 +650,43 @@ The web UI provides:
 - **DNS Lookup** tab — query various record types with TTL display
 - **DIG** tab — full dig-style output with response headers, sections, and timing
 - **WHOIS** tab — domain WHOIS lookup
+
+### metrics — Time-series metrics collection
+
+Collect host metrics (CPU, memory, disk, load) as a long-running agent, store them
+in a built-in time-series DB (BoltDB), and query them via CLI or HTTP API.
+
+```bash
+# Start the metrics server (HTTP API on port 8096), optionally with built-in agent
+mu metrics serve --port 8096 --agent --interval 30s
+
+# Run a standalone agent that reports to a remote server
+mu metrics agent --server http://metrics-host:8096 --interval 30s
+
+# Query stored metrics (names: cpu.used.percent, memory.used.percent, load.1m, etc.)
+mu metrics query cpu.used.percent --last 1h --format table
+mu metrics query --list                 # list all metric names
+mu metrics query load.1m --tags host=myhost --format json
+
+# Manually compact / expire old data
+mu metrics compact --retention 30d
+```
+
+The HTTP server exposes JSON APIs under `/api/metrics` (list, query, write,
+compact) for the agent and CLI clients.
+
+### completion — Generate shell completion script
+
+Print a bash/zsh completion script for `mu` subcommands and flags. The scripts
+dynamically parse `mu <path> --help` output, so they stay accurate as commands change.
+
+```bash
+# bash — add to ~/.bashrc
+source <(mu completion bash)
+
+# zsh — add to ~/.zshrc
+source <(mu completion zsh)
+```
 
 ### proxy — Database proxy with failover
 
@@ -1052,10 +1120,9 @@ Flags `--register`, `--boot`, and `--shutdown` are mutually exclusive.
 | `POST` | `/api/aliases` | Add/update alias (JSON: `{"name":"<host>","mac":"<mac>"}`) |
 | `DELETE` | `/api/aliases/{name}` | Delete an alias |
 | `POST` | `/api/wake/{hostname}` | Send WOL magic packet |
-| `POST` | `/api/boot/{hostname}` | Record boot notification and set status to "boot" |
-| `GET` | `/api/boot/{hostname}` | Query last boot time |
-| `POST` | `/api/shutdown/{hostname}` | Record shutdown notification and set status to "shutdown" |
-| `GET` | `/api/shutdown/{hostname}` | Query current status (boot/shutdown/unknown) |
+| `POST` | `/api/notify/{hostname}?type=boot` | Record boot notification and set status to "boot" |
+| `POST` | `/api/notify/{hostname}?type=shutdown` | Record shutdown notification and set status to "shutdown" |
+| `GET` | `/api/notify/{hostname}` | Query current status (boot/shutdown/unknown) and recent events |
 | `GET` | `/` | Svelte frontend UI |
 
 Hostname must conform to RFC 952/1123. MAC must be in `xx:xx:xx:xx:xx:xx` format.

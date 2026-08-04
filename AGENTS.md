@@ -12,7 +12,7 @@ go build -o bin/mu ./cmd/mu
 
 # Build for specific platforms
 make linux-amd64      # Linux x86_64
-make linux-armv8      # Linux ARM64
+make linux-arm64      # Linux ARM64
 make darwin-arm64     # macOS Apple Silicon
 make windows-amd64    # Windows x86_64
 make all              # Build all common platforms

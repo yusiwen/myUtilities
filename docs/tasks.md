@@ -95,8 +95,8 @@ Simple tools that would benefit from a web UI and gateway integration:
 | 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines |
 | 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines |
 | — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines |
-| — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (core/watcher ready) | ⭐⭐⭐ ~200 lines |
-| — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (core/git + openai ready) | ⭐⭐⭐ ~200 lines |
+| — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (internal/core/watcher ready) | ⭐⭐⭐ ~200 lines |
+| — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (internal/core/git + openai ready) | ⭐⭐⭐ ~200 lines |
 
 ## Recently Completed
 
@@ -133,13 +133,13 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Misc Tools** — `mu misc uuid|json|timestamp|hash` with CLI and web UI (4 tabs), zero external dependencies, gateway integration at `/misc/`
 - **Network Tools** — `mu network dns|dig|whois` with CLI and web UI (3 tabs), uses `github.com/miekg/dns` and `github.com/likexian/whois`, gateway integration at `/network/`
 - **k8s Metrics** — `mu k8s get nodes --metrics` and `mu k8s get pods --metrics` with CPU/memory usage, percentage for nodes, optional in Web UI via "Show metrics" checkbox; zero new dependencies
-- **Ask Command** — `mu ask` command for LLM Q&A with concise answers and reference URLs, using `core/openai` client and `core/llm` shared config
+- **Ask Command** — `mu ask` command for LLM Q&A with concise answers and reference URLs, using `internal/core/openai` client and `internal/core/llm` shared config
 - **Web Search Integration** — `mu ask --search` flag that fetches Brave Search API results and injects them into the LLM prompt for up-to-date, cited answers
-- **Shared LLM Config** — `core/llm` package to deduplicate config loading/saving logic across LLM-using commands
-- **git review agent** — Multi-turn tool-calling code review agent with 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info); agent loop via `core/openai.ChatWithTools()`; output rendered via `glamour` + `less -R` pager; reviews saved to `~/.cache/mu/git_reviews/` with YAML front matter; `mu git review --list` for browsing
-- **SCIP semantic code intelligence** — `core/scip` package + `mu scip` command; treesitter-nvim-style on-demand indexer install (auto-download from GitHub release into `~/.cache/mu/scip/tools/`), commit-cached SCIP indexes (`~/.cache/mu/scip/index/`), and 4 semantic agent tools (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); graceful degradation to text tools; `review.scip` config in `git-config.json`
+- **Shared LLM Config** — `internal/core/llm` package to deduplicate config loading/saving logic across LLM-using commands
+- **git review agent** — Multi-turn tool-calling code review agent with 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info); agent loop via `internal/core/openai.ChatWithTools()`; output rendered via `glamour` + `less -R` pager; reviews saved to `~/.cache/mu/git_reviews/` with YAML front matter; `mu git review --list` for browsing
+- **SCIP semantic code intelligence** — `internal/core/scip` package + `mu scip` command; treesitter-nvim-style on-demand indexer install (auto-download from GitHub release into `~/.cache/mu/scip/tools/`), commit-cached SCIP indexes (`~/.cache/mu/scip/index/`), and 4 semantic agent tools (`find_references`, `find_definition`, `symbol_info`, upgraded `read_function`); graceful degradation to text tools; `review.scip` config in `git-config.json`
 - **git-config.json** — Unified config replacing `commit-config.json`: `providers` array with named LLM providers, `commit`/`review` module configs referencing providers; automatic migration from old config
-- **Java SCIP indexer** — scip-java enabled via `core/scip`: `AssetName` by-name download of the cross-platform JVM launcher (SHA256-verified via the companion `.sha256` asset), data-driven indexer args (`Prefix`/`OutputFlag`/`QuietFlag`/`Trailing`), unified temp-file output capture (`runIndexer` + `extractError`, retained log path on failure), visible build line + spinner, and `FailHard` (Java build failure aborts `git review`; Go falls back); `--target` guard against non-HEAD commits
+- **Java SCIP indexer** — scip-java enabled via `internal/core/scip`: `AssetName` by-name download of the cross-platform JVM launcher (SHA256-verified via the companion `.sha256` asset), data-driven indexer args (`Prefix`/`OutputFlag`/`QuietFlag`/`Trailing`), unified temp-file output capture (`runIndexer` + `extractError`, retained log path on failure), visible build line + spinner, and `FailHard` (Java build failure aborts `git review`; Go falls back); `--target` guard against non-HEAD commits
 - **Agent review-loop optimizations** — `read_file` results cached per path/range (re-reads return a short note, not content), identical tool calls within one step deduped, and an "already-read files" system hint injected as the read set grows; measured 19→16 rounds with deeper reviews (7 findings) and lower token usage
 - **"no changes" error hints** — `git review` empty-diff errors now detect untracked files (suggest `git add -N`) and staged changes (suggest `--staged`/`git reset`), consistent with `git diff` semantics
-- **AssetName download SHA256 verification** — `core/installer.AssetByURL` now resolves the companion `.sha256` checksum (via `fetchChecksum`) so OS/arch-less launcher downloads are integrity-checked
+- **AssetName download SHA256 verification** — `internal/core/installer.AssetByURL` now resolves the companion `.sha256` checksum (via `fetchChecksum`) so OS/arch-less launcher downloads are integrity-checked
