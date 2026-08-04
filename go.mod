@@ -1,6 +1,6 @@
 module github.com/yusiwen/myUtilities
 
-go 1.26.0
+go 1.26.5
 
 require (
 	github.com/alecthomas/kong v1.12.1
@@ -17,6 +17,7 @@ require (
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/ryanolee/go-chaff v0.1.1
 	github.com/sabhiram/go-wol v0.0.0-20250815165103-eaddd4c17972
+	github.com/scip-code/scip/bindings/go/scip v0.9.0
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3
 	github.com/shirou/gopsutil/v4 v4.26.6
 	github.com/sijms/go-ora/v2 v2.9.0
@@ -24,6 +25,7 @@ require (
 	github.com/tjfoc/gmsm v1.4.1
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/term v0.45.0
+	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.2
 	k8s.io/apimachinery v0.36.2
@@ -84,7 +86,6 @@ require (
 	github.com/pjbgf/sha1cd v0.3.2 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/scip-code/scip/bindings/go/scip v0.9.0 // indirect
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/sourcegraph/beaut v0.0.0-20240611013027-627e4c25335a // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
@@ -111,7 +112,6 @@ require (
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.40.0 // indirect
-	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
