@@ -52,7 +52,7 @@ This is a CLI tool named `mu` (myUtilities) built with the Kong CLI framework. T
 
 - `cmd/mu/main.go` - Entry point using Kong for CLI parsing. Version info is injected at build time via ldflags.
 - `cmd/mu/myutilities.go` - Defines the root command structure with subcommands
-- `cmd/mu/version.go` - Version variables (populated by Makefile during build)
+- `internal/core/version/version.go` - Version variables (populated by Makefile via ldflags)
 
 ### Command Structure
 
@@ -331,10 +331,10 @@ When adding a new module with a web UI:
 
 ### Build-time Variables
 
-The Makefile injects version info at build time:
-- `main.Version` - Git tag or "unknown version"
-- `main.CommitSHA` - Short git commit hash
-- `main.BuildTime` - Build timestamp (UTC)
+The Makefile injects version info at build time into `internal/core/version`:
+- `version.Version` - Git tag or "unknown version"
+- `version.CommitSHA` - Short git commit hash
+- `version.BuildTime` - Build timestamp (UTC)
 
 ### Testing
 

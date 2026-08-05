@@ -12,6 +12,12 @@ Potential features for future consideration, ordered by implementation priority.
 | 4 | `mu svcreg` — ServiceCenter-compatible service registry | ✅ Done |
 | 5 | `mu set` — Unified config via `ModuleSetter` registry | ✅ Done |
 | 6 | `mu git review` — AI code review agent | ✅ Done |
+| 7 | `mu scip` — SCIP semantic code intelligence | ✅ Done |
+| 8 | `mu metrics` — Time-series metrics collection | ✅ Done |
+| 9 | `mu encode` / `mu cert` | ✅ Done (via `mu crypto` / `mu network`) |
+| 10 | `mu tail` — File tail / log follower | ⬜ Not implemented |
+| 11 | `mu port` — TCP connectivity check | ⬜ Not implemented |
+| 12 | `mu secret` — OS keyring credential storage | 📋 Planned (see [docs/keyring-module-plan.md](./docs/keyring-module-plan.md)) |
 
 ## Proposed Features
 
@@ -26,17 +32,16 @@ process group for gateway restart safety.
 
 ### 4. `mu encode` — Encoding/decoding toolbox
 
-Quick inline base64, URL, hex encoding/decoding and JWT payload decoding. Useful for
-daily ad-hoc debugging.
+✅ Done — implemented as `mu crypto encode/decode` (base64, base64url, hex, URL)
+and `mu crypto jwt decode/verify`. See README → crypto section.
 
-```
-mu encode base64 "hello"
-mu encode base64 -d "aGVsbG8="
-mu encode jwt <token>
-```
+---
 
-**Depends on:** `encoding/base64`, `encoding/hex`, `net/url`, `encoding/json` (all stdlib)
-**Complexity:** Low (single file, ~100 lines)
+### 4. `mu cert` — Certificate inspector
+
+✅ Done — implemented as `mu network cert` (fetch and display SSL/TLS certificate
+details for a domain) and `mu crypto rsa cert` (self-signed cert generation).
+See README → network section.
 
 ---
 
@@ -52,20 +57,7 @@ mu tail --lines 50 app.log
 
 **Depends on:** `internal/core/watcher` (already exists)
 **Complexity:** Low (thin CLI wrapper over existing core package)
-
----
-
-### 4. `mu cert` — Certificate inspector
-
-Reads a PEM certificate file and displays subject, issuer, expiry date, and SANs.
-Complements `crypto rsa cert` (generation) with inspection.
-
-```
-mu cert info server.pem
-```
-
-**Depends on:** `crypto/x509` (stdlib)
-**Complexity:** Low (single file, ~80 lines)
+**Status:** ⬜ Not implemented
 
 ---
 
@@ -79,6 +71,7 @@ mu port check db.example.com:5432
 
 **Depends on:** `net` (stdlib)
 **Complexity:** Low (single file, ~50 lines)
+**Status:** ⬜ Not implemented
 
 ---
 

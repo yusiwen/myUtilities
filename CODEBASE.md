@@ -16,7 +16,7 @@
 |---|---|
 | `cmd/mu/main.go:16` | `main()` — parses CLI with Kong, dispatches to subcommands |
 | `cmd/mu/myutilities.go:13` | `MyUtilities` struct — defines top-level subcommands |
-| `cmd/mu/version.go:3` | Build-time injected vars: `Version`, `CommitSHA`, `BuildTime` |
+| `internal/core/version/version.go` | Build-time injected vars: `Version`, `CommitSHA`, `BuildTime` |
 
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
@@ -41,10 +41,10 @@
 ├── cmd/
 │   └── mu/
 │       ├── main.go            # main() — parses CLI with Kong, dispatches to subcommands
-│       ├── myutilities.go     # MyUtilities struct — defines top-level subcommands
-│       └── version.go         # Build-time version vars (injected via ldflags)
+│       └── myutilities.go     # MyUtilities struct — defines top-level subcommands
 ├── internal/                  # All application packages (not externally importable)
 │   ├── core/                  # Shared business logic
+│   │   ├── version/           # Build-time version vars (injected via ldflags)
 │   │   ├── net/               #  Network utilities
 │   │   │   ├── wol.go         #  SendWOL() — magic packet sender
 │   │   │   ├── interface.go   #  IPFromInterface(), SelectBestInterfaceForWOL(), GetOutboundMAC()

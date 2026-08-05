@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/internal/core/config"
+	"github.com/yusiwen/myUtilities/internal/core/version"
 	"github.com/yusiwen/myUtilities/internal/gateway"
-	"os"
 )
 
 const shaLen = 7
@@ -18,11 +20,11 @@ func main() {
 		os.Exit(runSet(os.Args[2:]))
 	}
 
-	version := fmt.Sprintf("myUtilities version %s", Version)
-	displayVersion := Version
-	if len(CommitSHA) >= shaLen {
-		version += " (" + CommitSHA[:shaLen] + ")"
-		displayVersion += " (" + CommitSHA[:shaLen] + ")"
+	versionStr := fmt.Sprintf("myUtilities version %s", version.Version)
+	displayVersion := version.Version
+	if len(version.CommitSHA) >= shaLen {
+		versionStr += " (" + version.CommitSHA[:shaLen] + ")"
+		displayVersion += " (" + version.CommitSHA[:shaLen] + ")"
 	}
 	var mu = &MyUtilities{}
 	var ctx = kong.Parse(
@@ -36,9 +38,9 @@ func main() {
 			NoExpandSubcommands: true,
 		}),
 		kong.Vars{
-			"version":       version,
-			"versionNumber": Version,
-			"versionFull":   Version + " (" + BuildTime + ")",
+			"version":       versionStr,
+			"versionNumber": version.Version,
+			"versionFull":   version.Version + " (" + version.BuildTime + ")",
 		})
 	gateway.SetVersion(displayVersion)
 

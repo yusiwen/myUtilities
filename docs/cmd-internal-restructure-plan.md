@@ -20,8 +20,8 @@
 myUtilities/
 ├── cmd/mu/                     # 唯一可执行入口 (package main)
 │   ├── main.go                 # kong.Parse + runSet
-│   ├── myutilities.go          # MyUtilities CLI 结构体
-│   └── version.go              # Version/CommitSHA/BuildTime (ldflags -X main.* 不变)
+│   └── myutilities.go          # MyUtilities CLI 结构体
+│   └── (版本变量已移至 internal/core/version/，ldflags -X 指向新包)
 ├── internal/                   # 所有业务包（外部不可导入）
 │   ├── ask/ budget/ completion/ crypto/ diff/ es/ gateway/ git/
 │   ├── installer/ jarinfo/ k8s/ metrics/ misc/ mock/ network/

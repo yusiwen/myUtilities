@@ -19,9 +19,9 @@ BUDGET_FRONTEND_DIR=internal/budget/frontend
 THEME_PARTIAL=web/shared/frontend/theme-partial.html
 COMMON_PARTIAL=web/shared/frontend/common-partial.html
 FRONTEND_DIRS=internal/wol internal/es internal/mock internal/qrcode internal/jarinfo internal/crypto internal/diff internal/k8s internal/misc internal/network internal/svcreg internal/budget
-GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "main.Version=$(VERSION)" \
-		-X "main.CommitSHA=$(COMMIT_SHA)" \
-		-X "main.BuildTime=$(BUILDTIME)" \
+GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/yusiwen/myUtilities/internal/core/version.Version=$(VERSION)" \
+		-X "github.com/yusiwen/myUtilities/internal/core/version.CommitSHA=$(COMMIT_SHA)" \
+		-X "github.com/yusiwen/myUtilities/internal/core/version.BuildTime=$(BUILDTIME)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \

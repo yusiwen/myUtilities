@@ -9,12 +9,15 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 1. [x] Refactor the project to follow standard Go project layout (cmd/, pkg/, internal/, etc.)
     → See [Phase 3 — Standard Layout](./codebase-restructure-plan.md#phase-3--标准项目布局)
     → See [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)（执行方案与进度）
-2. [ ] Move version information to a dedicated package for better maintainability
+2. [x] Move version information to a dedicated package for better maintainability
     → See [Phase 1-①](./codebase-restructure-plan.md#1-①-版本信息抽到独立包)
-3. [ ] Create separate packages for common utilities instead of embedding them in specific packages
+    → Done: `internal/core/version`（`cmd/mu/version.go` 已删除，Makefile ldflags 已更新）
+3. [x] Create separate packages for common utilities instead of embedding them in specific packages
     → See [Phase 2-④](./codebase-restructure-plan.md#2-④-解决-4-组包名冲突)
-4. [ ] Standardize naming conventions across the codebase
+    → Done: 包名冲突已随 cmd/ + internal/ 重构解决
+4. [x] Standardize naming conventions across the codebase
     → See [Phase 1-②](./codebase-restructure-plan.md#1-②-修复-pascalcase-文件名) + [Phase 4-⑥](./codebase-restructure-plan.md#4-⑥-统一命名规范)
+    → Done: PascalCase 文件名已随重构修复（proxy/watcher/runner 等）
 5. [ ] Remove commented-out code and TODOs, replacing them with actual implementations or GitHub issues
     → See [Phase 1-③](./codebase-restructure-plan.md#1-③-清理-todo)
 
@@ -110,9 +113,6 @@ Simple tools that would benefit from a web UI and gateway integration:
   server with BoltDB storage, REST API (25+ endpoints), WebSocket watcher, heartbeat
   lease management, environment-based isolation, batch instance query, request logging
   middleware, and CLI client commands (`status`, `list services`, `list instances`)
-
-## Recently Completed
-
 - **Mock Dynamic Server** — Configurable multi-endpoint mock with template engine, conditional responses, delay simulation, and verbose logging
 - **Admin Web UI** — Svelte 5 frontend with CodeMirror 6 JSON editor, endpoint CRUD, and config persistence
 - **Custom DynamicRouter** — Thread-safe runtime endpoint registry with path parameter matching, replaces static `http.ServeMux`
@@ -143,3 +143,6 @@ Simple tools that would benefit from a web UI and gateway integration:
 - **Agent review-loop optimizations** — `read_file` results cached per path/range (re-reads return a short note, not content), identical tool calls within one step deduped, and an "already-read files" system hint injected as the read set grows; measured 19→16 rounds with deeper reviews (7 findings) and lower token usage
 - **"no changes" error hints** — `git review` empty-diff errors now detect untracked files (suggest `git add -N`) and staged changes (suggest `--staged`/`git reset`), consistent with `git diff` semantics
 - **AssetName download SHA256 verification** — `internal/core/installer.AssetByURL` now resolves the companion `.sha256` checksum (via `fetchChecksum`) so OS/arch-less launcher downloads are integrity-checked
+- **Version package** — Version vars moved from `cmd/mu/version.go` to `internal/core/version`; Makefile ldflags target the new package
+- **Standard layout migration** — Migrated to `cmd/ + internal/` Go layout; all business logic moved from CLI packages to `internal/core/`
+- **Nix flake dev environment** — Added `flake.nix` + `flake.lock` for reproducible development environment

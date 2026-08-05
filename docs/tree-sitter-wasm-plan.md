@@ -1,5 +1,10 @@
 # Tree-sitter WASM Integration Plan
 
+> **状态：已由 SCIP 方案取代（superseded）。** 本文档提出的 AST 级符号解析目标
+> 已通过 [SCIP 语义索引](./scip-integration-plan.md) 实现（`find_definition`、
+> `find_references`、`symbol_info`、升级版 `read_function`），Go/Java 已启用。
+> 保留本文档仅作历史参考，不再按此实施。
+
 ## Background
 
 `mu git review` agent currently has a `search_code` tool that uses `git grep`
