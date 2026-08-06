@@ -14,6 +14,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 
 	coreinst "github.com/yusiwen/myUtilities/internal/core/installer"
@@ -70,21 +72,103 @@ func (tc *Toolchain) toolsDir() string {
 
 // BinPath returns the versioned install path for the indexer binary.
 func (tc *Toolchain) BinPath(ix *Indexer) string {
-	return filepath.Join(tc.toolsDir(), ix.BinaryName, ix.Version, ix.BinaryName)
+	return tc.BinPathFor(ix, ix.Version)
 }
 
-// Lookup returns the installed binary path for ix and whether it is usable.
+// BinPathFor returns the install path for a specific version.
+func (tc *Toolchain) BinPathFor(ix *Indexer, version string) string {
+	return filepath.Join(tc.toolsDir(), ix.BinaryName, version, ix.BinaryName)
+}
+
+// Lookup returns the installed binary path for the indexer's default version
+// and whether it is usable.
 func (tc *Toolchain) Lookup(ix *Indexer) (string, bool) {
-	path := tc.BinPath(ix)
+	return tc.LookupFor(ix, ix.Version)
+}
+
+// LookupFor returns the installed binary path for a specific version.
+func (tc *Toolchain) LookupFor(ix *Indexer, version string) (string, bool) {
+	path := tc.BinPathFor(ix, version)
 	if isExecutable(path) {
 		return path, true
 	}
 	return "", false
 }
 
-// Install resolves and downloads the indexer binary for ix, returning its path.
-func (tc *Toolchain) Install(ix *Indexer) (string, error) {
-	if path, ok := tc.Lookup(ix); ok {
+// ResolveVersion determines which release version to use for ix, with the
+// priority: config override (map keyed by language) > default pin > latest.
+func (tc *Toolchain) ResolveVersion(ix *Indexer, overrides map[string]string) (string, error) {
+	if v, ok := overrides[ix.Lang]; ok && v != "" {
+		return v, nil
+	}
+	if ix.Version != "" {
+		return ix.Version, nil
+	}
+	return tc.resolveLatest(ix)
+}
+
+// LatestVersion queries GitHub for the latest release tag of the indexer.
+func (tc *Toolchain) LatestVersion(ix *Indexer) (string, error) {
+	return tc.resolveLatest(ix)
+}
+
+// resolveLatest queries GitHub for the latest release tag of the indexer.
+func (tc *Toolchain) resolveLatest(ix *Indexer) (string, error) {
+	if ix.Install != MethodGitHubRelease {
+		return "", fmt.Errorf("indexer %s uses install method %q, not auto-installable yet", ix.Lang, ix.Install)
+	}
+	user, program := splitRepo(ix.GitHubRepo)
+	client := &coreinst.Client{Token: tc.Token}
+	tag, err := client.LatestTag(user, program)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve latest release of %s: %w", ix.GitHubRepo, err)
+	}
+	return tag, nil
+}
+
+// InstalledVersions returns the installed version directories for ix, newest
+// first (empty when nothing is installed).
+func (tc *Toolchain) InstalledVersions(ix *Indexer) []string {
+	dir := filepath.Join(tc.toolsDir(), ix.BinaryName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var vers []string
+	for _, e := range entries {
+		if e.IsDir() {
+			vers = append(vers, e.Name())
+		}
+	}
+	sort.Slice(vers, func(i, j int) bool { return versionGreater(vers[i], vers[j]) })
+	return vers
+}
+
+// PurgeVersions removes installed version directories for ix, keeping the
+// given versions (which should be absolute paths or version dirs to keep).
+func (tc *Toolchain) PurgeVersions(ix *Indexer, keep ...string) error {
+	keepSet := map[string]bool{}
+	for _, k := range keep {
+		if k == "" {
+			continue
+		}
+		keepSet[filepath.Base(k)] = true
+	}
+	for _, v := range tc.InstalledVersions(ix) {
+		if keepSet[v] {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(tc.toolsDir(), ix.BinaryName, v)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Install resolves and downloads the indexer binary for ix at the given
+// version, returning its path.
+func (tc *Toolchain) Install(ix *Indexer, version string) (string, error) {
+	if path, ok := tc.LookupFor(ix, version); ok {
 		return path, nil
 	}
 	if ix.Install != MethodGitHubRelease {
@@ -99,27 +183,27 @@ func (tc *Toolchain) Install(ix *Indexer) (string, error) {
 	q := coreinst.Query{
 		User:    user,
 		Program: program,
-		Release: ix.Version,
+		Release: version,
 	}
 	if q.Release == "" {
 		q.Release = "latest"
 	}
 
-	binDir := filepath.Dir(tc.BinPath(ix))
+	binDir := filepath.Dir(tc.BinPathFor(ix, version))
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return "", err
 	}
 
 	var asset coreinst.Asset
-	if ix.AssetName != "" {
+	if assetName := ix.AssetNameFor(version); assetName != "" {
 		// Cross-platform launcher asset (no OS/arch in the name): resolve the
 		// browser download URL by exact name and install it directly.
 		tc.logf(term.Faint("Resolving %s release %s ..."), ix.GitHubRepo, q.Release)
-		url, sha, err := client.AssetByURL(user, program, q.Release, ix.AssetName)
+		url, sha, err := client.AssetByURL(user, program, q.Release, assetName)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve %s asset: %w", ix.AssetName, err)
+			return "", fmt.Errorf("failed to resolve %s asset: %w", assetName, err)
 		}
-		asset = coreinst.Asset{Name: ix.AssetName, URL: url, Type: ".bin", SHA256: sha}
+		asset = coreinst.Asset{Name: assetName, URL: url, Type: ".bin", SHA256: sha}
 	} else {
 		tc.logf(term.Faint("Resolving %s release %s ..."), ix.GitHubRepo, q.Release)
 		result, err := client.QueryAssets(q)
@@ -134,15 +218,15 @@ func (tc *Toolchain) Install(ix *Indexer) (string, error) {
 		tc.debugf("asset: %s (%s) %s", asset.Name, asset.Key(), asset.URL)
 	}
 
-	if err := tc.installAsset(asset, tc.BinPath(ix)); err != nil {
+	if err := tc.installAsset(asset, tc.BinPathFor(ix, version)); err != nil {
 		return "", err
 	}
-	if err := os.Chmod(tc.BinPath(ix), 0755); err != nil {
+	if err := os.Chmod(tc.BinPathFor(ix, version), 0755); err != nil {
 		return "", err
 	}
 
-	tc.logf("%s %s installed to %s", term.Faint(ix.BinaryName), term.Faint(q.Release), term.Bright(tc.BinPath(ix)))
-	return tc.BinPath(ix), nil
+	tc.logf("%s %s installed to %s", term.Faint(ix.BinaryName), term.Faint(q.Release), term.Bright(tc.BinPathFor(ix, version)))
+	return tc.BinPathFor(ix, version), nil
 }
 
 func splitRepo(repo string) (user, program string) {
@@ -388,6 +472,36 @@ func isExecutable(path string) bool {
 		return false
 	}
 	return !info.IsDir() && info.Mode()&0111 != 0
+}
+
+// versionGreater reports whether a > b, comparing dotted numeric versions.
+// Tags may have a "v" prefix (e.g. "v0.13.1") or be date-style (e.g.
+// "2026-07-27"); non-numeric segments are compared lexically as a tiebreak.
+func versionGreater(a, b string) bool {
+	av, bv := parseVersion(a), parseVersion(b)
+	for i := 0; i < len(av) && i < len(bv); i++ {
+		if av[i] != bv[i] {
+			return av[i] > bv[i]
+		}
+	}
+	return len(av) > len(bv)
+}
+
+func parseVersion(v string) []int {
+	fields := strings.FieldsFunc(strings.TrimPrefix(v, "v"), func(r rune) bool {
+		return r == '.' || r == '-'
+	})
+	out := make([]int, 0, len(fields))
+	for _, f := range fields {
+		if n, err := strconv.Atoi(f); err == nil {
+			out = append(out, n)
+		} else {
+			// Lexical segment: approximate by length + first char for
+			// deterministic ordering in date-like tags.
+			out = append(out, len(f)*1000+int(f[0]))
+		}
+	}
+	return out
 }
 
 func download(url string) (io.ReadCloser, error) {

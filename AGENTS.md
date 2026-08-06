@@ -158,12 +158,13 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/core/scip/` - SCIP semantic code intelligence
   - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `internal/core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
-  - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, pinned version, `AssetName` for OS/arch-less launchers, data-driven `Prefix`/`OutputFlag`/`QuietFlag`/`Trailing` args, `FailHard`); Go and Java are enabled (Java is `FailHard`), TS/C registered for future use
-  - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`
+  - `Indexer` registry — per-language indexer metadata (detect signals, GitHub release, default pinned version, `AssetNameTemplate` for OS/arch-less launchers, data-driven `Prefix`/`OutputFlag`/`QuietFlag`/`Trailing` args, `FailHard`); Go and Java are enabled (Java is `FailHard`), TS/C registered for future use
+  - `EnsureOptions` — `RepoRoot`, `CacheDir` (default `~/.cache/mu/scip`), `AutoInstall`, `Force`, `Versions` (map of lang → release tag override)
+  - Version resolution priority: `review.scip.versions` config override > indexer default pin > latest GitHub release (`Toolchain.ResolveVersion`). `mu scip update` upgrades to latest and persists the tag into `git-config.json`; `mu scip install --release` installs a specific tag; `mu set git review --scip-version lang=tag` sets an override.
   - Cache layout: `~/.cache/mu/scip/tools/<name>/<version>/<binary>` and `~/.cache/mu/scip/index/<project>/<lang>/<commit>.scip` (or `working.scip` when dirty)
   - Dirty-tree freshness: `working.scip` is reused only if no matching changed source file (via `git status --porcelain`) is newer than it; `--refresh-scip` forces a rebuild. Clean trees always reuse the immutable per-commit index.
   - Indexer output is captured to a temp file (`runIndexer`); on failure `extractError` shows relevant lines and the full log is retained with its path. Stale/forced rebuilds print a visible reason line + spinner (`newIndexSpinner`, TTY only).
-  - `AssetName` downloads (OS/arch-less launchers like scip-java) are SHA256-verified via the companion `.sha256` release asset; `internal/core/installer.AssetByURL` resolves URL + checksum, `fetchChecksum` parses it
+  - `AssetNameTemplate` downloads (OS/arch-less launchers like scip-java) are SHA256-verified via the companion `.sha256` release asset; `internal/core/installer.AssetByURL` resolves URL + checksum, `fetchChecksum` parses it, `LatestTag` resolves the newest release
   - Build failures return an `IndexError{Lang, Err, Hard}`; `FailHard` languages (Java) abort `git review` via `internal/git/review.go`, while Go falls back to text tools.
   - Consumed by `internal/core/git/agent.go` (tools: `find_references`, `find_definition`, `symbol_info`, upgraded `read_function`)
 

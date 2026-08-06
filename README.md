@@ -825,15 +825,34 @@ SCIP management commands:
 # Install the indexer for a language (auto-downloaded)
 mu scip install go
 mu scip install java
+mu scip install go --release v0.3.0   # install a specific release tag
 
-# List available / installed indexers
+# List available / installed indexers (configured / pinned / installed versions)
 mu scip list
 
 # Build the index for the current repo
 mu scip index
 
+# Update indexer(s) to the latest release (persists the version in config)
+mu scip update go              # update a single language
+mu scip update                 # update all enabled indexers
+mu scip update --dry-run       # show old → new without downloading
+mu scip update --no-pin        # download only, don't touch git-config.json
+mu scip update --keep-old      # keep previous versions instead of removing them
+
 # Remove all cached indexers and indexes
 mu scip purge
+```
+
+**Indexer version control:** each language's indexer release tag is pinned in
+code as a conservative default (e.g. scip-go `v0.2.7`, scip-java `v0.13.1`).
+`mu scip update` upgrades to the latest release and records the new tag in
+`git-config.json` under `review.scip.versions`, so upgrades are explicit and
+persistent. Overrides can also be set manually:
+
+```bash
+mu set git review --scip-version go=v0.3.0      # pin a specific release
+mu set git review --scip-version-rm go          # remove the override
 ```
 
 **Java projects:** `scip-java` indexes by actually running the Maven/Gradle build
@@ -853,7 +872,12 @@ Configuration lives in `git-config.json` under the `review.scip` key:
   "review": {
     "provider": "default",
     "lang": "en",
-    "scip": { "enabled": true, "auto_install": true, "cache_dir": "" }
+    "scip": {
+      "enabled": true,
+      "auto_install": true,
+      "cache_dir": "",
+      "versions": { "go": "v0.3.0" }
+    }
   }
 }
 ```

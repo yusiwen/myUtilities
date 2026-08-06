@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/alecthomas/kong"
@@ -170,9 +171,11 @@ func (o *CommitModuleCmd) Run() error {
 }
 
 type ReviewModuleCmd struct {
-	Provider   string `help:"Provider name to use."`
-	Lang       string `help:"Output language (en, cn)."`
-	ReviewsDir string `help:"Directory to store review reports." name:"reviews-dir"`
+	Provider      string `help:"Provider name to use."`
+	Lang          string `help:"Output language (en, cn)."`
+	ReviewsDir    string `help:"Directory to store review reports." name:"reviews-dir"`
+	ScipVersion   string `help:"Set SCIP indexer version override as lang=tag (e.g. go=v0.3.0)." name:"scip-version"`
+	ScipVersionRm string `help:"Remove SCIP version override for a language (e.g. go)." name:"scip-version-rm"`
 }
 
 func (o *ReviewModuleCmd) Run() error {
@@ -194,6 +197,21 @@ func (o *ReviewModuleCmd) Run() error {
 	}
 	if o.ReviewsDir != "" {
 		gc.Review.ReviewsDir = o.ReviewsDir
+	}
+	if o.ScipVersion != "" {
+		lang, tag, ok := strings.Cut(o.ScipVersion, "=")
+		if !ok || lang == "" || tag == "" {
+			return fmt.Errorf("invalid --scip-version %q, expected lang=tag (e.g. go=v0.3.0)", o.ScipVersion)
+		}
+		if gc.Review.Scip.Versions == nil {
+			gc.Review.Scip.Versions = map[string]string{}
+		}
+		gc.Review.Scip.Versions[lang] = tag
+	}
+	if o.ScipVersionRm != "" {
+		if gc.Review.Scip.Versions != nil {
+			delete(gc.Review.Scip.Versions, o.ScipVersionRm)
+		}
 	}
 	return coregit.SaveGitConfig(gc)
 }

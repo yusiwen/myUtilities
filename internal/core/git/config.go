@@ -16,9 +16,10 @@ type Provider struct {
 }
 
 type ScipConfig struct {
-	Enabled     *bool  `json:"enabled,omitempty"`      // nil → enabled by default
-	AutoInstall *bool  `json:"auto_install,omitempty"` // nil → true
-	CacheDir    string `json:"cache_dir,omitempty"`    // empty → ~/.cache/mu/scip
+	Enabled     *bool             `json:"enabled,omitempty"`      // nil → enabled by default
+	AutoInstall *bool             `json:"auto_install,omitempty"` // nil → true
+	CacheDir    string            `json:"cache_dir,omitempty"`    // empty → ~/.cache/mu/scip
+	Versions    map[string]string `json:"versions,omitempty"`     // lang → release tag override
 }
 
 type ModuleConfig struct {

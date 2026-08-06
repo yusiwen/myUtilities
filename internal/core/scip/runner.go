@@ -31,6 +31,9 @@ type EnsureOptions struct {
 	Token string
 	// AutoInstall allows downloading missing indexer binaries.
 	AutoInstall bool
+	// Versions maps language → release tag, overriding the indexer's default
+	// pinned version. Empty map uses the default pins.
+	Versions map[string]string
 	// Verbose enables progress/debug output.
 	Verbose bool
 	// Out receives progress output (defaults to stderr).
@@ -105,6 +108,11 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 		if !ok || ix.Disable {
 			continue
 		}
+		version, err := tc.ResolveVersion(ix, opts.Versions)
+		if err != nil {
+			tc.logf(term.Faint("Skipping %s: %s"), LangDisplay(lang), err)
+			continue
+		}
 
 		path := store.IndexPath(project, lang, commit)
 		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -131,7 +139,7 @@ func EnsureIndex(opts EnsureOptions) (*IndexSet, error) {
 			if opts.Force {
 				os.Remove(path)
 			}
-			bin, err := tc.Install(ix)
+			bin, err := tc.Install(ix, version)
 			if err != nil {
 				if autoInstall {
 					return nil, indexErr(ix, fmt.Errorf("install %s indexer: %w", lang, err))

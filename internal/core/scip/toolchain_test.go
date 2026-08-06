@@ -119,8 +119,8 @@ func TestJavaRegistryEnabled(t *testing.T) {
 	if !ix.FailHard {
 		t.Fatal("java should be FailHard")
 	}
-	if ix.AssetName != "scip-java-v0.13.1" {
-		t.Fatalf("unexpected java AssetName: %q", ix.AssetName)
+	if ix.AssetNameFor("v0.13.1") != "scip-java-v0.13.1" {
+		t.Fatalf("unexpected java AssetNameFor: %q", ix.AssetNameFor("v0.13.1"))
 	}
 	if strings.Join(ix.Prefix, " ") != "index" || ix.OutputFlag != "--output" {
 		t.Fatalf("unexpected java invocation fields: prefix=%v output=%q", ix.Prefix, ix.OutputFlag)
@@ -129,5 +129,102 @@ func TestJavaRegistryEnabled(t *testing.T) {
 	langs, err := DetectLangs(t.TempDir())
 	if err != nil || len(langs) != 0 {
 		t.Fatalf("empty dir should detect nothing, got %v (err=%v)", langs, err)
+	}
+}
+
+func TestVersionGreater(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want bool
+	}{
+		{"v0.2.7", "v0.13.1", false},
+		{"v0.13.1", "v0.2.7", true},
+		{"v0.13.1", "v0.13.1", false},
+		{"v0.3.0", "v0.13.1", false},
+		{"v1.0.0", "v0.99.0", true},
+		{"2026-07-27", "2026-07-26", true},
+		{"v0.2.7", "2026-07-27", false},
+	}
+	for _, c := range cases {
+		if got := versionGreater(c.a, c.b); got != c.want {
+			t.Errorf("versionGreater(%q, %q) = %v, want %v", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestResolveVersion(t *testing.T) {
+	tc := NewToolchain()
+	tc.Root = t.TempDir()
+	ix, _ := LookupLang("go")
+
+	// Config override wins.
+	if v, _ := tc.ResolveVersion(ix, map[string]string{"go": "v9.9.9"}); v != "v9.9.9" {
+		t.Fatalf("override: got %q", v)
+	}
+	// Default pin used when no override.
+	if v, _ := tc.ResolveVersion(ix, nil); v != ix.Version {
+		t.Fatalf("pin: got %q, want %q", v, ix.Version)
+	}
+}
+
+func TestInstalledAndPurgeVersions(t *testing.T) {
+	tc := NewToolchain()
+	tc.Root = t.TempDir()
+	ix, _ := LookupLang("go")
+
+	if got := tc.InstalledVersions(ix); len(got) != 0 {
+		t.Fatalf("expected no installed versions, got %v", got)
+	}
+
+	for _, ver := range []string{"v0.2.0", "v0.1.0", "v0.3.0"} {
+		dir := filepath.Join(tc.toolsDir(), ix.BinaryName, ver)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, ix.BinaryName), []byte("x"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := tc.InstalledVersions(ix)
+	if len(got) != 3 || got[0] != "v0.3.0" {
+		t.Fatalf("installed versions not newest-first: %v", got)
+	}
+
+	if err := tc.PurgeVersions(ix, "v0.3.0"); err != nil {
+		t.Fatal(err)
+	}
+	got = tc.InstalledVersions(ix)
+	if len(got) != 1 || got[0] != "v0.3.0" {
+		t.Fatalf("purge kept wrong versions: %v", got)
+	}
+}
+
+func TestLookupFor(t *testing.T) {
+	tc := NewToolchain()
+	tc.Root = t.TempDir()
+	ix, _ := LookupLang("go")
+
+	if _, ok := tc.LookupFor(ix, "v1.2.3"); ok {
+		t.Fatal("expected not installed")
+	}
+
+	dir := filepath.Join(tc.toolsDir(), ix.BinaryName, "v1.2.3")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(dir, ix.BinaryName)
+	if err := os.WriteFile(bin, []byte("x"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tc.LookupFor(ix, "v1.2.3"); !ok {
+		t.Fatal("expected installed after creating binary")
+	}
+	// Non-executable file is not usable.
+	if err := os.Chmod(bin, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := tc.LookupFor(ix, "v1.2.3"); ok {
+		t.Fatal("non-executable binary should not be usable")
 	}
 }

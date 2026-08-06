@@ -133,6 +133,7 @@ func (o *ReviewOptions) Run() error {
 				CacheDir:    scipCfg.CacheDir,
 				AutoInstall: autoInstall,
 				Force:       o.RefreshScip,
+				Versions:    scipCfg.Versions,
 				Verbose:     o.Verbose,
 			})
 			if err != nil {

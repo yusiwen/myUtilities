@@ -1,5 +1,9 @@
 package scip
 
+import (
+	"fmt"
+)
+
 // InstallMethod describes how an indexer binary is distributed.
 type InstallMethod string
 
@@ -22,7 +26,9 @@ type Indexer struct {
 	Detect []string
 	// GitHubRepo is the "owner/repo" used when Install == MethodGitHubRelease.
 	GitHubRepo string
-	// Version pins the release tag, e.g. "v0.4.0".
+	// Version is the default pinned release tag, e.g. "v0.4.0". It is the
+	// fallback when no config override is set; it may be empty, in which case
+	// the latest release is resolved at install time.
 	Version string
 	// Install is the distribution method for the indexer binary.
 	Install InstallMethod
@@ -38,10 +44,12 @@ type Indexer struct {
 	// (e.g. compile_commands.json, a JVM build). They are registered but
 	// not used by the auto-detection path.
 	Disable bool
-	// AssetName pins the exact GitHub release asset name to download,
-	// bypassing OS/arch name matching. Used by cross-platform launchers
-	// whose release assets do not encode the target platform.
-	AssetName string
+	// AssetNameTemplate formats the exact GitHub release asset name to
+	// download, bypassing OS/arch name matching. A "%s" placeholder is
+	// substituted with the resolved release tag. Used by cross-platform
+	// launchers whose release assets do not encode the target platform,
+	// e.g. "scip-java-%s" → "scip-java-v0.13.1".
+	AssetNameTemplate string
 	// Prefix is the fixed leading subcommand arguments, e.g. ["index"] for
 	// "scip-java index".
 	Prefix []string
@@ -85,18 +93,18 @@ var registry = []*Indexer{
 		OutputFile: "index.scip",
 	},
 	{
-		Lang:       "java",
-		Detect:     []string{"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "gradlew", "*.java"},
-		GitHubRepo: "scip-code/scip-java",
-		Version:    "v0.13.1",
-		Install:    MethodGitHubRelease,
-		Requires:   []string{"java"},
-		BinaryName: "scip-java",
-		OutputFile: "index.scip",
-		AssetName:  "scip-java-v0.13.1",
-		Prefix:     []string{"index"},
-		OutputFlag: "--output",
-		FailHard:   true,
+		Lang:              "java",
+		Detect:            []string{"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle", "gradlew", "*.java"},
+		GitHubRepo:        "scip-code/scip-java",
+		Version:           "v0.13.1",
+		Install:           MethodGitHubRelease,
+		Requires:          []string{"java"},
+		BinaryName:        "scip-java",
+		OutputFile:        "index.scip",
+		AssetNameTemplate: "scip-java-%s",
+		Prefix:            []string{"index"},
+		OutputFlag:        "--output",
+		FailHard:          true,
 	},
 	{
 		Lang:       "c",
@@ -115,6 +123,15 @@ func Registry() []*Indexer {
 	out := make([]*Indexer, len(registry))
 	copy(out, registry)
 	return out
+}
+
+// AssetNameFor returns the exact release asset name for a resolved version,
+// using AssetNameTemplate when set.
+func (ix *Indexer) AssetNameFor(version string) string {
+	if ix.AssetNameTemplate == "" {
+		return ""
+	}
+	return fmt.Sprintf(ix.AssetNameTemplate, version)
 }
 
 // LookupLang returns the indexer registered for lang, if any.

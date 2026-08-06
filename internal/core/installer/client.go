@@ -215,6 +215,21 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 	return release, assets, nil
 }
 
+// LatestTag returns the tag name of the latest published release for the
+// repo, without any asset matching. Useful for cross-platform launchers whose
+// asset names do not encode the target platform.
+func (c *Client) LatestTag(user, program string) (string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", user, program)
+	var ghr ghRelease
+	if err := c.get(url, &ghr); err != nil {
+		return "", err
+	}
+	if ghr.TagName == "" {
+		return "", fmt.Errorf("latest release has no tag for %s/%s", user, program)
+	}
+	return ghr.TagName, nil
+}
+
 // AssetByURL returns the browser download URL and SHA256 checksum for a release
 // asset by exact name, without OS/arch filtering. The checksum is read from a
 // sibling "<name>.sha256" asset when present; it is empty otherwise. Used for
