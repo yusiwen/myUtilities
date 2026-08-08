@@ -432,6 +432,6 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 4 | agent 工具接入 | ✅ |
 | 5 | CLI + 配置 | ✅ |
 | 6 | 文档 + 验证 | ✅ |
-| 7 | Rust 支持（registry + 数据驱动 generate + 裸 `.gz` 解压） | ⬜ 待实施 |
+| 7 | Rust 支持（registry + 数据驱动 generate + 裸 `.gz` 解压） | ✅ |
 | 8 | Java 支持（AssetName 下载 + buildArgs + 输出临时文件 + FailHard + spinner） | ✅ |
 | 9 | 版本配置化 + `mu scip update`（`AssetName` → `AssetNameTemplate`，`review.scip.versions` 覆盖，`ResolveVersion` 配置>pin>latest，`update`/`--release`/`--scip-version`，`LatestTag` 解析） | ✅ |

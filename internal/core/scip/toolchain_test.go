@@ -91,6 +91,92 @@ func TestExtractBinary(t *testing.T) {
 	}
 }
 
+// makeRawGz writes a bare gzip-compressed single binary (no tar container),
+// mirroring how rust-analyzer ships its release assets.
+func makeRawGz(t *testing.T, name, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, name)
+
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	gw := gzip.NewWriter(f)
+	if _, err := gw.Write([]byte(content)); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestExtractRawGzip(t *testing.T) {
+	archive := makeRawGz(t, "rust-analyzer-x86_64-unknown-linux-gnu.gz", "#!rust-binary\n")
+
+	outDir := t.TempDir()
+	found, err := extractBinary(archive, outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if found == "" {
+		t.Fatal("expected a binary to be extracted")
+	}
+	if filepath.Base(found) != "rust-analyzer-x86_64-unknown-linux-gnu" {
+		t.Fatalf("expected decompressed binary name, got %q", found)
+	}
+	data, err := os.ReadFile(found)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "#!rust-binary\n" {
+		t.Fatalf("unexpected extracted content: %q", string(data))
+	}
+}
+
+func TestRustRegistryEnabled(t *testing.T) {
+	ix, ok := LookupLang("rust")
+	if !ok {
+		t.Fatal("rust indexer missing from registry")
+	}
+	if ix.Disable {
+		t.Fatal("rust should be enabled")
+	}
+	if ix.Install != MethodGitHubRelease {
+		t.Fatalf("rust should be GitHub-release distributed, got %q", ix.Install)
+	}
+	if strings.Join(ix.Prefix, " ") != "scip" || ix.OutputFlag != "--output" {
+		t.Fatalf("unexpected rust invocation fields: prefix=%v output=%q", ix.Prefix, ix.OutputFlag)
+	}
+	if !contains(ix.Detect, "Cargo.toml") {
+		t.Fatalf("rust Detect should include Cargo.toml, got %v", ix.Detect)
+	}
+}
+
+func TestDetectRust(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Cargo.toml"), []byte("[package]\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	langs, err := DetectLangs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, l := range langs {
+		if l == "rust" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected rust in detected langs, got %v", langs)
+	}
+}
+
 func TestBinaryCandidate(t *testing.T) {
 	cases := map[string]bool{
 		"scip-go":       true,

@@ -103,6 +103,7 @@ Simple tools that would benefit from a web UI and gateway integration:
 
 ## Recently Completed
 
+- **Rust SCIP indexer** — rust-analyzer (`scip` subcommand) registered in `internal/core/scip`: bare `.gz` single-binary extraction fallback (`extractRawGzip`, tried after tar parse), `Cargo.toml`/`*.rs` detection, data-driven invocation `rust-analyzer scip --output <path> .`; enables `find_references`/`find_definition`/`symbol_info`/`read_function` for Rust repos via `git review`
 - **Frontend Favicons** — Added emoji favicons to all 11 frontends matching gateway landing page card icons
 - **Mock Dynamic Server Fix** — Fixed gateway integration default route fallback to DynamicRouter for mock endpoints
 - **svcreg Web Dashboard** — Svelte 5 frontend with Dashboard, Services, Instances, Admin tabs.

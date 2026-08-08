@@ -319,15 +319,46 @@ func (tc *Toolchain) downloadExtract(a coreinst.Asset, dest string) error {
 }
 
 // extractBinary extracts archive (by extension) into dir and returns the path
-// of the most likely indexer binary.
+// of the most likely indexer binary. A .gz archive is treated as a tar.gz
+// first; when the stream is not a tar (e.g. rust-analyzer ships a bare gzipped
+// single binary), it falls back to decompressing it directly.
 func extractBinary(archivePath, dir string) (string, error) {
 	lower := strings.ToLower(archivePath)
 	switch {
 	case strings.HasSuffix(lower, ".zip"):
 		return extractZip(archivePath, dir)
+	case strings.HasSuffix(lower, ".gz"):
+		if p, err := extractTar(archivePath, dir); err == nil && p != "" {
+			return p, nil
+		}
+		return extractRawGzip(archivePath, dir)
 	default:
 		return extractTar(archivePath, dir)
 	}
+}
+
+// extractRawGzip decompresses a bare gzip-compressed single binary (no tar
+// container) into dir and returns the extracted file path.
+func extractRawGzip(archivePath, dir string) (string, error) {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", err
+	}
+	defer gz.Close()
+
+	name := filepath.Base(archivePath)
+	name = strings.TrimSuffix(name, ".gz")
+	dest := filepath.Join(dir, name)
+	if err := writeFileFrom(dest, gz); err != nil {
+		return "", err
+	}
+	return dest, nil
 }
 
 func extractTar(archivePath, dir string) (string, error) {

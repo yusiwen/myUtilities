@@ -148,6 +148,7 @@ exit 1
 func TestBuildArgs(t *testing.T) {
 	goIX, _ := LookupLang("go")
 	javaIX, _ := LookupLang("java")
+	rustIX, _ := LookupLang("rust")
 
 	quiet := &Toolchain{}
 	verbose := &Toolchain{Verbose: true}
@@ -168,6 +169,15 @@ func TestBuildArgs(t *testing.T) {
 	}
 	if got := buildArgs(verbose, javaIX, "/cache/out.scip"); strings.Join(got, " ") != "index --output /cache/out.scip" {
 		t.Fatalf("java verbose args = %v", got)
+	}
+
+	// Rust: `rust-analyzer scip --output <path> .` (cwd = repo root); no quiet flag.
+	got = buildArgs(quiet, rustIX, "/cache/out.scip")
+	if strings.Join(got, " ") != "scip --output /cache/out.scip ." {
+		t.Fatalf("rust args = %v", got)
+	}
+	if got := buildArgs(verbose, rustIX, "/cache/out.scip"); strings.Join(got, " ") != "scip --output /cache/out.scip ." {
+		t.Fatalf("rust verbose args = %v", got)
 	}
 }
 

@@ -807,16 +807,16 @@ The agent gains four semantic tools:
 | `read_function` | Reads the exact enclosing function body (upgraded from a fixed ±30-line window) |
 
 Indexers are installed **on demand, treesitter-nvim style**: on the first review the
-language is auto-detected from the repo (e.g. `go.mod`, `pom.xml`), the matching indexer
-binary is downloaded from a GitHub release into `~/.cache/mu/scip/tools/`, and the index
+language is auto-detected from the repo (e.g. `go.mod`, `pom.xml`, `Cargo.toml`), the matching
+indexer binary is downloaded from a GitHub release into `~/.cache/mu/scip/tools/`, and the index
 is built and cached per commit in `~/.cache/mu/scip/index/`. Dirty working trees use a
 `working` index (rebuilt when source files changed). A stale index is rebuilt with an
 explanatory line; building shows a spinner.
 
 Indexer output is captured to a temp file (streamed live with `--verbose`); on a failed
 build the error lines are extracted and the full log is kept, e.g.:
-`Full indexer log kept at: /tmp/scip-index-XXX`. Go failures degrade gracefully to text
-tools, while a **Java build failure aborts the review** (fail fast), since `scip-java`
+`Full indexer log kept at: /tmp/scip-index-XXX`. Go and Rust failures degrade gracefully to
+text tools, while a **Java build failure aborts the review** (fail fast), since `scip-java`
 runs a real Maven/Gradle build.
 
 SCIP management commands:
@@ -825,6 +825,7 @@ SCIP management commands:
 # Install the indexer for a language (auto-downloaded)
 mu scip install go
 mu scip install java
+mu scip install rust
 mu scip install go --release v0.3.0   # install a specific release tag
 
 # List available / installed indexers (configured / pinned / installed versions)
@@ -845,7 +846,8 @@ mu scip purge
 ```
 
 **Indexer version control:** each language's indexer release tag is pinned in
-code as a conservative default (e.g. scip-go `v0.2.7`, scip-java `v0.13.1`).
+code as a conservative default (e.g. scip-go `v0.2.7`, scip-java `v0.13.1`,
+rust-analyzer `2026-08-03`).
 `mu scip update` upgrades to the latest release and records the new tag in
 `git-config.json` under `review.scip.versions`, so upgrades are explicit and
 persistent. Overrides can also be set manually:
@@ -864,6 +866,16 @@ mu set git review --scip-version-rm go          # remove the override
 
 `git review` builds the Java index automatically when missing or stale (fail-fast on a
 failed build — see the retained-log hint above); use `--refresh-scip` to force a rebuild.
+
+**Rust projects:** `git review` uses `rust-analyzer scip` to index Cargo workspaces, so it needs:
+
+- `cargo` and `rustc` on `PATH`
+- a Cargo workspace that resolves cleanly (indexing loads the whole workspace)
+
+The rust-analyzer release asset is a bare gzipped binary (not a tar archive) and has no
+companion SHA256 checksum, so it is downloaded without checksum verification. `rust-analyzer`
+builds its SCIP index via load-bearing inference; macro/generic-heavy code may resolve less
+precisely than with `scip-go`.
 
 Configuration lives in `git-config.json` under the `review.scip` key:
 
