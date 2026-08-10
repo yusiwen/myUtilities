@@ -10,8 +10,9 @@ import (
 )
 
 // commandMapper decodes a single --command value into a core runner.Command.
-// The accepted format is "<name>::<command line>"; when the separator is
-// absent the whole value is treated as the command line with no name.
+// The accepted format is "[<name>::][!]<command line>": an optional name
+// separated by "::", and an optional leading "!" on the command line marking
+// the command as interactive (stdin/stdout/stderr wired to the terminal).
 type commandMapper struct{}
 
 func (commandMapper) Decode(ctx *kong.DecodeContext, target reflect.Value) error {
@@ -29,6 +30,10 @@ func (commandMapper) Decode(ctx *kong.DecodeContext, target reflect.Value) error
 		c.CmdLine = cmd
 	} else {
 		c.CmdLine = val
+	}
+	if strings.HasPrefix(c.CmdLine, "!") {
+		c.Interactive = true
+		c.CmdLine = strings.TrimPrefix(c.CmdLine, "!")
 	}
 	target.Set(reflect.ValueOf(c))
 	return nil

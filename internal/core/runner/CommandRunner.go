@@ -16,8 +16,9 @@ import (
 )
 
 type Command struct {
-	Name    string `help:"Description of this command" default:""`
-	CmdLine string `help:"Command line" default:""`
+	Name        string `help:"Description of this command" default:""`
+	CmdLine     string `help:"Command line" default:""`
+	Interactive bool   // run with stdin/stdout/stderr connected directly to the terminal
 }
 
 type CmdStatus struct {
@@ -109,7 +110,13 @@ func (r *CommandRunner) runPlain() error {
 			name = cmd.CmdLine
 		}
 		fmt.Printf("Executing [%s]...\n", name)
-		if err := r.runCommand(cmd); err != nil {
+		var err error
+		if cmd.Interactive {
+			err = r.runInteractive(cmd, os.Stdin, os.Stdout, os.Stderr)
+		} else {
+			err = r.runCommand(cmd)
+		}
+		if err != nil {
 			finish()
 			return err
 		}
@@ -127,6 +134,26 @@ func (r *CommandRunner) runCommands() {
 	for _, cmd := range r.Commands {
 		out := fmt.Sprintf("Executing [%s]...", cmd.Name)
 		fmt.Println(aec.Apply(out, outputColor))
+
+		if cmd.Interactive {
+			// Suspend the redraw display so it does not interfere with the
+			// interactive session, then stream the command directly.
+			r.d.pause()
+			err := r.runInteractive(cmd, os.Stdin, os.Stdout, os.Stderr)
+			r.d.resume()
+
+			if err != nil {
+				r.err = err
+				fmt.Println(aec.Apply("Error:", errColor))
+				fmt.Printf("%v\n", err)
+				break
+			}
+			fmt.Printf(ANSI_MOVE_UP)
+			out = fmt.Sprintf("%s done", out)
+			fmt.Print(ANSI_CLEAR_LINE)
+			fmt.Println(aec.Apply(out, outputColor))
+			continue
+		}
 
 		err := r.runCommand(cmd)
 		<-r.d.clear
@@ -214,6 +241,23 @@ func (r *CommandRunner) runCommand(command Command) error {
 	return nil
 }
 
+// runInteractive runs a command with stdin/stdout/stderr wired directly to the
+// given streams, bypassing the display buffer. It is used for commands that
+// prompt the user (sudo, ssh, apt confirmations).
+func (r *CommandRunner) runInteractive(command Command, stdin io.Reader, stdout, stderr io.Writer) error {
+	cmd := exec.Command("bash", "-c", command.CmdLine)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("command %q failed (exit code %d)", command.CmdLine, exitError.ExitCode())
+		}
+		return fmt.Errorf("command %q failed to run: %w", command.CmdLine, err)
+	}
+	return nil
+}
+
 type CommandRunner struct {
 	output chan string
 	done   chan *CmdStatus
@@ -267,6 +311,9 @@ type display struct {
 	buffer      []string
 	bufferMutex sync.Mutex
 
+	// isPaused suspends redraws while an interactive command is running.
+	isPaused bool
+
 	// failedOut holds a snapshot of buffer for the last command that failed,
 	// captured before cleanUp wipes it, so runCommands can re-print the
 	// failed command's output next to the error.
@@ -282,6 +329,12 @@ func (d *display) update() {
 		case <-d.ticker.C:
 			d.print()
 		case status := <-d.done:
+			// runCommands closes r.done once all commands have finished;
+			// a nil status signals shutdown (e.g. the last command was
+			// interactive and never sent a status).
+			if status == nil {
+				return
+			}
 			if !status.isSuccess {
 				// Snapshot the buffer before cleanup erases it, so the
 				// failed command's output can be re-printed with the error.
@@ -313,6 +366,10 @@ func (d *display) refreshBuffer() {
 
 func (d *display) print() {
 	d.bufferMutex.Lock()
+	defer d.bufferMutex.Unlock()
+	if d.isPaused {
+		return
+	}
 	if d.prevLines > 0 {
 		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevLines)
 	}
@@ -327,11 +384,11 @@ func (d *display) print() {
 	}
 
 	d.prevLines = currentLines
-	d.bufferMutex.Unlock()
 }
 
-func (d *display) cleanUp() {
-	d.bufferMutex.Lock()
+// clearScreenLocked erases the transient redraw and resets the buffer state.
+// The caller must hold bufferMutex.
+func (d *display) clearScreenLocked() {
 	if !d.isHidden {
 		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevLines)
 		for i := 0; i < d.prevLines; i++ {
@@ -345,6 +402,29 @@ func (d *display) cleanUp() {
 	d.prevLines = 0
 	d.buffer = nil
 	d.isHidden = true
+}
+
+func (d *display) cleanUp() {
+	d.bufferMutex.Lock()
+	d.clearScreenLocked()
 	d.bufferMutex.Unlock()
 	d.clear <- struct{}{}
+}
+
+// pause clears the screen and stops redraws so an interactive command can take
+// over the terminal without the display moving the cursor around.
+func (d *display) pause() {
+	d.bufferMutex.Lock()
+	if !d.isPaused {
+		d.clearScreenLocked()
+		d.isPaused = true
+	}
+	d.bufferMutex.Unlock()
+}
+
+// resume re-enables redraws after an interactive command finishes.
+func (d *display) resume() {
+	d.bufferMutex.Lock()
+	d.isPaused = false
+	d.bufferMutex.Unlock()
 }

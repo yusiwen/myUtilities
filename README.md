@@ -716,7 +716,11 @@ mu proxy db --port 1521 \
 ```bash
 mu run --command "echo hello" --command "ls -la"
 mu run --command "greet::echo hello"   # optional name prefix: <name>::<command>
+mu run --command "!sudo whoami"        # prefix ! = interactive (wire terminal stdin/output)
 ```
+
+Interactive commands (`!` prefix) connect stdin/stdout/stderr directly to your
+terminal, so prompts (e.g. `sudo` password, `apt` y/n) work normally.
 
 ### git — Git utilities with AI
 

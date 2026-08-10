@@ -5,5 +5,5 @@ import (
 )
 
 type CommandRunnerOptions struct {
-	Commands []runner.Command `name:"command" help:"Shell command to run. Repeat to run multiple. Format: <name>::<command>."`
+	Commands []runner.Command `name:"command" help:"Shell command to run. Repeat to run multiple. Format: [<name>::][!]<command> (prefix ! for interactive, e.g. !sudo whoami)."`
 }
