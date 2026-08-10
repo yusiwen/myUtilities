@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kong v1.12.1
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/glamour v1.0.0
+	github.com/creack/pty v1.1.24
 	github.com/elastic/go-elasticsearch/v8 v8.19.5
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0

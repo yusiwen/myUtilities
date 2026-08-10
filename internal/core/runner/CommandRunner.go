@@ -2,16 +2,19 @@ package runner
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
+	"syscall"
 
+	"github.com/creack/pty"
 	"github.com/morikuni/aec"
 )
 
@@ -35,6 +38,15 @@ const (
 	ANSI_MOVE_UP       = "\033[1A"
 	ANSI_MOVE_UP_LINES = "\033[%dA"
 )
+
+// ansiRe strips CSI/OSC escape sequences from child output drawn into the
+// gray display area, so a pty-backed child that colorizes still renders
+// uniformly.
+var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\].*?(\x07|\x1b\\)|\x1b[@-_]`)
+
+func stripANSI(s string) string {
+	return ansiRe.ReplaceAllString(s, "")
+}
 
 func init() {
 	// As recommended on https://no-color.org/
@@ -64,6 +76,8 @@ func (r *CommandRunner) Run() error {
 	if len(r.Commands) == 0 {
 		return nil
 	}
+
+	r.usePTY = isTerminal(os.Stdout) && runtime.GOOS != "windows"
 
 	if !isTerminal(os.Stdout) {
 		return r.runPlain()
@@ -145,7 +159,6 @@ func (r *CommandRunner) runCommands() {
 			if err != nil {
 				r.err = err
 				fmt.Println(aec.Apply("Error:", errColor))
-				fmt.Printf("%v\n", err)
 				break
 			}
 			fmt.Printf(ANSI_MOVE_UP)
@@ -166,7 +179,6 @@ func (r *CommandRunner) runCommands() {
 				fmt.Println(l)
 			}
 			fmt.Println(aec.Apply("Error:", errColor))
-			fmt.Printf("%v\n", err)
 			break
 		} else {
 			fmt.Printf(ANSI_MOVE_UP)
@@ -177,7 +189,17 @@ func (r *CommandRunner) runCommands() {
 	}
 }
 
+// runCommand dispatches a non-interactive command: on a terminal the child
+// runs on a pty so stdio programs line-buffer and stream promptly; elsewhere
+// (piped output or platforms without pty) it uses plain pipes.
 func (r *CommandRunner) runCommand(command Command) error {
+	if r.usePTY {
+		return r.runCommandPTY(command)
+	}
+	return r.runCommandPipes(command)
+}
+
+func (r *CommandRunner) runCommandPipes(command Command) error {
 	cmd := exec.Command("bash", "-c", command.CmdLine)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -241,6 +263,65 @@ func (r *CommandRunner) runCommand(command Command) error {
 	return nil
 }
 
+// runCommandPTY runs a command with its stdout/stderr on a pty, feeding each
+// (ANSI-stripped) line into the display buffer. stdin stays /dev/null so
+// commands that read it still fail fast.
+func (r *CommandRunner) runCommandPTY(command Command) error {
+	ptmx, tty, err := pty.Open()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("bash", "-c", command.CmdLine)
+	cmd.Stdout = tty
+	cmd.Stderr = tty
+	if err := cmd.Start(); err != nil {
+		ptmx.Close()
+		tty.Close()
+		return err
+	}
+	// The child holds the slave; close our copy so the master reaches EOF
+	// once the process exits.
+	tty.Close()
+
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+
+	scanner := bufio.NewScanner(ptmx)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimRight(stripANSI(scanner.Text()), "\r")
+		r.output <- line
+	}
+	// On Linux, reading the master after the slave closes yields EIO, which
+	// signals end of output rather than a real error.
+	if err := scanner.Err(); err != nil && !errors.Is(err, syscall.EIO) {
+		log.Printf("Output reading error: %v", err)
+	}
+	ptmx.Close()
+
+	if err := <-waitCh; err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			r.done <- &CmdStatus{
+				isSuccess: false,
+				exitCode:  exitError.ExitCode(),
+				errMsg:    "no error output",
+			}
+			return fmt.Errorf("command %q failed (exit code %d)", command.CmdLine, exitError.ExitCode())
+		}
+		r.done <- &CmdStatus{
+			isSuccess: false,
+			exitCode:  -1,
+			errMsg:    err.Error(),
+		}
+		return fmt.Errorf("command %q failed to run: %w", command.CmdLine, err)
+	}
+	r.done <- &CmdStatus{
+		isSuccess: true,
+		exitCode:  0,
+	}
+	return nil
+}
+
 // runInteractive runs a command with stdin/stdout/stderr wired directly to the
 // given streams, bypassing the display buffer. It is used for commands that
 // prompt the user (sudo, ssh, apt confirmations).
@@ -264,6 +345,8 @@ type CommandRunner struct {
 
 	Commands []Command
 
+	usePTY bool
+
 	err error
 	wg  *sync.WaitGroup
 	d   *display
@@ -273,6 +356,7 @@ func NewCommandRunner(commands []Command) *CommandRunner {
 	output := make(chan string)
 	done := make(chan *CmdStatus)
 	clearDone := make(chan struct{})
+	redraw := make(chan struct{}, 1)
 	wg := sync.WaitGroup{}
 
 	return &CommandRunner{
@@ -283,14 +367,14 @@ func NewCommandRunner(commands []Command) *CommandRunner {
 		d: &display{
 			output:    output,
 			done:      done,
-			wg:        &wg,
 			clear:     clearDone,
+			redraw:    redraw,
+			wg:        &wg,
 			cmdCnt:    len(commands),
 			doneCnt:   0,
 			isHidden:  true,
 			prevLines: 0,
 			buffer:    make([]string, 0),
-			ticker:    time.NewTicker(200 * time.Millisecond),
 		},
 	}
 }
@@ -299,7 +383,7 @@ type display struct {
 	output chan string
 	done   chan *CmdStatus
 	clear  chan struct{}
-	ticker *time.Ticker
+	redraw chan struct{}
 
 	wg *sync.WaitGroup
 
@@ -326,7 +410,7 @@ func (d *display) update() {
 
 	for {
 		select {
-		case <-d.ticker.C:
+		case <-d.redraw:
 			d.print()
 		case status := <-d.done:
 			// runCommands closes r.done once all commands have finished;
@@ -361,6 +445,12 @@ func (d *display) refreshBuffer() {
 			d.buffer = d.buffer[1:]
 		}
 		d.bufferMutex.Unlock()
+		// Ask for an immediate redraw; coalesce bursts with a non-blocking
+		// send into a size-1 channel.
+		select {
+		case d.redraw <- struct{}{}:
+		default:
+		}
 	}
 }
 

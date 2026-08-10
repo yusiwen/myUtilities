@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -115,5 +116,94 @@ func TestRunInteractiveInterrupt(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "exit code 4") {
 		t.Fatalf("error should mention exit code 4, got: %v", err)
+	}
+}
+
+func TestStripANSI(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"\x1b[31mRED\x1b[0m text", "RED text"},
+		{"plain", "plain"},
+		{"\x1b[2K line\r", " line\r"},
+		{"a\x1b[?25lb\x1b[?25h", "ab"},
+	}
+	for _, tt := range tests {
+		if got := stripANSI(tt.in); got != tt.want {
+			t.Fatalf("stripANSI(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestRunCommandPTY verifies the pty-backed execution path: output streams
+// line-buffered, ANSI is stripped, and exit codes propagate.
+func TestRunCommandPTY(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty requires POSIX")
+	}
+	r := NewCommandRunner([]Command{
+		{Name: "c", CmdLine: "printf '\\e[31mRED\\e[0m hello\\nworld\\n'"},
+	})
+	r.usePTY = true
+
+	var lines []string
+	printerDone := make(chan struct{})
+	go func() {
+		defer close(printerDone)
+		for l := range r.output {
+			lines = append(lines, l)
+		}
+	}()
+	statusDone := make(chan struct{})
+	go func() {
+		defer close(statusDone)
+		for range r.done {
+		}
+	}()
+
+	if err := r.runCommandPTY(r.Commands[0]); err != nil {
+		t.Fatalf("runCommandPTY: %v", err)
+	}
+	close(r.output)
+	close(r.done)
+	<-printerDone
+	<-statusDone
+
+	want := []string{"RED hello", "world"}
+	if len(lines) != len(want) {
+		t.Fatalf("got %d lines (%q), want %q", len(lines), lines, want)
+	}
+	for i := range want {
+		if lines[i] != want[i] {
+			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
+		}
+	}
+}
+
+func TestRunCommandPTYFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("pty requires POSIX")
+	}
+	r := NewCommandRunner([]Command{{Name: "boom", CmdLine: "echo oops 1>&2; exit 3"}})
+	r.usePTY = true
+
+	go func() {
+		for range r.output {
+		}
+	}()
+	statusDone := make(chan struct{})
+	go func() {
+		defer close(statusDone)
+		for range r.done {
+		}
+	}()
+
+	err := r.runCommandPTY(r.Commands[0])
+	close(r.output)
+	close(r.done)
+	<-statusDone
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "exit code 3") {
+		t.Fatalf("error should mention exit code 3, got: %v", err)
 	}
 }
