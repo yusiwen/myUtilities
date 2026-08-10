@@ -12,7 +12,7 @@ func TestFetchChecksum(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if got := fetchChecksum(srv.URL); got != "a694cae143c32c5b6226362fb4bd268a8d13d3cd9b482819b3b0029a9a97b8fe" {
+	if got := (&Client{}).fetchChecksum(srv.URL); got != "a694cae143c32c5b6226362fb4bd268a8d13d3cd9b482819b3b0029a9a97b8fe" {
 		t.Fatalf("unexpected checksum: %q", got)
 	}
 }
@@ -23,7 +23,7 @@ func TestFetchChecksumError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	if got := fetchChecksum(srv.URL); got != "" {
+	if got := (&Client{}).fetchChecksum(srv.URL); got != "" {
 		t.Fatalf("expected empty checksum on error, got %q", got)
 	}
 }

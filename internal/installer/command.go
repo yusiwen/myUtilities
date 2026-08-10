@@ -4,11 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"text/template"
 
 	coreinst "github.com/yusiwen/myUtilities/internal/core/installer"
 	"github.com/yusiwen/myUtilities/internal/installer/templates"
 )
+
+// safeNameRe constrains user-controlled values that are interpolated into the
+// generated shell script. Anything else could break out of the script's quoted
+// strings and inject arbitrary shell commands.
+var safeNameRe = regexp.MustCompile(`^[A-Za-z0-9._\-/@+]+$`)
+
+func sanitize(name, what string) error {
+	if !safeNameRe.MatchString(name) {
+		return fmt.Errorf("invalid %s %q: allowed characters are letters, digits and ._-/@+", what, name)
+	}
+	return nil
+}
 
 func (o Options) Run() error {
 	script := ""
@@ -46,7 +59,33 @@ func (o Options) Run() error {
 		q.Release = "latest"
 	}
 
-	client := &coreinst.Client{Token: o.Token}
+	// Token precedence: explicit --token (or GITHUB_TOKEN env) over the
+	// installer-config.json value.
+	token := o.Token
+	if token == "" {
+		cfg, err := coreinst.LoadConfig(o.Config)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w", err)
+		}
+		token = cfg.Token
+	}
+
+	if err := sanitize(q.User, "user"); err != nil {
+		return err
+	}
+	if err := sanitize(q.Program, "program"); err != nil {
+		return err
+	}
+	if err := sanitize(q.Release, "release"); err != nil {
+		return err
+	}
+	if q.AsProgram != "" {
+		if err := sanitize(q.AsProgram, "as-program"); err != nil {
+			return err
+		}
+	}
+
+	client := &coreinst.Client{Token: token}
 	result, err := client.QueryAssets(q)
 	if err != nil {
 		return fmt.Errorf("query failed: %s", err)

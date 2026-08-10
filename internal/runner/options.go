@@ -5,5 +5,5 @@ import (
 )
 
 type CommandRunnerOptions struct {
-	Commands []runner.Command `embed:"" prefix:"runner." help:"Commands to run."`
+	Commands []runner.Command `name:"command" help:"Shell command to run. Repeat to run multiple. Format: <name>::<command>."`
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/yusiwen/myUtilities/internal/core/config"
 	"github.com/yusiwen/myUtilities/internal/core/version"
 	"github.com/yusiwen/myUtilities/internal/gateway"
+	"github.com/yusiwen/myUtilities/internal/runner"
 )
 
 const shaLen = 7
@@ -29,6 +30,7 @@ func main() {
 	var mu = &MyUtilities{}
 	var ctx = kong.Parse(
 		mu,
+		runner.TypeMapperOption(),
 		kong.Name("myUtilities"),
 		kong.Description("myUtilities"),
 		kong.UsageOnError(),

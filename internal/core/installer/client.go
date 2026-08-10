@@ -14,6 +14,18 @@ import (
 
 var errNotFound = errors.New("not found")
 
+// defaultHTTP is used for all requests in this package. The timeout prevents
+// hanging requests against the GitHub API or release asset hosts.
+var defaultHTTP = &http.Client{Timeout: 30 * time.Second}
+
+// perPage is the number of releases/assetes requested per API page. The
+// GitHub API caps this at 100; it is a variable so tests can shrink it.
+var perPage = 100
+
+// apiBase is the GitHub REST API root. It is a variable so tests can point it
+// at a local server.
+var apiBase = "https://api.github.com"
+
 type Asset struct {
 	Name, OS, Arch, URL, Type, SHA256 string
 }
@@ -67,13 +79,23 @@ type Client struct {
 	Token string
 }
 
-func (c *Client) get(url string, v interface{}) error {
-	req, _ := http.NewRequest("GET", url, nil)
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
+func (c *Client) do(req *http.Request) (*http.Response, error) {
 	if c.Token != "" {
 		req.Header.Set("Authorization", "token "+c.Token)
 	}
-	resp, err := http.Get(url)
+	return defaultHTTP.Do(req)
+}
+
+// get performs a JSON GET, attaching the configured token to the request. The
+// token is only sent on requests issued through this client, never by the
+// http package defaults.
+func (c *Client) get(url string, v interface{}) error {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("build request failed: %s: %s", url, err)
+	}
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+	resp, err := c.do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %s: %s", url, err)
 	}
@@ -125,7 +147,7 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 	user := q.User
 	repo := q.Program
 	release := q.Release
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases", user, repo)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases", apiBase, user, repo)
 	ghas := ghAssets{}
 	if release == "" || release == "latest" {
 		url += "/latest"
@@ -137,17 +159,29 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 		ghas = ghr.Assets
 	} else {
 		ghrs := []ghRelease{}
-		if err := c.get(url, &ghrs); err != nil {
-			return release, nil, err
+		for page := 1; ; page++ {
+			listURL := fmt.Sprintf("%s?per_page=%d&page=%d", url, perPage, page)
+			pageGHs := []ghRelease{}
+			if err := c.get(listURL, &pageGHs); err != nil {
+				return release, nil, err
+			}
+			if len(pageGHs) == 0 {
+				break
+			}
+			ghrs = append(ghrs, pageGHs...)
+			if len(pageGHs) < perPage {
+				break
+			}
 		}
 		found := false
 		for _, ghr := range ghrs {
 			if ghr.TagName == release {
 				found = true
+				// Fetch the full asset list via assets_url; the release list
+				// representation can truncate assets.
 				if err := c.get(ghr.AssetsURL, &ghas); err != nil {
 					return release, nil, err
 				}
-				ghas = ghr.Assets
 				break
 			}
 		}
@@ -158,7 +192,7 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 	if len(ghas) == 0 {
 		return release, nil, errors.New("no assets found")
 	}
-	sumIndex, _ := ghas.getSumIndex()
+	sumIndex, _ := c.getSumIndex(ghas)
 	index := map[string]Asset{}
 	for _, ga := range ghas {
 		url := ga.BrowserDownloadURL
@@ -219,7 +253,7 @@ func (c *Client) getAssets(q Query) (string, Assets, error) {
 // repo, without any asset matching. Useful for cross-platform launchers whose
 // asset names do not encode the target platform.
 func (c *Client) LatestTag(user, program string) (string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", user, program)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/latest", apiBase, user, program)
 	var ghr ghRelease
 	if err := c.get(url, &ghr); err != nil {
 		return "", err
@@ -236,7 +270,7 @@ func (c *Client) LatestTag(user, program string) (string, error) {
 // cross-platform launchers whose release assets do not encode the target
 // platform.
 func (c *Client) AssetByURL(user, program, release, name string) (string, string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/tags/%s", user, program, release)
+	url := fmt.Sprintf("%s/repos/%s/%s/releases/tags/%s", apiBase, user, program, release)
 	var ghr ghRelease
 	if err := c.get(url, &ghr); err != nil {
 		return "", "", err
@@ -257,7 +291,7 @@ func (c *Client) AssetByURL(user, program, release, name string) (string, string
 	sha := ""
 	for _, a := range ghr.Assets {
 		if a.Name == name+".sha256" {
-			sha = fetchChecksum(a.BrowserDownloadURL)
+			sha = c.fetchChecksum(a.BrowserDownloadURL)
 			break
 		}
 	}
@@ -265,8 +299,12 @@ func (c *Client) AssetByURL(user, program, release, name string) (string, string
 }
 
 // fetchChecksum downloads a sha256sum-format file and returns the hex digest.
-func fetchChecksum(url string) string {
-	resp, err := http.Get(url)
+func (c *Client) fetchChecksum(url string) string {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := c.do(req)
 	if err != nil {
 		return ""
 	}
@@ -287,7 +325,7 @@ func fetchChecksum(url string) string {
 
 type ghAssets []ghAsset
 
-func (as ghAssets) getSumIndex() (map[string]string, error) {
+func (c *Client) getSumIndex(as ghAssets) (map[string]string, error) {
 	url := ""
 	for _, ga := range as {
 		if ga.IsChecksumFile() {
@@ -298,7 +336,11 @@ func (as ghAssets) getSumIndex() (map[string]string, error) {
 	if url == "" {
 		return nil, errors.New("no sum file found")
 	}
-	resp, err := http.DefaultClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +352,8 @@ func (as ghAssets) getSumIndex() (map[string]string, error) {
 		if len(fs) != 2 {
 			continue
 		}
-		index[fs[1]] = fs[0]
+		name := strings.TrimPrefix(fs[1], "*")
+		index[name] = fs[0]
 	}
 	if err := s.Err(); err != nil {
 		return nil, err

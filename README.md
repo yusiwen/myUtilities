@@ -72,6 +72,21 @@ All settings can also be set via environment variables (`OPENAI_API_KEY`, `OPENA
 mu install owner/repo --move
 ```
 
+Install from a specific release tag, or search by program name:
+
+```bash
+mu install owner/repo@v1.2.0     # specific tag
+mu install jq                     # auto-search GitHub for "jq"
+```
+
+Private repos and rate-limit avoidance via a GitHub token:
+
+```bash
+mu install owner/private-repo --token ghp_xxx
+mu set installer --token ghp_xxx        # persist in ~/.config/mu/installer-config.json
+mu set installer --unset                # remove the stored token
+```
+
 ### crypto — Cryptographic tools
 
 Encrypt and decrypt data with various algorithms (AES, DES, 3DES, SM4), generate
@@ -699,7 +714,8 @@ mu proxy db --port 1521 \
 ### run — Execute commands with colored output
 
 ```bash
-mu run --commands "echo hello" --commands "ls -la"
+mu run --command "echo hello" --command "ls -la"
+mu run --command "greet::echo hello"   # optional name prefix: <name>::<command>
 ```
 
 ### git — Git utilities with AI

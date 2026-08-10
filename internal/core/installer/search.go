@@ -36,7 +36,7 @@ func captureRepoLocation(url string) (user, project string, err error) {
 	}
 	req.Header.Set("Accept", "*/*")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.122 Safari/537.36")
-	resp, err := http.DefaultTransport.RoundTrip(req)
+	resp, err := defaultHTTP.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("request failed: %s", err)
 	}

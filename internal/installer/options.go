@@ -5,6 +5,7 @@ type Options struct {
 
 	Output    string `help:"Output format, can be 'shell', 'json'" default:"shell" short:"o"`
 	Token     string `help:"GitHub token." short:"t" env:"GITHUB_TOKEN"`
+	Config    string `help:"Path to config JSON file. Default: ~/.config/mu/installer-config.json"`
 	Insecure  bool   `help:"Allow insecure connections." short:"k"`
 	AsProgram string `help:"Install as different name."`
 	Select    string `help:"Select from list of available releases."`

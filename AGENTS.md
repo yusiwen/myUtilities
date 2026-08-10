@@ -104,6 +104,7 @@ stored under `~/.config/mu/` by default:
 | budget | `budget-config.json` |
 | git | `git-config.json` |
 | es | `es-config.json` |
+| installer | `installer-config.json` |
 | mock | `mock-config.json` |
 | svcreg | `svcreg-config.json` |
 | wol | `wol-config.json` |
