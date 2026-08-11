@@ -24,6 +24,7 @@ require (
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/tjfoc/gmsm v1.4.1
+	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab
 	go.etcd.io/bbolt v1.3.11
 	golang.org/x/term v0.45.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af

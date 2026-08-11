@@ -8,14 +8,16 @@ import (
 	"log"
 	"os"
 	"os/exec"
-	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/creack/pty"
 	"github.com/morikuni/aec"
+	"github.com/tonistiigi/vt100"
+	"golang.org/x/term"
 )
 
 type Command struct {
@@ -35,17 +37,37 @@ var errColor aec.ANSI
 
 const (
 	ANSI_CLEAR_LINE    = "\033[2K"
+	ANSI_CLEAR_DOWN    = "\033[J"
 	ANSI_MOVE_UP       = "\033[1A"
 	ANSI_MOVE_UP_LINES = "\033[%dA"
 )
 
-// ansiRe strips CSI/OSC escape sequences from child output drawn into the
-// gray display area, so a pty-backed child that colorizes still renders
-// uniformly.
-var ansiRe = regexp.MustCompile(`\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\].*?(\x07|\x1b\\)|\x1b[@-_]`)
+// regionPad reserves columns between the terminal edge and the vt100 width so
+// a rendered row (plus its leading space) never wraps on the real terminal.
+const regionPad = 3
 
-func stripANSI(s string) string {
-	return ansiRe.ReplaceAllString(s, "")
+// logLinesDefault is the per-step region height in rows, matching buildkit's
+// termHeightMin. MU_RUN_LOG_LINES overrides it, mirroring BUILDKIT_TTY_LOG_LINES.
+const logLinesDefault = 6
+
+// logLines returns the region height: MU_RUN_LOG_LINES if set and valid, else
+// logLinesDefault.
+func logLines() int {
+	if v := os.Getenv("MU_RUN_LOG_LINES"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return logLinesDefault
+}
+
+// termWidth returns the stdout terminal width, falling back to 80.
+func termWidth() int {
+	w, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w <= 0 {
+		return 80
+	}
+	return w
 }
 
 func init() {
@@ -83,9 +105,11 @@ func (r *CommandRunner) Run() error {
 		return r.runPlain()
 	}
 
+	r.d.width = termWidth()
+
 	r.wg.Add(3)
 	go r.runCommands()
-	go r.d.refreshBuffer()
+	go r.d.feedOutput()
 	go r.d.update()
 
 	r.wg.Wait()
@@ -168,6 +192,7 @@ func (r *CommandRunner) runCommands() {
 			continue
 		}
 
+		r.d.startStep()
 		err := r.runCommand(cmd)
 		<-r.d.clear
 
@@ -263,9 +288,10 @@ func (r *CommandRunner) runCommandPipes(command Command) error {
 	return nil
 }
 
-// runCommandPTY runs a command with its stdout/stderr on a pty, feeding each
-// (ANSI-stripped) line into the display buffer. stdin stays /dev/null so
-// commands that read it still fail fast.
+// runCommandPTY runs a command with its stdout/stderr on a pty, feeding raw
+// output chunks into the display's VT100 emulator (which handles wrapping,
+// ANSI and CR like a real terminal). stdin stays /dev/null so commands that
+// read it still fail fast.
 func (r *CommandRunner) runCommandPTY(command Command) error {
 	ptmx, tty, err := pty.Open()
 	if err != nil {
@@ -286,16 +312,22 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
 
-	scanner := bufio.NewScanner(ptmx)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		line := strings.TrimRight(stripANSI(scanner.Text()), "\r")
-		r.output <- line
-	}
-	// On Linux, reading the master after the slave closes yields EIO, which
-	// signals end of output rather than a real error.
-	if err := scanner.Err(); err != nil && !errors.Is(err, syscall.EIO) {
-		log.Printf("Output reading error: %v", err)
+	buf := make([]byte, 32*1024)
+	reader := bufio.NewReader(ptmx)
+	for {
+		n, rerr := reader.Read(buf)
+		if n > 0 {
+			r.output <- string(buf[:n])
+		}
+		if rerr != nil {
+			// On Linux, reading the master after the slave closes yields EIO,
+			// which signals end of output rather than a real error.
+			if errors.Is(rerr, syscall.EIO) || errors.Is(rerr, io.EOF) {
+				break
+			}
+			log.Printf("Output reading error: %v", rerr)
+			break
+		}
 	}
 	ptmx.Close()
 
@@ -365,16 +397,17 @@ func NewCommandRunner(commands []Command) *CommandRunner {
 		done:     done,
 		wg:       &wg,
 		d: &display{
-			output:    output,
-			done:      done,
-			clear:     clearDone,
-			redraw:    redraw,
-			wg:        &wg,
-			cmdCnt:    len(commands),
-			doneCnt:   0,
-			isHidden:  true,
-			prevLines: 0,
-			buffer:    make([]string, 0),
+			output:   output,
+			done:     done,
+			clear:    clearDone,
+			redraw:   redraw,
+			wg:       &wg,
+			cmdCnt:   len(commands),
+			doneCnt:  0,
+			isHidden: true,
+			prevRows: 0,
+			width:    80,
+			maxRows:  logLines(),
 		},
 	}
 }
@@ -390,17 +423,21 @@ type display struct {
 	cmdCnt  int
 	doneCnt int
 
-	isHidden    bool
-	prevLines   int
-	buffer      []string
+	width   int
+	maxRows int
+
+	isHidden bool
+	prevRows int
+	term     *vt100.VT100
+
 	bufferMutex sync.Mutex
 
 	// isPaused suspends redraws while an interactive command is running.
 	isPaused bool
 
-	// failedOut holds a snapshot of buffer for the last command that failed,
-	// captured before cleanUp wipes it, so runCommands can re-print the
-	// failed command's output next to the error.
+	// failedOut holds a snapshot of the emulated screen for the last command
+	// that failed, captured before cleanUp wipes it, so runCommands can
+	// re-print the failed command's output next to the error.
 	failedOut []string
 }
 
@@ -420,10 +457,10 @@ func (d *display) update() {
 				return
 			}
 			if !status.isSuccess {
-				// Snapshot the buffer before cleanup erases it, so the
-				// failed command's output can be re-printed with the error.
+				// Snapshot the emulated screen before cleanup erases it, so
+				// the failed command's output can be re-printed with the error.
 				d.bufferMutex.Lock()
-				d.failedOut = append([]string(nil), d.buffer...)
+				d.failedOut = d.snapshotRowsLocked()
 				d.bufferMutex.Unlock()
 			}
 			d.cleanUp()
@@ -436,17 +473,27 @@ func (d *display) update() {
 	}
 }
 
-func (d *display) refreshBuffer() {
+// startStep resets the emulated terminal for a new command step.
+func (d *display) startStep() {
+	d.bufferMutex.Lock()
+	defer d.bufferMutex.Unlock()
+	d.term = vt100.NewVT100(d.maxRows, d.width-regionPad)
+	d.prevRows = 0
+	d.isHidden = true
+	d.failedOut = nil
+}
+
+// feedOutput consumes raw output chunks from the runner and feeds them into
+// the VT100 emulator, asking for an immediate redraw per chunk.
+func (d *display) feedOutput() {
 	defer d.wg.Done()
-	for line := range d.output {
+	for chunk := range d.output {
 		d.bufferMutex.Lock()
-		d.buffer = append(d.buffer, line)
-		if len(d.buffer) > 6 {
-			d.buffer = d.buffer[1:]
+		if d.term != nil {
+			d.term.Write([]byte(chunk)) // ignore error: never trust vt100
 		}
 		d.bufferMutex.Unlock()
-		// Ask for an immediate redraw; coalesce bursts with a non-blocking
-		// send into a size-1 channel.
+		// Coalesce bursts with a non-blocking send into a size-1 channel.
 		select {
 		case d.redraw <- struct{}{}:
 		default:
@@ -454,43 +501,61 @@ func (d *display) refreshBuffer() {
 	}
 }
 
+// snapshotRowsLocked returns the non-empty rows of the emulated screen. The
+// caller must hold bufferMutex.
+func (d *display) snapshotRowsLocked() []string {
+	if d.term == nil {
+		return nil
+	}
+	var rows []string
+	for _, row := range d.term.Content {
+		if !isEmpty(row) {
+			rows = append(rows, string(row))
+		}
+	}
+	return rows
+}
+
+// isEmpty reports whether a vt100 screen row is entirely blank.
+func isEmpty(row []rune) bool {
+	for _, r := range row {
+		if r != ' ' {
+			return false
+		}
+	}
+	return true
+}
+
 func (d *display) print() {
 	d.bufferMutex.Lock()
 	defer d.bufferMutex.Unlock()
-	if d.isPaused {
+	if d.isPaused || d.term == nil {
 		return
 	}
-	if d.prevLines > 0 {
-		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevLines)
-	}
 
-	currentLines := len(d.buffer)
-	if currentLines > 0 {
+	rows := d.snapshotRowsLocked()
+	if d.prevRows > 0 {
+		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevRows)
+	}
+	if len(rows) > 0 {
 		d.isHidden = false
 	}
-	for _, l := range d.buffer {
-		out := aec.Apply(l, aec.Faint)
-		fmt.Print(ANSI_CLEAR_LINE + " " + out + "\n")
+	for _, row := range rows {
+		fmt.Print(ANSI_CLEAR_LINE + " " + aec.Apply(row, aec.Faint) + "\n")
 	}
-
-	d.prevLines = currentLines
+	d.prevRows = len(rows)
 }
 
-// clearScreenLocked erases the transient redraw and resets the buffer state.
+// clearScreenLocked erases the transient redraw and resets the display state.
 // The caller must hold bufferMutex.
 func (d *display) clearScreenLocked() {
-	if !d.isHidden {
-		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevLines)
-		for i := 0; i < d.prevLines; i++ {
-			fmt.Println(ANSI_CLEAR_LINE)
-		}
-		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevLines)
+	if !d.isHidden && d.prevRows > 0 {
+		fmt.Printf(ANSI_MOVE_UP_LINES, d.prevRows)
+		// Return to column 0, clear this line and everything below, wiping
+		// the whole region regardless of exact row count.
+		fmt.Print("\r" + ANSI_CLEAR_LINE + ANSI_CLEAR_DOWN)
 	}
-	// Reset the buffer unconditionally: a command that finished before the
-	// first ticker tick never triggered print(), leaving isHidden true and
-	// the buffer stale for the next command.
-	d.prevLines = 0
-	d.buffer = nil
+	d.prevRows = 0
 	d.isHidden = true
 }
 

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"os"
 	"runtime"
 	"strings"
 	"testing"
@@ -119,22 +120,83 @@ func TestRunInteractiveInterrupt(t *testing.T) {
 	}
 }
 
-func TestStripANSI(t *testing.T) {
-	tests := []struct{ in, want string }{
-		{"\x1b[31mRED\x1b[0m text", "RED text"},
-		{"plain", "plain"},
-		{"\x1b[2K line\r", " line\r"},
-		{"a\x1b[?25lb\x1b[?25h", "ab"},
-	}
-	for _, tt := range tests {
-		if got := stripANSI(tt.in); got != tt.want {
-			t.Fatalf("stripANSI(%q) = %q, want %q", tt.in, got, tt.want)
+func TestLogLinesEnv(t *testing.T) {
+	old := os.Getenv("MU_RUN_LOG_LINES")
+	defer os.Setenv("MU_RUN_LOG_LINES", old)
+
+	for _, tt := range []struct {
+		env  string
+		want int
+	}{
+		{"", 6},
+		{"10", 10},
+		{"abc", 6},
+		{"0", 6},
+		{"-3", 6},
+	} {
+		os.Setenv("MU_RUN_LOG_LINES", tt.env)
+		if got := logLines(); got != tt.want {
+			t.Fatalf("logLines(%q) = %d, want %d", tt.env, got, tt.want)
 		}
 	}
 }
 
+// TestDisplaySoftWrap verifies the VT100-backed display soft-wraps long lines
+// at the emulated width instead of truncating, and that ANSI/CR are handled
+// by the emulator.
+func TestDisplaySoftWrap(t *testing.T) {
+	newDisplay := func() *display {
+		d := &display{width: 20, maxRows: 6}
+		d.startStep()
+		return d
+	}
+
+	// A 40-char line wraps into multiple rows of the emulated width.
+	d := newDisplay()
+	d.term.Write([]byte(strings.Repeat("x", 40) + "\n"))
+	rows := d.snapshotRowsLocked()
+	if len(rows) < 2 {
+		t.Fatalf("got %d rows, want a 40-col line to wrap", len(rows))
+	}
+	for i, row := range rows {
+		if len([]rune(row)) != d.term.Width {
+			t.Fatalf("row %d width = %d, want emulated width %d", i, len([]rune(row)), d.term.Width)
+		}
+	}
+
+	// ANSI codes must be interpreted, not leaked into the screen.
+	d = newDisplay()
+	d.term.Write([]byte("\x1b[31mRED\x1b[0m text\n"))
+	rows = d.snapshotRowsLocked()
+	joined := strings.Join(rows, "")
+	if strings.Contains(joined, "\x1b") {
+		t.Fatalf("ANSI leaked into emulated screen: %q", rows)
+	}
+	if !strings.Contains(joined, "RED text") {
+		t.Fatalf("content missing after ANSI: %q", rows)
+	}
+
+	// Carriage returns overwrite in place (progress-bar style).
+	d = newDisplay()
+	d.term.Write([]byte("spin 0%\rspin 50%\rspin 100%\n"))
+	rows = d.snapshotRowsLocked()
+	joined = strings.Join(rows, "")
+	if strings.Contains(joined, "spin 0%") || !strings.Contains(joined, "spin 100%") {
+		t.Fatalf("CR overwrite not reflected: %q", rows)
+	}
+
+	// More than maxRows lines scroll the emulated screen.
+	d = newDisplay()
+	for i := 0; i < 10; i++ {
+		d.term.Write([]byte("line\n"))
+	}
+	if got := d.term.UsedHeight(); got > d.maxRows {
+		t.Fatalf("UsedHeight %d exceeds maxRows %d", got, d.maxRows)
+	}
+}
+
 // TestRunCommandPTY verifies the pty-backed execution path: output streams
-// line-buffered, ANSI is stripped, and exit codes propagate.
+// line-buffered, ANSI is interpreted by the emulator, and exit codes propagate.
 func TestRunCommandPTY(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("pty requires POSIX")
@@ -144,12 +206,12 @@ func TestRunCommandPTY(t *testing.T) {
 	})
 	r.usePTY = true
 
-	var lines []string
+	var chunks []string
 	printerDone := make(chan struct{})
 	go func() {
 		defer close(printerDone)
-		for l := range r.output {
-			lines = append(lines, l)
+		for c := range r.output {
+			chunks = append(chunks, c)
 		}
 	}()
 	statusDone := make(chan struct{})
@@ -167,14 +229,12 @@ func TestRunCommandPTY(t *testing.T) {
 	<-printerDone
 	<-statusDone
 
-	want := []string{"RED hello", "world"}
-	if len(lines) != len(want) {
-		t.Fatalf("got %d lines (%q), want %q", len(lines), lines, want)
+	joined := strings.Join(chunks, "")
+	if !strings.Contains(joined, "RED") || !strings.Contains(joined, "hello") || !strings.Contains(joined, "world") {
+		t.Fatalf("output chunks missing content: %q", joined)
 	}
-	for i := range want {
-		if lines[i] != want[i] {
-			t.Fatalf("line %d = %q, want %q", i, lines[i], want[i])
-		}
+	if len(chunks) == 0 {
+		t.Fatal("expected at least one output chunk")
 	}
 }
 
