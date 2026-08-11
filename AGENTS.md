@@ -130,7 +130,9 @@ The `internal/core/` directory contains reusable business logic:
   - `Proxy.go` - Base proxy interface and `DefaultProxy` struct
   - `db/DBProxy.go` - Oracle database proxy with health checks
 - `internal/core/runner/` - Command execution with real-time output display
-  - `CommandRunner.go` - Runs bash commands with colored output and buffer management
+  - `CommandRunner.go` - Runs `bash -c` commands sequentially with colored output
+  - On a TTY, non-interactive commands run on a pty; output is fed into a VT100 emulator (`github.com/tonistiigi/vt100`) and shown in a live per-step region (default 6 rows, `MU_RUN_LOG_LINES` to override); success clears the region, failure reprints the failed step's output with the error and stops
+  - `!`-prefixed commands run interactively (`runInteractive`), suspending the display (`display.pause`/`resume`); piped/redirected stdout falls back to plain output (`runPlain`)
 - `internal/core/watcher/` - Event-driven resource watching system
   - Implements a Kubernetes-style watch pattern with `WatchServer`, `EventStore`
   - `Watcher` interface for pluggable resource monitors

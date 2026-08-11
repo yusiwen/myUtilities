@@ -596,7 +596,7 @@ By default, module configs are read from `~/.config/mu/`:
 | `/crypto/` | Crypto | Encrypt, decrypt, passwords, JWT, encode/decode |
 | `/diff/` | Diff | Side-by-side text comparison |
 | `/k8s/` | K8s | Kubernetes Secret YAML generator and decoder |
-| `/misc/` | Misc | JSON, UUID, timestamp, hash tools |
+| `/misc/` | Misc | JSON, UUID, timestamp, hash, tracker list tools |
 | `/network/` | Network | DNS, DIG, and WHOIS query tools |
 | `/svcreg/` | Service Registry | Register and discover microservices |
 | `/budget/` | API Budget | Track LLM API balance across providers |
@@ -606,7 +606,8 @@ skipped with a warning and the rest of the gateway starts normally.
 
 ### misc — Miscellaneous tools
 
-JSON formatter/validator, UUID generator, timestamp converter, and hash calculator.
+JSON formatter/validator, UUID generator, timestamp converter, hash calculator,
+and a BitTorrent trackers list fetcher (web UI only).
 Supports both CLI and web UI.
 
 ```bash
@@ -638,6 +639,8 @@ The web UI provides:
 - **UUID** tab — generate UUID v4, single or batch
 - **Timestamp** tab — auto-detect Unix timestamp or ISO date, real-time conversion
 - **Hash** tab — compute MD5, SHA-256, SHA-512 hashes with file upload support
+- **Trackers** tab — fetch and refresh the best BitTorrent trackers list from the
+  [ngosang/trackerslist](https://github.com/ngosang/trackerslist) project
 
 ### network — Network tools
 
@@ -719,8 +722,27 @@ mu run --command "greet::echo hello"   # optional name prefix: <name>::<command>
 mu run --command "!sudo whoami"        # prefix ! = interactive (wire terminal stdin/output)
 ```
 
-Interactive commands (`!` prefix) connect stdin/stdout/stderr directly to your
-terminal, so prompts (e.g. `sudo` password, `apt` y/n) work normally.
+Each command runs sequentially through `bash -c`. When stdout is a terminal,
+non-interactive commands run on a **pseudo-terminal** so stdio programs
+line-buffer and stream output promptly; the output is rendered through a VT100
+emulator (handling ANSI, wrapping and CR like a real terminal) in a **live
+per-step region** (6 rows by default), updated in place as the command runs.
+On success the region is cleared, leaving a colored `Executing [name]... done`
+line; on failure the failed step's recent output is reprinted followed by a red
+`Error:` line and the runner stops.
+
+Behavior can be tuned:
+
+- **Live region height** — set `MU_RUN_LOG_LINES` (e.g. `10`) to change the
+  per-step display rows, mirroring `BUILDKIT_TTY_LOG_LINES`.
+- **Interactive commands** (`!` prefix) — suspend the live display and connect
+  stdin/stdout/stderr directly to your terminal, so prompts (e.g. `sudo`
+  password, `apt` y/n) work normally.
+- **Piped output** — when stdout is not a TTY (piped or redirected), the display
+  machinery is skipped and output is printed as plain `Executing [name]...` /
+  `... done` lines.
+- **Color** — name lines are blue (cyan on Windows), errors red; set `NO_COLOR`
+  to disable.
 
 ### git — Git utilities with AI
 
