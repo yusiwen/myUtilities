@@ -20,6 +20,11 @@
   let hashInput = $state('')
   let hashResult = $state('')
 
+  // Trackers
+  let trackers = $state('')
+  let trackersLoading = $state(false)
+  let trackersError = $state('')
+
   async function jsonOp(op) {
     if (!jsonInput.trim()) { jsonError = 'Input is required'; return }
     jsonError = ''; jsonOutput = ''
@@ -69,6 +74,21 @@
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     }
   }
+
+  async function loadTrackers() {
+    trackersLoading = true; trackersError = ''
+    try {
+      const r = await fetch('/api/misc/trackers')
+      if (!r.ok) throw new Error((await r.text()) || 'failed')
+      trackers = (await r.json()).content
+    } catch (e) { trackersError = e.message }
+    trackersLoading = false
+  }
+
+  async function openTrackers() {
+    tab = 'trackers'
+    if (!trackers) await loadTrackers()
+  }
 </script>
 
 <div class="app">
@@ -82,6 +102,7 @@
     <button class="tab" class:active={tab === 'uuid'} onclick={() => tab = 'uuid'}>UUID</button>
     <button class="tab" class:active={tab === 'timestamp'} onclick={() => tab = 'timestamp'}>Timestamp</button>
     <button class="tab" class:active={tab === 'hash'} onclick={() => tab = 'hash'}>Hash</button>
+    <button class="tab" class:active={tab === 'trackers'} onclick={openTrackers}>Trackers</button>
   </div>
 
   {#if tab === 'json'}
@@ -127,6 +148,21 @@
         <div class="result-area">
           <code class="result-text">{tsResult}</code>
           <button class="btn xs" onclick={() => copy(tsResult)}>📋 Copy</button>
+        </div>
+      {/if}
+    </div>
+  {:else if tab === 'trackers'}
+    <div class="card">
+      <div class="field-row btn-row">
+        <button class="btn" onclick={loadTrackers} disabled={trackersLoading}>⟳ Refresh</button>
+      </div>
+      {#if trackersError}<div class="msg error">{trackersError}</div>{/if}
+      {#if trackersLoading}
+        <div class="msg">Loading trackers list…</div>
+      {:else if trackers}
+        <div class="result-area">
+          <button class="btn xs" onclick={() => copy(trackers)}>📋 Copy All</button>
+          <pre class="result-block">{trackers}</pre>
         </div>
       {/if}
     </div>

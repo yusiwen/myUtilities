@@ -218,6 +218,7 @@ func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/misc/uuid", handleUUID)
 	mux.HandleFunc("/api/misc/timestamp", handleTimestamp)
 	mux.HandleFunc("/api/misc/hash/", handleHash)
+	mux.HandleFunc("/api/misc/trackers", handleTrackers)
 }
 
 type jsonFunc func(string) (string, error)
@@ -380,4 +381,31 @@ func handleHash(w http.ResponseWriter, r *http.Request) {
 	result := fmt.Sprintf("%x", h.Sum(nil))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"result": result})
+}
+
+const trackersListURL = "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
+
+func handleTrackers(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, `{"error":"GET required"}`, http.StatusMethodNotAllowed)
+		return
+	}
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get(trackersListURL)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadGateway)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, fmt.Sprintf(`{"error":"upstream returned %d"}`, resp.StatusCode), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"content": string(body)})
 }
