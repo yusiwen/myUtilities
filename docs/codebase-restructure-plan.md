@@ -163,7 +163,16 @@
 
 ### 3-⑤ 迁移到 cmd/ + internal/
 
-> ✅ **已完成**（2026-08-03）。详细执行方案与进度见 [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)。
+> ✅ **已完成**（2026-08-03）。关键决策：
+>
+> | 决策点 | 结论 |
+> |--------|------|
+> | core/ 业务逻辑包位置 | `internal/core/`（纯 CLI 工具，所有包对外不可导入） |
+> | 是否顺带解决包名冲突 | 仅做目录迁移，4 组同名包 alias（`corecrypto`/`coregit`/`corerunner` 等）保留 |
+> | shared/frontend/ 位置 | 移到 `web/shared/frontend/` |
+> | commit 拆分 | 3 个 commit：①移动+import ②构建系统 ③文档 |
+> | Makefile `default:` 无版本注入 | 保持现状（只把 `.` 改为 `./cmd/mu`），不顺手改成复用 GOBUILD |
+>
 > 实际规模修正：~180 个 .go 文件、23 个命令包、23 个 core 子包、12 个前端模块、42 个文件 / 103 处 import 改写。
 
 **目标：** 解决 D，将项目调整为标准 Go 项目布局。
@@ -244,5 +253,5 @@ myUtilities/                     (go.mod)
 
 1. **Phase 1** — Quick Wins，立即可做，风险低
 2. **Phase 2** — 包名冲突，解决最大痛点
-3. **Phase 3** — 标准布局 ✅ 已完成（见 [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)）
+3. **Phase 3** — 标准布局 ✅ 已完成
 4. **Phase 4** — 命名收尾，最后补完

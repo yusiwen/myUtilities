@@ -8,7 +8,6 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 
 1. [x] Refactor the project to follow standard Go project layout (cmd/, pkg/, internal/, etc.)
     → See [Phase 3 — Standard Layout](./codebase-restructure-plan.md#phase-3--标准项目布局)
-    → See [cmd-internal-restructure-plan.md](./cmd-internal-restructure-plan.md)（执行方案与进度）
 2. [x] Move version information to a dedicated package for better maintainability
     → See [Phase 1-①](./codebase-restructure-plan.md#1-①-版本信息抽到独立包)
     → Done: `internal/core/version`（`cmd/mu/version.go` 已删除，Makefile ldflags 已更新）
