@@ -25,6 +25,10 @@
   let trackersLoading = $state(false)
   let trackersError = $state('')
 
+  // Copy feedback
+  let copiedText = $state('')
+  let copiedTimer
+
   async function jsonOp(op) {
     if (!jsonInput.trim()) { jsonError = 'Input is required'; return }
     jsonError = ''; jsonOutput = ''
@@ -73,12 +77,15 @@
       const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'
       document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
     }
+    copiedText = text
+    clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => copiedText = '', 1500)
   }
 
-  async function loadTrackers() {
+  async function loadTrackers(force) {
     trackersLoading = true; trackersError = ''
     try {
-      const r = await fetch('/api/misc/trackers')
+      const r = await fetch('/api/misc/trackers' + (force ? '?refresh=1' : ''))
       if (!r.ok) throw new Error((await r.text()) || 'failed')
       trackers = (await r.json()).content
     } catch (e) { trackersError = e.message }
@@ -119,7 +126,7 @@
       {#if jsonError}<div class="msg error">{jsonError}</div>{/if}
       {#if jsonOutput}
         <div class="result-area">
-          <button class="btn xs" onclick={() => copy(jsonOutput)}>📋 Copy</button>
+          <button class="btn xs" onclick={() => copy(jsonOutput)}>{copiedText === jsonOutput ? '✓ Copied' : '📋 Copy'}</button>
           <pre class="result-block">{jsonOutput}</pre>
         </div>
       {/if}
@@ -133,7 +140,7 @@
       <button class="btn primary" onclick={genUuid}>Generate</button>
       {#if uuids.length > 0}
         <div class="result-area">
-          <button class="btn xs" onclick={() => copy(uuids.join('\n'))}>📋 Copy All</button>
+          <button class="btn xs" onclick={() => copy(uuids.join('\n'))}>{copiedText === uuids.join('\n') ? '✓ Copied' : '📋 Copy All'}</button>
           <div class="uuid-list">{#each uuids as u}<div class="uuid-line">{u}</div>{/each}</div>
         </div>
       {/if}
@@ -147,21 +154,22 @@
       {#if tsResult}
         <div class="result-area">
           <code class="result-text">{tsResult}</code>
-          <button class="btn xs" onclick={() => copy(tsResult)}>📋 Copy</button>
+          <button class="btn xs" onclick={() => copy(tsResult)}>{copiedText === tsResult ? '✓ Copied' : '📋 Copy'}</button>
         </div>
       {/if}
     </div>
   {:else if tab === 'trackers'}
     <div class="card">
       <div class="field-row btn-row">
-        <button class="btn" onclick={loadTrackers} disabled={trackersLoading}>⟳ Refresh</button>
+        <button class="btn" onclick={() => loadTrackers(true)} disabled={trackersLoading}>⟳ Refresh</button>
       </div>
       {#if trackersError}<div class="msg error">{trackersError}</div>{/if}
       {#if trackersLoading}
         <div class="msg">Loading trackers list…</div>
       {:else if trackers}
         <div class="result-area">
-          <button class="btn xs" onclick={() => copy(trackers)}>📋 Copy All</button>
+          <button class="btn xs" onclick={() => copy(trackers)}>{copiedText === trackers ? '✓ Copied' : '📋 Copy All'}</button>
+          <a class="btn xs" href="https://github.com/ngosang/trackerslist" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
           <pre class="result-block">{trackers}</pre>
         </div>
       {/if}
@@ -191,7 +199,7 @@
       {#if hashResult}
         <div class="result-area">
           <code class="result-text result-mono">{hashResult}</code>
-          <button class="btn xs" onclick={() => copy(hashResult)}>📋 Copy</button>
+          <button class="btn xs" onclick={() => copy(hashResult)}>{copiedText === hashResult ? '✓ Copied' : '📋 Copy'}</button>
         </div>
       {/if}
     </div>

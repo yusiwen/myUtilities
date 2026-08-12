@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -385,11 +386,31 @@ func handleHash(w http.ResponseWriter, r *http.Request) {
 
 const trackersListURL = "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
 
+const trackersCacheTTL = 30 * time.Minute
+
+var (
+	trackersCacheMutex   sync.Mutex
+	trackersCacheContent string
+	trackersCacheTime    time.Time
+)
+
 func handleTrackers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, `{"error":"GET required"}`, http.StatusMethodNotAllowed)
 		return
 	}
+	refresh := r.URL.Query().Get("refresh") == "1"
+
+	trackersCacheMutex.Lock()
+	if !refresh && trackersCacheContent != "" && time.Since(trackersCacheTime) <= trackersCacheTTL {
+		cached := trackersCacheContent
+		trackersCacheMutex.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"content": cached})
+		return
+	}
+	trackersCacheMutex.Unlock()
+
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Get(trackersListURL)
 	if err != nil {
@@ -406,6 +427,13 @@ func handleTrackers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf(`{"error":"upstream returned %d"}`, resp.StatusCode), http.StatusBadGateway)
 		return
 	}
+
+	content := string(body)
+	trackersCacheMutex.Lock()
+	trackersCacheContent = content
+	trackersCacheTime = time.Now()
+	trackersCacheMutex.Unlock()
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"content": string(body)})
+	json.NewEncoder(w).Encode(map[string]string{"content": content})
 }
