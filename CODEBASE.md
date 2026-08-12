@@ -53,8 +53,8 @@
 │   │   ├── proxy/             # Database proxy abstractions
 │   │   │   ├── proxy.go       #  Proxy interface, BackendConfig, BackendStatus, DefaultProxy
 │   │   │   └── db/dbproxy.go  #  OracleProxy — TCP proxy with health checks & failover
-│   │   ├── runner/            # Command execution engine
-│   │   │   └── commandrunner.go  #  Runs bash commands with real-time colored output, buffer mgmt
+│   │   ├── runner/            # Command execution engine (CommandRunner.go + recipe.go + recipe_runner.go)
+│   │   │   └── CommandRunner.go #  bash -c execution with PTY/VT100 live display, spinner+elapsed header, Ctrl-C handling; recipe.go/recipe_runner.go add YAML task orchestration
 │   │   ├── store/             # BoltDB key-value store
 │   │   │   └── store.go       #  CRUD for MAC aliases, boot/shutdown event recording
 │   │   └── watcher/           # K8s-style watch system
@@ -80,8 +80,9 @@
 │   │   ├── options.go         #  Flags: host/port, db routes, health-check params
 │   │   └── dbproxy.go         #  Run() — parses options, starts OracleProxy
 │   ├── runner/                # Command runner CLI
-│   │   ├── options.go         #  Embed: []Command from internal/core/runner
-│   │   └── runner.go          #  Run() — creates CommandRunner, executes commands
+│   │   ├── options.go         #  Flags: --command, --file (recipe), --task, --var, --keep-going, --dry-run, --schema
+│   │   ├── runner.go          #  Run() — dispatches inline commands or recipe files (exit 130 on interrupt)
+│   │   └── recipe_schema.go   #  Embeds docs/schema/recipe-schema.json for `mu run --schema`
 │   ├── wol/                   # Wake-on-LAN HTTP server + agent
 │   │   ├── options.go         #  Subcommands: serve, agent, interfaces
 │   │   ├── command.go         #  Serve: WOL API, alias CRUD, boot/shutdown notify
