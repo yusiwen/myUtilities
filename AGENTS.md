@@ -131,8 +131,9 @@ The `internal/core/` directory contains reusable business logic:
   - `db/DBProxy.go` - Oracle database proxy with health checks
 - `internal/core/runner/` - Command execution with real-time output display
   - `CommandRunner.go` - Runs `bash -c` commands sequentially with colored output
-  - On a TTY, non-interactive commands run on a pty; output is fed into a VT100 emulator (`github.com/tonistiigi/vt100`) and shown in a live per-step region (default 6 rows, `MU_RUN_LOG_LINES` to override); success clears the region, failure reprints the failed step's output with the error and stops
+  - On a TTY, non-interactive commands run on a pty; output is fed into a VT100 emulator (`github.com/tonistiigi/vt100`) and shown in a live per-step region (default 6 rows, `MU_RUN_LOG_LINES` to override) under a header line that renders an animated spinner + elapsed time while running; on success the region is cleared and the header collapses to `Executing [name]... ✓ <elapsed>` (green, `✗` red + failed output on failure) and the runner stops
   - `!`-prefixed commands run interactively (`runInteractive`), suspending the display (`display.pause`/`resume`); piped/redirected stdout falls back to plain output (`runPlain`)
+  - Ctrl-C is handled via `signal.NotifyContext`: the signal is forwarded to the currently executing child (`setActive`/`signalActive`), execution stops after the current step, `Run` returns `ErrInterrupted`, and `internal/runner` maps that to exit code 130
 - `internal/core/watcher/` - Event-driven resource watching system
   - Implements a Kubernetes-style watch pattern with `WatchServer`, `EventStore`
   - `Watcher` interface for pluggable resource monitors

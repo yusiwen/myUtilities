@@ -727,9 +727,10 @@ non-interactive commands run on a **pseudo-terminal** so stdio programs
 line-buffer and stream output promptly; the output is rendered through a VT100
 emulator (handling ANSI, wrapping and CR like a real terminal) in a **live
 per-step region** (6 rows by default), updated in place as the command runs.
-On success the region is cleared, leaving a colored `Executing [name]... done`
-line; on failure the failed step's recent output is reprinted followed by a red
-`Error:` line and the runner stops.
+The step header shows an animated spinner plus the elapsed time while running,
+and on completion the region is cleared and the header collapses to a green
+`Executing [name]... ✓ 0.8s` line (red `✗` on failure, followed by the failed
+step's recent output and an `Error:` line) and the runner stops.
 
 Behavior can be tuned:
 
@@ -740,9 +741,11 @@ Behavior can be tuned:
   password, `apt` y/n) work normally.
 - **Piped output** — when stdout is not a TTY (piped or redirected), the display
   machinery is skipped and output is printed as plain `Executing [name]...` /
-  `... done` lines.
-- **Color** — name lines are blue (cyan on Windows), errors red; set `NO_COLOR`
-  to disable.
+  `name ✓ (0.8s)` lines.
+- **Interrupt** — `Ctrl-C` forwards the signal to the currently running command,
+  stops after it, and exits with code `130` (press `Ctrl-C` twice to force-quit).
+- **Color** — name lines are blue (cyan on Windows), `✓` is green, errors are
+  red; set `NO_COLOR` to disable.
 
 ### git — Git utilities with AI
 

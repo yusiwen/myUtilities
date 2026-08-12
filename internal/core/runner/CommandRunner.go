@@ -2,17 +2,21 @@ package runner
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 	"github.com/morikuni/aec"
@@ -34,6 +38,7 @@ type CmdStatus struct {
 
 var outputColor aec.ANSI
 var errColor aec.ANSI
+var successColor aec.ANSI
 
 const (
 	ANSI_CLEAR_LINE    = "\033[2K"
@@ -41,6 +46,23 @@ const (
 	ANSI_MOVE_UP       = "\033[1A"
 	ANSI_MOVE_UP_LINES = "\033[%dA"
 )
+
+// spinnerFrames is the animation cycle shown on the step header while a
+// non-interactive command is running.
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// ErrInterrupted is returned by Run when the user interrupted execution
+// (Ctrl-C). Callers may use it to pick an exit code (e.g. 128+SIGINT).
+var ErrInterrupted = errors.New("interrupted")
+
+// formatElapsed renders a duration for the step header/final line:
+// "<1s" as e.g. "0.4s", "<1m" as "1.5s", otherwise "1m05s".
+func formatElapsed(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+}
 
 // regionPad reserves columns between the terminal edge and the vt100 width so
 // a rendered row (plus its leading space) never wraps on the real terminal.
@@ -78,9 +100,11 @@ func init() {
 	} else if runtime.GOOS == "windows" {
 		outputColor = aec.CyanF
 		errColor = aec.RedF
+		successColor = aec.GreenF
 	} else {
 		outputColor = aec.BlueF
 		errColor = aec.RedF
+		successColor = aec.GreenF
 	}
 }
 
@@ -99,10 +123,27 @@ func (r *CommandRunner) Run() error {
 		return nil
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// Watch for the first interrupt: mark the run as interrupted and forward
+	// the signal to the currently executing child (a pty child is in its own
+	// session, so the terminal-generated SIGINT never reaches it). A second
+	// Ctrl-C hits the default disposition (NotifyContext unsubscribes after
+	// the first signal) and kills the process outright.
+	go func() {
+		<-ctx.Done()
+		r.interrupted.Store(true)
+		r.signalActive(os.Interrupt)
+	}()
+
 	r.usePTY = isTerminal(os.Stdout) && runtime.GOOS != "windows"
 
 	if !isTerminal(os.Stdout) {
-		return r.runPlain()
+		err := r.runPlain()
+		if r.interrupted.Load() {
+			return ErrInterrupted
+		}
+		return err
 	}
 
 	r.d.width = termWidth()
@@ -113,6 +154,9 @@ func (r *CommandRunner) Run() error {
 	go r.d.update()
 
 	r.wg.Wait()
+	if r.interrupted.Load() {
+		return ErrInterrupted
+	}
 	return r.err
 }
 
@@ -143,22 +187,31 @@ func (r *CommandRunner) runPlain() error {
 	}
 
 	for _, cmd := range r.Commands {
+		if r.interrupted.Load() {
+			break
+		}
 		name := cmd.Name
 		if name == "" {
 			name = cmd.CmdLine
 		}
 		fmt.Printf("Executing [%s]...\n", name)
+		start := time.Now()
 		var err error
 		if cmd.Interactive {
 			err = r.runInteractive(cmd, os.Stdin, os.Stdout, os.Stderr)
 		} else {
 			err = r.runCommand(cmd)
 		}
+		elapsed := time.Since(start)
 		if err != nil {
+			if r.interrupted.Load() {
+				fmt.Println("Interrupted.")
+				break
+			}
 			finish()
 			return err
 		}
-		fmt.Printf("%s done\n", name)
+		fmt.Printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
 	}
 	finish()
 	return nil
@@ -170,10 +223,17 @@ func (r *CommandRunner) runCommands() {
 	defer close(r.done)
 
 	for _, cmd := range r.Commands {
-		out := fmt.Sprintf("Executing [%s]...", cmd.Name)
-		fmt.Println(aec.Apply(out, outputColor))
+		if r.interrupted.Load() {
+			break
+		}
 
 		if cmd.Interactive {
+			// The header is printed here because the display is suspended
+			// during the interactive session and cannot render it.
+			out := fmt.Sprintf("Executing [%s]...", cmd.Name)
+			fmt.Println(aec.Apply(out, outputColor))
+
+			r.interactiveStart = time.Now()
 			// Suspend the redraw display so it does not interfere with the
 			// interactive session, then stream the command directly.
 			r.d.pause()
@@ -181,23 +241,33 @@ func (r *CommandRunner) runCommands() {
 			r.d.resume()
 
 			if err != nil {
+				if r.interrupted.Load() {
+					fmt.Println("Interrupted.")
+					break
+				}
 				r.err = err
 				fmt.Println(aec.Apply("Error:", errColor))
 				break
 			}
+			elapsed := time.Since(r.interactiveStart)
 			fmt.Printf(ANSI_MOVE_UP)
-			out = fmt.Sprintf("%s done", out)
 			fmt.Print(ANSI_CLEAR_LINE)
-			fmt.Println(aec.Apply(out, outputColor))
+			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
 			continue
 		}
 
-		r.d.startStep()
+		r.d.startStep(cmd.Name)
 		err := r.runCommand(cmd)
 		<-r.d.clear
 
 		if err != nil {
+			if r.interrupted.Load() {
+				fmt.Println("Interrupted.")
+				break
+			}
 			r.err = err
+			elapsed := time.Since(r.d.stepStart)
+			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✗ %s", cmd.Name, formatElapsed(elapsed)), errColor))
 			// Keep the failed command's recent output visible before the
 			// error is printed, since the display cleanup wiped it.
 			for _, l := range r.d.failedOut {
@@ -206,10 +276,8 @@ func (r *CommandRunner) runCommands() {
 			fmt.Println(aec.Apply("Error:", errColor))
 			break
 		} else {
-			fmt.Printf(ANSI_MOVE_UP)
-			out = fmt.Sprintf("%s done", out)
-			fmt.Print(ANSI_CLEAR_LINE)
-			fmt.Println(aec.Apply(out, outputColor))
+			elapsed := time.Since(r.d.stepStart)
+			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
 		}
 	}
 }
@@ -238,6 +306,8 @@ func (r *CommandRunner) runCommandPipes(command Command) error {
 	if err != nil {
 		return err
 	}
+	r.setActive(cmd)
+	defer r.setActive(nil)
 
 	stderrCh := make(chan string, 1)
 	go func() {
@@ -305,6 +375,8 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 		tty.Close()
 		return err
 	}
+	r.setActive(cmd)
+	defer r.setActive(nil)
 	// The child holds the slave; close our copy so the master reaches EOF
 	// once the process exits.
 	tty.Close()
@@ -362,7 +434,12 @@ func (r *CommandRunner) runInteractive(command Command, stdin io.Reader, stdout,
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("command %q failed to run: %w", command.CmdLine, err)
+	}
+	r.setActive(cmd)
+	defer r.setActive(nil)
+	if err := cmd.Wait(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("command %q failed (exit code %d)", command.CmdLine, exitError.ExitCode())
 		}
@@ -382,6 +459,31 @@ type CommandRunner struct {
 	err error
 	wg  *sync.WaitGroup
 	d   *display
+
+	interrupted atomic.Bool
+
+	activeMu sync.Mutex
+	active   *exec.Cmd
+
+	interactiveStart time.Time
+}
+
+// setActive records the currently executing child so the interrupt handler can
+// forward the signal to it.
+func (r *CommandRunner) setActive(cmd *exec.Cmd) {
+	r.activeMu.Lock()
+	r.active = cmd
+	r.activeMu.Unlock()
+}
+
+// signalActive sends sig to the currently executing child, if any.
+func (r *CommandRunner) signalActive(sig os.Signal) {
+	r.activeMu.Lock()
+	cmd := r.active
+	r.activeMu.Unlock()
+	if cmd != nil && cmd.Process != nil {
+		_ = cmd.Process.Signal(sig)
+	}
 }
 
 func NewCommandRunner(commands []Command) *CommandRunner {
@@ -432,6 +534,13 @@ type display struct {
 
 	bufferMutex sync.Mutex
 
+	// stepActive is true while a non-interactive command is running; the
+	// spinner ticker only draws while it is set.
+	stepActive bool
+	stepName   string
+	stepStart  time.Time
+	spinnerIdx int
+
 	// isPaused suspends redraws while an interactive command is running.
 	isPaused bool
 
@@ -445,10 +554,15 @@ func (d *display) update() {
 	defer d.wg.Done()
 	defer close(d.clear)
 
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-d.redraw:
 			d.print()
+		case <-ticker.C:
+			d.spin()
 		case status := <-d.done:
 			// runCommands closes r.done once all commands have finished;
 			// a nil status signals shutdown (e.g. the last command was
@@ -473,14 +587,33 @@ func (d *display) update() {
 	}
 }
 
-// startStep resets the emulated terminal for a new command step.
-func (d *display) startStep() {
+// spin advances the spinner frame and redraws the step header. It is called on
+// a fixed ticker while a non-interactive command is running.
+func (d *display) spin() {
+	d.bufferMutex.Lock()
+	if !d.stepActive || d.isPaused {
+		d.bufferMutex.Unlock()
+		return
+	}
+	d.spinnerIdx++
+	d.printLocked()
+	d.bufferMutex.Unlock()
+}
+
+// startStep begins a new non-interactive command step: it prints the initial
+// header line (with spinner and elapsed time) and resets the emulated terminal.
+func (d *display) startStep(name string) {
 	d.bufferMutex.Lock()
 	defer d.bufferMutex.Unlock()
+	d.stepName = name
+	d.stepStart = time.Now()
+	d.stepActive = true
+	d.spinnerIdx = 0
 	d.term = vt100.NewVT100(d.maxRows, d.width-regionPad)
 	d.prevRows = 0
-	d.isHidden = true
+	d.isHidden = false
 	d.failedOut = nil
+	d.printLocked()
 }
 
 // feedOutput consumes raw output chunks from the runner and feeds them into
@@ -529,7 +662,13 @@ func isEmpty(row []rune) bool {
 func (d *display) print() {
 	d.bufferMutex.Lock()
 	defer d.bufferMutex.Unlock()
-	if d.isPaused || d.term == nil {
+	d.printLocked()
+}
+
+// printLocked renders the step header plus the emulated region rows. The
+// caller must hold bufferMutex.
+func (d *display) printLocked() {
+	if d.isPaused || d.term == nil || !d.stepActive {
 		return
 	}
 
@@ -540,10 +679,19 @@ func (d *display) print() {
 	if len(rows) > 0 {
 		d.isHidden = false
 	}
+	// Header line: "Executing [<name>]... <spinner> <elapsed>"
+	elapsed := time.Since(d.stepStart)
+	header := fmt.Sprintf("Executing [%s]... %s %s", d.stepName, spinnerFrames[d.spinnerIdx%len(spinnerFrames)], formatElapsed(elapsed))
+	fmt.Print(ANSI_CLEAR_LINE + aec.Apply(header, outputColor) + "\n")
+	total := 1 + len(rows)
 	for _, row := range rows {
 		fmt.Print(ANSI_CLEAR_LINE + " " + aec.Apply(row, aec.Faint) + "\n")
 	}
-	d.prevRows = len(rows)
+	// Erase rows left over from a taller previous draw.
+	if total < d.prevRows {
+		fmt.Print(ANSI_CLEAR_DOWN)
+	}
+	d.prevRows = total
 }
 
 // clearScreenLocked erases the transient redraw and resets the display state.
@@ -557,6 +705,7 @@ func (d *display) clearScreenLocked() {
 	}
 	d.prevRows = 0
 	d.isHidden = true
+	d.stepActive = false
 }
 
 func (d *display) cleanUp() {

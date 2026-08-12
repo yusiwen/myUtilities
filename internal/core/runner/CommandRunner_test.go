@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // These tests exercise the non-TTY path (test stdout is never a terminal),
@@ -54,6 +55,25 @@ func TestCommandRunnerEmptyStderr(t *testing.T) {
 func TestCommandRunnerNoCommands(t *testing.T) {
 	if err := NewCommandRunner(nil).Run(); err != nil {
 		t.Fatalf("Run with no commands: %v", err)
+	}
+}
+
+func TestFormatElapsed(t *testing.T) {
+	cases := []struct {
+		d    time.Duration
+		want string
+	}{
+		{0, "0.0s"},
+		{400 * time.Millisecond, "0.4s"},
+		{1500 * time.Millisecond, "1.5s"},
+		{10 * time.Second, "10.0s"},
+		{65 * time.Second, "1m05s"},
+		{125 * time.Second, "2m05s"},
+	}
+	for _, c := range cases {
+		if got := formatElapsed(c.d); got != c.want {
+			t.Fatalf("formatElapsed(%v) = %q, want %q", c.d, got, c.want)
+		}
 	}
 }
 
@@ -147,7 +167,7 @@ func TestLogLinesEnv(t *testing.T) {
 func TestDisplaySoftWrap(t *testing.T) {
 	newDisplay := func() *display {
 		d := &display{width: 20, maxRows: 6}
-		d.startStep()
+		d.startStep("test")
 		return d
 	}
 
