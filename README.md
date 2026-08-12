@@ -747,6 +747,78 @@ Behavior can be tuned:
 - **Color** — name lines are blue (cyan on Windows), `✓` is green, errors are
   red; set `NO_COLOR` to disable.
 
+#### Task orchestration with recipe files
+
+`mu run --file <recipe.yaml>` runs a set of named, ordered tasks with
+dependencies, variables, timeouts, retries, and failure policies, reusing the
+same live display (each task is one step). `--command` and `--file` are
+mutually exclusive.
+
+```yaml
+# tasks.yaml
+name: build-deploy
+vars:                        # {{.key}} templates, overridable with --var key=value
+  version: "1.2.3"
+  registry: "ghcr.io/me/app"
+env:                         # applied to every task
+  CI: "true"
+tasks:
+  clean:
+    command: rm -rf dist
+    timeout: 30s             # per-task timeout, e.g. "30s" or "2m"
+  build:
+    depends: [clean]         # runs after clean completes
+    commands:                # multiple commands run sequentially
+      - go vet ./...
+      - go build -o dist/app .
+    env:
+      VERSION: "{{.version}}"
+    retry: 2                 # retry this many extra times on failure
+  test:
+    depends: [build]
+    command: go test ./...
+    continue_on_error: true  # keep going even if this task fails
+  deploy:
+    depends: [build]
+    workdir: ./deploy        # default working directory is the current directory
+    command: "kubectl set image deploy/app app={{.registry}}:{{.version}}"
+```
+
+```bash
+mu run --file tasks.yaml                    # run all tasks in dependency order
+mu run --file tasks.yaml --task build,test  # run only these + their dependencies
+mu run --file tasks.yaml --var version=2.0  # override a variable
+mu run --file tasks.yaml --keep-going       # continue after failures
+mu run --file tasks.yaml --dry-run          # print the ordered task list, don't run
+mu run --schema                             # print the recipe JSON Schema
+```
+
+Recipe semantics:
+
+- **Dependency order** — tasks are scheduled topologically; a task runs after
+  all of its `depends`. Cycles are rejected at load time.
+- **Variables** — `{{.key}}` is templated with `vars` merged with `--var`
+  overrides; a reference to an undefined variable is an error.
+- **Timeout** — a task exceeding `timeout` is killed and reported as
+  `timed out`.
+- **Retry** — a failed task is retried up to `retry` more times (each attempt
+  re-runs the full task).
+- **Failure policy** — by default the run stops at the first failure; a task
+  with `continue_on_error: true`, or `--keep-going`, lets later tasks run. The
+  final summary lists each task with `✓`/`✗` and its duration, and any failure
+  yields a non-zero exit code.
+- **Interactive commands are not supported** in recipes — a `!`-prefixed
+  command is rejected at load time, and commands that try to read stdin fail
+  fast at runtime.
+- **Editor validation** — the recipe JSON Schema lives at
+  `docs/schema/recipe-schema.json` (also embedded and printed by
+  `mu run --schema`). Add a header to a recipe file to enable autocomplete and
+  inline validation in editors backed by the YAML Language Server:
+  `# yaml-language-server: $schema=https://raw.githubusercontent.com/yusiwen/myUtilities/main/docs/schema/recipe-schema.json`
+  (pin the URL to a release tag for stability; breaking format changes bump the
+  schema's `x-recipe-version`). Editor validation is optional and independent
+  of the runtime checks.
+
 ### git — Git utilities with AI
 
 Subcommands: `commit`, `review`, `ignore`.

@@ -25,9 +25,12 @@ import (
 )
 
 type Command struct {
-	Name        string `help:"Description of this command" default:""`
-	CmdLine     string `help:"Command line" default:""`
-	Interactive bool   // run with stdin/stdout/stderr connected directly to the terminal
+	Name        string        `help:"Description of this command" default:""`
+	CmdLine     string        `help:"Command line" default:""`
+	Interactive bool          // run with stdin/stdout/stderr connected directly to the terminal
+	Env         []string      // extra environment variables in KEY=VALUE form
+	Dir         string        // working directory for the command
+	Timeout     time.Duration // optional per-command timeout; zero means no timeout
 }
 
 type CmdStatus struct {
@@ -282,6 +285,43 @@ func (r *CommandRunner) runCommands() {
 	}
 }
 
+// ParseCommandSpec decodes a single command spec of the form
+// "[<name>::][!]<command line>": an optional name separated by "::", and an
+// optional leading "!" marking the command as interactive. It is shared by the
+// CLI mapper and recipe loading.
+func ParseCommandSpec(val string) Command {
+	var c Command
+	if name, cmd, found := strings.Cut(val, "::"); found {
+		c.Name = name
+		c.CmdLine = cmd
+	} else {
+		c.CmdLine = val
+	}
+	if strings.HasPrefix(c.CmdLine, "!") {
+		c.Interactive = true
+		c.CmdLine = strings.TrimPrefix(c.CmdLine, "!")
+	}
+	return c
+}
+
+// newBashCommand builds the exec.Cmd for a command line, applying the
+// command's environment, working directory, and timeout. The returned context
+// is cancelled when the command finishes; if it is a WithTimeout context, the
+// process is killed once the deadline passes.
+func newBashCommand(command Command) (*exec.Cmd, context.Context, context.CancelFunc) {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if command.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), command.Timeout)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
+	cmd := exec.CommandContext(ctx, "bash", "-c", command.CmdLine)
+	cmd.Env = append(os.Environ(), command.Env...)
+	cmd.Dir = command.Dir
+	return cmd, ctx, cancel
+}
+
 // runCommand dispatches a non-interactive command: on a terminal the child
 // runs on a pty so stdio programs line-buffer and stream promptly; elsewhere
 // (piped output or platforms without pty) it uses plain pipes.
@@ -293,7 +333,8 @@ func (r *CommandRunner) runCommand(command Command) error {
 }
 
 func (r *CommandRunner) runCommandPipes(command Command) error {
-	cmd := exec.Command("bash", "-c", command.CmdLine)
+	cmd, ctx, cancel := newBashCommand(command)
+	defer cancel()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -331,6 +372,9 @@ func (r *CommandRunner) runCommandPipes(command Command) error {
 	errorMsg := <-stderrCh
 
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			msg := errorMsg
 			if strings.TrimSpace(msg) == "" {
@@ -367,7 +411,8 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("bash", "-c", command.CmdLine)
+	cmd, ctx, cancel := newBashCommand(command)
+	defer cancel()
 	cmd.Stdout = tty
 	cmd.Stderr = tty
 	if err := cmd.Start(); err != nil {
@@ -404,6 +449,9 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 	ptmx.Close()
 
 	if err := <-waitCh; err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			r.done <- &CmdStatus{
 				isSuccess: false,
@@ -430,7 +478,8 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 // given streams, bypassing the display buffer. It is used for commands that
 // prompt the user (sudo, ssh, apt confirmations).
 func (r *CommandRunner) runInteractive(command Command, stdin io.Reader, stdout, stderr io.Writer) error {
-	cmd := exec.Command("bash", "-c", command.CmdLine)
+	cmd, ctx, cancel := newBashCommand(command)
+	defer cancel()
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -440,6 +489,9 @@ func (r *CommandRunner) runInteractive(command Command, stdin io.Reader, stdout,
 	r.setActive(cmd)
 	defer r.setActive(nil)
 	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("command %q failed (exit code %d)", command.CmdLine, exitError.ExitCode())
 		}
@@ -504,8 +556,6 @@ func NewCommandRunner(commands []Command) *CommandRunner {
 			clear:    clearDone,
 			redraw:   redraw,
 			wg:       &wg,
-			cmdCnt:   len(commands),
-			doneCnt:  0,
 			isHidden: true,
 			prevRows: 0,
 			width:    80,
@@ -521,9 +571,6 @@ type display struct {
 	redraw chan struct{}
 
 	wg *sync.WaitGroup
-
-	cmdCnt  int
-	doneCnt int
 
 	width   int
 	maxRows int
@@ -564,9 +611,10 @@ func (d *display) update() {
 		case <-ticker.C:
 			d.spin()
 		case status := <-d.done:
-			// runCommands closes r.done once all commands have finished;
-			// a nil status signals shutdown (e.g. the last command was
-			// interactive and never sent a status).
+			// runCommands / recipe runners close r.done once everything has
+			// finished; a nil status signals shutdown. Unlike before, update
+			// does NOT exit on a failed command: retries and keep-going runs
+			// continue to use the display across failures.
 			if status == nil {
 				return
 			}
@@ -578,11 +626,6 @@ func (d *display) update() {
 				d.bufferMutex.Unlock()
 			}
 			d.cleanUp()
-
-			d.doneCnt++
-			if !status.isSuccess || d.doneCnt == d.cmdCnt {
-				return
-			}
 		}
 	}
 }

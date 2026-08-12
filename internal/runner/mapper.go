@@ -3,7 +3,6 @@ package runner
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/alecthomas/kong"
 	corerunner "github.com/yusiwen/myUtilities/internal/core/runner"
@@ -24,18 +23,7 @@ func (commandMapper) Decode(ctx *kong.DecodeContext, target reflect.Value) error
 	if !ok {
 		return fmt.Errorf("invalid value for --command: %v", t.Value)
 	}
-	var c corerunner.Command
-	if name, cmd, found := strings.Cut(val, "::"); found {
-		c.Name = name
-		c.CmdLine = cmd
-	} else {
-		c.CmdLine = val
-	}
-	if strings.HasPrefix(c.CmdLine, "!") {
-		c.Interactive = true
-		c.CmdLine = strings.TrimPrefix(c.CmdLine, "!")
-	}
-	target.Set(reflect.ValueOf(c))
+	target.Set(reflect.ValueOf(corerunner.ParseCommandSpec(val)))
 	return nil
 }
 

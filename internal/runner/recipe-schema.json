@@ -1,0 +1,101 @@
+{
+  "$id": "https://raw.githubusercontent.com/yusiwen/myUtilities/main/docs/schema/recipe-schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-recipe-version": "1",
+  "title": "mu run recipe",
+  "description": "Task-orchestration recipe file for `mu run --file`. Bump x-recipe-version on any breaking format change and keep in sync with internal/core/runner/recipe.go.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Recipe name."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the recipe."
+    },
+    "vars": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Template variables referenced as {{.key}} in commands, env values, and workdir. Overridable with --var key=value."
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Environment variables applied to every task."
+    },
+    "tasks": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "required": ["tasks"],
+  "$defs": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string",
+          "description": "Single shell command. Use either 'command' or 'commands', not both."
+        },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Multiple shell commands run sequentially."
+        },
+        "depends": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Task names that must complete before this task runs."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "workdir": {
+          "type": "string",
+          "description": "Working directory for the task (relative to the current directory)."
+        },
+        "timeout": {
+          "type": "string",
+          "description": "Per-task timeout, e.g. \"30s\" or \"2m\"."
+        },
+        "retry": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retry the task this many more times on failure."
+        },
+        "continue_on_error": {
+          "type": "boolean",
+          "description": "Continue running later tasks after this task fails."
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["command"]
+        },
+        {
+          "required": ["commands"]
+        }
+      ]
+    }
+  }
+}
