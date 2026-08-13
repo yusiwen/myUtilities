@@ -55,6 +55,12 @@
 │   │   │   └── db/dbproxy.go  #  OracleProxy — TCP proxy with health checks & failover
 │   │   ├── runner/            # Command execution engine (CommandRunner.go + recipe.go + recipe_runner.go)
 │   │   │   └── CommandRunner.go #  bash -c execution with PTY/VT100 live display, spinner+elapsed header, Ctrl-C handling; recipe.go/recipe_runner.go add YAML task orchestration
+│   │   ├── misc/              # Misc tools business logic
+│   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
+│   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
+│   │   │   ├── timestamp.go   #  ConvertTimestamp() — unix/date parsing
+│   │   │   ├── hash.go        #  Hash(alg, input) — md5/sha256/sha512
+│   │   │   └── trackers.go    #  TrackersCache — TTL-cached tracker list fetch
 │   │   ├── store/             # BoltDB key-value store
 │   │   │   └── store.go       #  CRUD for MAC aliases, boot/shutdown event recording
 │   │   └── watcher/           # K8s-style watch system

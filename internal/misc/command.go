@@ -1,20 +1,15 @@
 package misc
 
 import (
-	"bytes"
-	"crypto/md5"
-	"crypto/rand"
-	"crypto/sha256"
-	"crypto/sha512"
 	"encoding/json"
 	"fmt"
-	"hash"
 	"io"
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 	"time"
+
+	coremisc "github.com/yusiwen/myUtilities/internal/core/misc"
 )
 
 type Options struct {
@@ -63,7 +58,7 @@ type ServeOptions struct {
 
 func (o *UUIDOptions) Run() error {
 	for i := 0; i < o.Count; i++ {
-		u, err := genUUID()
+		u, err := coremisc.GenUUID()
 		if err != nil {
 			return err
 		}
@@ -72,27 +67,16 @@ func (o *UUIDOptions) Run() error {
 	return nil
 }
 
-func genUUID() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("generate uuid: %w", err)
-	}
-	b[6] = (b[6] & 0x0f) | 0x40 // version 4
-	b[8] = (b[8] & 0x3f) | 0x80 // variant 10
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
-}
-
 func (o *JSONFormatCmd) Run() error {
 	input, err := readInput(o.Input)
 	if err != nil {
 		return err
 	}
-	var v interface{}
-	if err := json.Unmarshal([]byte(input), &v); err != nil {
+	out, err := coremisc.FormatJSON(input)
+	if err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
 	}
-	out, _ := json.MarshalIndent(v, "", "  ")
-	fmt.Println(string(out))
+	fmt.Println(out)
 	return nil
 }
 
@@ -101,11 +85,11 @@ func (o *JSONValidateCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	if json.Valid([]byte(input)) {
-		fmt.Println("✅ Valid JSON")
-	} else {
-		fmt.Println("❌ Invalid JSON")
+	out, err := coremisc.ValidateJSON(input)
+	if err != nil {
+		return err
 	}
+	fmt.Println(out)
 	return nil
 }
 
@@ -114,47 +98,18 @@ func (o *JSONMinifyCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	var v interface{}
-	if err := json.Unmarshal([]byte(input), &v); err != nil {
+	out, err := coremisc.MinifyJSON(input)
+	if err != nil {
 		return fmt.Errorf("invalid JSON: %w", err)
 	}
-	var buf bytes.Buffer
-	json.Compact(&buf, []byte(input))
-	fmt.Println(buf.String())
+	fmt.Println(out)
 	return nil
 }
 
 func (o *TimestampOptions) Run() error {
-	if o.Input == "" {
-		fmt.Println(time.Now().Unix())
-		return nil
-	}
-	// Try common date formats first
-	formats := []string{
-		time.RFC3339,
-		"2006-01-02T15:04:05",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-		"2006/01/02",
-		time.RFC1123,
-	}
-	t, err := time.Parse(formats[0], o.Input)
+	t, err := coremisc.ConvertTimestamp(o.Input)
 	if err != nil {
-		for _, f := range formats {
-			t, err = time.Parse(f, o.Input)
-			if err == nil {
-				break
-			}
-		}
-	}
-	if err != nil {
-		// Try Unix timestamp (only if the input looks like a pure number)
-		var sec int64
-		if _, e := fmt.Sscanf(o.Input, "%d", &sec); e == nil && fmt.Sprint(sec) == o.Input {
-			t = time.Unix(sec, 0)
-		} else {
-			return fmt.Errorf("unable to parse time: %s", o.Input)
-		}
+		return err
 	}
 	fmt.Println(t.Unix())
 	return nil
@@ -175,20 +130,11 @@ func (o *HashOptions) Run() error {
 		}
 		data = []byte(input)
 	}
-
-	var h hash.Hash
-	switch o.Alg {
-	case "md5":
-		h = md5.New()
-	case "sha256":
-		h = sha256.New()
-	case "sha512":
-		h = sha512.New()
-	default:
-		return fmt.Errorf("unsupported algorithm: %s", o.Alg)
+	out, err := coremisc.Hash(o.Alg, string(data))
+	if err != nil {
+		return err
 	}
-	h.Write(data)
-	fmt.Printf("%x\n", h.Sum(nil))
+	fmt.Println(out)
 	return nil
 }
 
@@ -212,10 +158,12 @@ func (o *ServeOptions) Run() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
+var trackersCache = coremisc.DefaultTrackers()
+
 func RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/api/misc/json/format", handleJSONOp(formatJSON))
-	mux.HandleFunc("/api/misc/json/validate", handleJSONOp(validateJSON))
-	mux.HandleFunc("/api/misc/json/minify", handleJSONOp(minifyJSON))
+	mux.HandleFunc("/api/misc/json/format", handleJSONOp(coremisc.FormatJSON))
+	mux.HandleFunc("/api/misc/json/validate", handleJSONOp(coremisc.ValidateJSON))
+	mux.HandleFunc("/api/misc/json/minify", handleJSONOp(coremisc.MinifyJSON))
 	mux.HandleFunc("/api/misc/uuid", handleUUID)
 	mux.HandleFunc("/api/misc/timestamp", handleTimestamp)
 	mux.HandleFunc("/api/misc/hash/", handleHash)
@@ -223,32 +171,6 @@ func RegisterHandlers(mux *http.ServeMux) {
 }
 
 type jsonFunc func(string) (string, error)
-
-func formatJSON(input string) (string, error) {
-	var v interface{}
-	if err := json.Unmarshal([]byte(input), &v); err != nil {
-		return "", err
-	}
-	out, _ := json.MarshalIndent(v, "", "  ")
-	return string(out), nil
-}
-
-func validateJSON(input string) (string, error) {
-	if json.Valid([]byte(input)) {
-		return "✅ Valid JSON", nil
-	}
-	return "❌ Invalid JSON", nil
-}
-
-func minifyJSON(input string) (string, error) {
-	var v interface{}
-	if err := json.Unmarshal([]byte(input), &v); err != nil {
-		return "", err
-	}
-	var buf bytes.Buffer
-	json.Compact(&buf, []byte(input))
-	return buf.String(), nil
-}
 
 func handleJSONOp(fn jsonFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +215,7 @@ func handleUUID(w http.ResponseWriter, r *http.Request) {
 	}
 	uuids := make([]string, req.Count)
 	for i := 0; i < req.Count; i++ {
-		u, err := genUUID()
+		u, err := coremisc.GenUUID()
 		if err != nil {
 			http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusInternalServerError)
 			return
@@ -317,39 +239,19 @@ func handleTimestamp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Input == "" {
-		result := fmt.Sprintf("%d", time.Now().Unix())
-		json.NewEncoder(w).Encode(map[string]string{"result": result})
+	t, err := coremisc.ConvertTimestamp(req.Input)
+	if err != nil {
+		http.Error(w, `{"error":"unable to parse time"}`, http.StatusBadRequest)
 		return
 	}
-
-	formats := []string{
-		time.RFC3339,
-		"2006-01-02T15:04:05",
-		"2006-01-02 15:04:05",
-		"2006-01-02",
-		"2006/01/02",
-	}
-	t, err := time.Parse(formats[0], req.Input)
-	if err != nil {
-		for _, f := range formats {
-			t, err = time.Parse(f, req.Input)
-			if err == nil {
-				break
-			}
-		}
-	}
-	if err != nil {
-		var sec int64
-		if _, e := fmt.Sscanf(req.Input, "%d", &sec); e == nil && fmt.Sprint(sec) == req.Input {
-			t = time.Unix(sec, 0)
-		} else {
-			http.Error(w, fmt.Sprintf(`{"error":"unable to parse time"}`), http.StatusBadRequest)
-			return
-		}
+	var result string
+	if req.Input == "" {
+		result = fmt.Sprintf("%d", t.Unix())
+	} else {
+		result = fmt.Sprintf("%d (%s)", t.Unix(), t.Format(time.RFC3339))
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"result": fmt.Sprintf("%d (%s)", t.Unix(), t.Format(time.RFC3339))})
+	json.NewEncoder(w).Encode(map[string]string{"result": result})
 }
 
 func handleHash(w http.ResponseWriter, r *http.Request) {
@@ -366,33 +268,14 @@ func handleHash(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var h hash.Hash
-	switch alg {
-	case "md5":
-		h = md5.New()
-	case "sha256":
-		h = sha256.New()
-	case "sha512":
-		h = sha512.New()
-	default:
-		http.Error(w, `{"error":"unsupported algorithm"}`, http.StatusBadRequest)
+	result, err := coremisc.Hash(alg, req.Input)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
 		return
 	}
-	h.Write([]byte(req.Input))
-	result := fmt.Sprintf("%x", h.Sum(nil))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"result": result})
 }
-
-const trackersListURL = "https://raw.githubusercontent.com/ngosang/trackerslist/master/trackers_best.txt"
-
-const trackersCacheTTL = 30 * time.Minute
-
-var (
-	trackersCacheMutex   sync.Mutex
-	trackersCacheContent string
-	trackersCacheTime    time.Time
-)
 
 func handleTrackers(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -400,40 +283,11 @@ func handleTrackers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refresh := r.URL.Query().Get("refresh") == "1"
-
-	trackersCacheMutex.Lock()
-	if !refresh && trackersCacheContent != "" && time.Since(trackersCacheTime) <= trackersCacheTTL {
-		cached := trackersCacheContent
-		trackersCacheMutex.Unlock()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"content": cached})
-		return
-	}
-	trackersCacheMutex.Unlock()
-
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Get(trackersListURL)
+	content, err := trackersCache.Get(refresh)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadGateway)
 		return
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadGateway)
-		return
-	}
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, fmt.Sprintf(`{"error":"upstream returned %d"}`, resp.StatusCode), http.StatusBadGateway)
-		return
-	}
-
-	content := string(body)
-	trackersCacheMutex.Lock()
-	trackersCacheContent = content
-	trackersCacheTime = time.Now()
-	trackersCacheMutex.Unlock()
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"content": content})
 }
