@@ -2,6 +2,37 @@
 
 A multi-purpose CLI tool with subcommands for common development and operations tasks.
 
+![mu Gateway](docs/mu-gateway-screenshot.png)
+
+## Features
+
+| Command | Type | Description | Web UI |
+|---|---|---|---|
+| `install` | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
+| `mock` | Testing | Mock servers: mock-server, file-server, oauth-server, dynamic-server with admin UI | ✓ |
+| `qrcode` | Utils | Generate QR codes (terminal, PNG, web UI) | ✓ |
+| `serve` | DevOps | Static file server with CORS and logging | – |
+| `svcreg` | Ops | Service registry server (ServiceCenter-compatible) + dashboard | ✓ |
+| `proxy` | Ops | Database proxy with failover (Oracle) | – |
+| `run` | DevOps | Command runner with live display + YAML recipe orchestration | – |
+| `wol` | Ops | Wake-on-LAN server, boot/shutdown agent, interface discovery | ✓ |
+| `es` | Data | Elasticsearch query tool (status, indices, search) | ✓ |
+| `git` | Dev | AI commit messages, multi-turn code review, .gitignore templates | – |
+| `watch` | Ops | Watch filesystem / git remotes for changes | – |
+| `k8s` | Cloud | Kubernetes Secret YAML generator + resource browser | ✓ |
+| `jar` | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
+| `gateway` | Ops | Unified portal serving all web-enabled modules | ✓ |
+| `diff` | Dev | Side-by-side text/file comparison | ✓ |
+| `network` | Net | DNS, DIG, and WHOIS lookups | ✓ |
+| `misc` | Utils | JSON format/validate, UUID, timestamp, hash, trackers | ✓ |
+| `crypto` | Utils | Encrypt/decrypt, passwords, JWT, encode/decode | ✓ |
+| `ask` | AI | Ask an LLM questions (optional web search) | – |
+| `budget` | AI | Track LLM API usage/balance across providers | ✓ |
+| `metrics` | Ops | Time-series host metrics collection and querying | – |
+| `scip` | Dev | SCIP semantic code intelligence (indexers + index) | – |
+| `fleet` | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
+| `completion` | Dev | Generate bash/zsh completion scripts | – |
+
 ## Build
 
 ```bash
