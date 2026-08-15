@@ -55,6 +55,12 @@
 │   │   │   └── db/dbproxy.go  #  OracleProxy — TCP proxy with health checks & failover
 │   │   ├── runner/            # Command execution engine (CommandRunner.go + recipe.go + recipe_runner.go)
 │   │   │   └── CommandRunner.go #  bash -c execution with PTY/VT100 live display, spinner+elapsed header, Ctrl-C handling; recipe.go/recipe_runner.go add YAML task orchestration
+│   │   ├── fleet/             # Remote batch execution (dispatcher + agent, poll model)
+│   │   │   ├── dispatcher.go  #  HTTP API: jobs, register, poll, output, complete, files; token auth
+│   │   │   ├── store.go       #  BoltDB buckets agents/jobs/runs/run_output, ClaimNextRun, 1MB output cap
+│   │   │   ├── agent.go       #  Register → poll → download/extract files → run (core/runner) → stream → complete
+│   │   │   ├── client.go      #  Controller/agent HTTP client
+│   │   │   └── transfer.go    #  ArchiveExt / ExtractArchive (tar.gz/tar/zip) / ComputeSHA256
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
@@ -89,6 +95,10 @@
 │   │   ├── options.go         #  Flags: --command, --file (recipe), --task, --var, --keep-going, --dry-run, --schema
 │   │   ├── runner.go          #  Run() — dispatches inline commands or recipe files (exit 130 on interrupt)
 │   │   └── recipe_schema.go   #  Embeds docs/schema/recipe-schema.json for `mu run --schema`
+│   ├── fleet/                 # Fleet CLI (serve/agent/run/hosts/status/jobs)
+│   │   ├── options.go         #  Subcommands + flags (--hosts, --file/--command, --var, --files, --watch)
+│   │   ├── command.go         #  Run() — wires to core/fleet; --watch streams output + per-host summary
+│   │   └── config.go          #  fleet-config.json load (server/token/hostname/groups/poll/port/db/data_dir)
 │   ├── wol/                   # Wake-on-LAN HTTP server + agent
 │   │   ├── options.go         #  Subcommands: serve, agent, interfaces
 │   │   ├── command.go         #  Serve: WOL API, alias CRUD, boot/shutdown notify

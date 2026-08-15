@@ -77,6 +77,28 @@ func TestFormatElapsed(t *testing.T) {
 	}
 }
 
+// TestOutputWriter verifies that plain-mode output is teed to the injected
+// OutputWriter (used by the fleet agent to stream output).
+func TestOutputWriter(t *testing.T) {
+	var buf bytes.Buffer
+	r := NewCommandRunner([]Command{
+		{Name: "greet", CmdLine: "echo teed-output"},
+	})
+	r.OutputWriter = &buf
+	if err := r.Run(); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "teed-output") {
+		t.Fatalf("OutputWriter did not receive command output: %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "Executing [greet]...") {
+		t.Fatalf("OutputWriter missing header line: %q", buf.String())
+	}
+	if !strings.Contains(buf.String(), "✓") {
+		t.Fatalf("OutputWriter missing success marker: %q", buf.String())
+	}
+}
+
 // TestRunInteractiveStdin verifies an interactive command can answer a prompt
 // read from its stdin (e.g. apt's y/n confirmation).
 func TestRunInteractiveStdin(t *testing.T) {

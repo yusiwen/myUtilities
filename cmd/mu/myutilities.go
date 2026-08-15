@@ -8,6 +8,7 @@ import (
 	"github.com/yusiwen/myUtilities/internal/crypto"
 	"github.com/yusiwen/myUtilities/internal/diff"
 	"github.com/yusiwen/myUtilities/internal/es"
+	"github.com/yusiwen/myUtilities/internal/fleet"
 	"github.com/yusiwen/myUtilities/internal/gateway"
 	"github.com/yusiwen/myUtilities/internal/git"
 	"github.com/yusiwen/myUtilities/internal/installer"
@@ -51,5 +52,6 @@ type MyUtilities struct {
 	Budget     budget.Options              `cmd:"" name:"budget" help:"Query LLM API usage and balance."`
 	Metrics    metrics.Options             `cmd:"" name:"metrics" help:"Time-series metrics collection and querying."`
 	Scip       scip.Options                `cmd:"" name:"scip" help:"SCIP semantic code intelligence."`
+	Fleet      fleet.Options               `cmd:"" name:"fleet" help:"Fleet management (remote execution/deploys)."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

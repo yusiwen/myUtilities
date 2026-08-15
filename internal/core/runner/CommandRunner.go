@@ -121,6 +121,65 @@ func isTerminal(f *os.File) bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
+// CommandRunner holds command execution state and implements Run()
+type CommandRunner struct {
+	output chan string
+	done   chan *CmdStatus
+
+	Commands []Command
+
+	// Optional output writer to direct output to (used by fleet agent for sending chunks)
+	OutputWriter io.Writer
+
+	usePTY bool
+
+	err error
+	wg  *sync.WaitGroup
+	d   *display
+
+	interrupted atomic.Bool
+
+	activeMu sync.Mutex
+	active   *exec.Cmd
+
+	interactiveStart time.Time
+}
+
+func NewCommandRunner(commands []Command) *CommandRunner {
+	output := make(chan string)
+	done := make(chan *CmdStatus)
+	clearDone := make(chan struct{})
+	redraw := make(chan struct{}, 1)
+	wg := sync.WaitGroup{}
+
+	return &CommandRunner{
+		Commands: commands,
+		output:   output,
+		done:     done,
+		wg:       &wg,
+		d: &display{
+			output:   output,
+			done:     done,
+			clear:    clearDone,
+			redraw:   redraw,
+			wg:       &wg,
+			isHidden: true,
+			prevRows: 0,
+			width:    80,
+			maxRows:  logLines(),
+		},
+	}
+}
+
+// NewCommandRunnerWithWriter creates a new command runner with an additional
+// output writer (used by the fleet agent for sending output chunks to the dispatcher)
+func NewCommandRunnerWithWriter(commands []Command, outputWriter io.Writer) *CommandRunner {
+	runner := NewCommandRunner(commands)
+	runner.OutputWriter = outputWriter
+	return runner
+}
+
+// Run executes all commands in sequence
 func (r *CommandRunner) Run() error {
 	if len(r.Commands) == 0 {
 		return nil
@@ -173,7 +232,7 @@ func (r *CommandRunner) runPlain() error {
 	go func() {
 		defer close(printerDone)
 		for line := range r.output {
-			fmt.Println(line)
+			r.println(line)
 		}
 	}()
 	go func() {
@@ -197,7 +256,7 @@ func (r *CommandRunner) runPlain() error {
 		if name == "" {
 			name = cmd.CmdLine
 		}
-		fmt.Printf("Executing [%s]...\n", name)
+		r.printf("Executing [%s]...\n", name)
 		start := time.Now()
 		var err error
 		if cmd.Interactive {
@@ -208,13 +267,13 @@ func (r *CommandRunner) runPlain() error {
 		elapsed := time.Since(start)
 		if err != nil {
 			if r.interrupted.Load() {
-				fmt.Println("Interrupted.")
+				r.println("Interrupted.")
 				break
 			}
 			finish()
 			return err
 		}
-		fmt.Printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
+		r.printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
 	}
 	finish()
 	return nil
@@ -500,32 +559,30 @@ func (r *CommandRunner) runInteractive(command Command, stdin io.Reader, stdout,
 	return nil
 }
 
-type CommandRunner struct {
-	output chan string
-	done   chan *CmdStatus
-
-	Commands []Command
-
-	usePTY bool
-
-	err error
-	wg  *sync.WaitGroup
-	d   *display
-
-	interrupted atomic.Bool
-
-	activeMu sync.Mutex
-	active   *exec.Cmd
-
-	interactiveStart time.Time
-}
-
 // setActive records the currently executing child so the interrupt handler can
 // forward the signal to it.
 func (r *CommandRunner) setActive(cmd *exec.Cmd) {
 	r.activeMu.Lock()
 	r.active = cmd
 	r.activeMu.Unlock()
+}
+
+// println prints to stdout and, when set, also to the injected OutputWriter
+// (used by headless callers such as the fleet agent to stream output).
+func (r *CommandRunner) println(args ...interface{}) {
+	fmt.Println(args...)
+	if r.OutputWriter != nil {
+		fmt.Fprintln(r.OutputWriter, args...)
+	}
+}
+
+// printf formats output to stdout and, when set, also to the injected
+// OutputWriter.
+func (r *CommandRunner) printf(format string, args ...interface{}) {
+	fmt.Printf(format, args...)
+	if r.OutputWriter != nil {
+		fmt.Fprintf(r.OutputWriter, format, args...)
+	}
 }
 
 // signalActive sends sig to the currently executing child, if any.
@@ -535,32 +592,6 @@ func (r *CommandRunner) signalActive(sig os.Signal) {
 	r.activeMu.Unlock()
 	if cmd != nil && cmd.Process != nil {
 		_ = cmd.Process.Signal(sig)
-	}
-}
-
-func NewCommandRunner(commands []Command) *CommandRunner {
-	output := make(chan string)
-	done := make(chan *CmdStatus)
-	clearDone := make(chan struct{})
-	redraw := make(chan struct{}, 1)
-	wg := sync.WaitGroup{}
-
-	return &CommandRunner{
-		Commands: commands,
-		output:   output,
-		done:     done,
-		wg:       &wg,
-		d: &display{
-			output:   output,
-			done:     done,
-			clear:    clearDone,
-			redraw:   redraw,
-			wg:       &wg,
-			isHidden: true,
-			prevRows: 0,
-			width:    80,
-			maxRows:  logLines(),
-		},
 	}
 }
 

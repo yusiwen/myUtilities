@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -20,6 +21,9 @@ type RecipeRunOptions struct {
 	Vars      map[string]string // CLI variable overrides
 	KeepGoing bool
 	DryRun    bool
+	// Workdir is the base directory for tasks without an explicit workdir
+	// (used by the fleet agent to run recipes inside a job's staging area).
+	Workdir string
 }
 
 // TaskResult records the outcome of one task for the final summary.
@@ -88,10 +92,18 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 		if err != nil {
 			return nil, fmt.Errorf("task %q: %w", name, err)
 		}
+		dir := opts.Workdir
+		if workdir != "" {
+			if opts.Workdir != "" {
+				dir = filepath.Join(opts.Workdir, workdir)
+			} else {
+				dir = workdir
+			}
+		}
 		env := append(envSlice(recipe.Env), envSlice(task.Env)...)
 		cmdList := make([]Command, 0, len(cmds))
 		for _, c := range cmds {
-			cmdList = append(cmdList, Command{Name: name, CmdLine: c, Env: env, Dir: workdir, Timeout: timeout})
+			cmdList = append(cmdList, Command{Name: name, CmdLine: c, Env: env, Dir: dir, Timeout: timeout})
 		}
 		preparedTasks = append(preparedTasks, prepared{
 			name:    name,
@@ -127,7 +139,7 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 			taskErr := r.runTask(p.name, p.cmds, p.timeout, useDisplay)
 			elapsed := time.Since(start)
 			for attempt := 1; taskErr != nil && attempt <= p.retry && !r.interrupted.Load(); attempt++ {
-				fmt.Println(aec.Apply(fmt.Sprintf("task %q failed, retrying %d/%d...", p.name, attempt, p.retry), aec.Faint))
+				r.println(aec.Apply(fmt.Sprintf("task %q failed, retrying %d/%d...", p.name, attempt, p.retry), aec.Faint))
 				start = time.Now()
 				taskErr = r.runTask(p.name, p.cmds, p.timeout, useDisplay)
 				elapsed = time.Since(start)
@@ -138,7 +150,7 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 			if taskErr != nil {
 				failures = append(failures, p.name)
 				results = append(results, TaskResult{Name: p.name, Status: "fail", Duration: elapsed})
-				fmt.Println(aec.Apply(fmt.Sprintf("✗ task %s failed after %s", p.name, formatElapsed(elapsed)), errColor))
+				r.println(aec.Apply(fmt.Sprintf("✗ task %s failed after %s", p.name, formatElapsed(elapsed)), errColor))
 				if !p.contErr && !opts.KeepGoing {
 					break
 				}
@@ -167,7 +179,7 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 		go func() {
 			defer close(printerDone)
 			for line := range r.output {
-				fmt.Println(line)
+				r.println(line)
 			}
 		}()
 		go func() {
@@ -183,9 +195,9 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 	}
 
 	if r.interrupted.Load() {
-		fmt.Println("Interrupted.")
+		r.println("Interrupted.")
 	} else {
-		printSummary(results)
+		r.printSummary(results)
 	}
 	return results, loopErr
 }
@@ -202,7 +214,7 @@ func (r *CommandRunner) runTask(name string, cmds []Command, timeout time.Durati
 		if useDisplay {
 			r.d.startStep(name)
 		} else {
-			fmt.Printf("Executing [%s]...\n", name)
+			r.printf("Executing [%s]...\n", name)
 			start = time.Now()
 		}
 		err := r.runCommand(cmd)
@@ -224,7 +236,7 @@ func (r *CommandRunner) runTask(name string, cmds []Command, timeout time.Durati
 					fmt.Println(l)
 				}
 			}
-			fmt.Println(aec.Apply("Error: "+err.Error(), errColor))
+			r.println(aec.Apply("Error: "+err.Error(), errColor))
 			return err
 		}
 		if useDisplay {
@@ -234,18 +246,18 @@ func (r *CommandRunner) runTask(name string, cmds []Command, timeout time.Durati
 			}
 			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s%s", name, formatElapsed(elapsed), suffix), successColor))
 		} else {
-			fmt.Printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
+			r.printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
 		}
 	}
 	return nil
 }
 
-func printSummary(results []TaskResult) {
+func (r *CommandRunner) printSummary(results []TaskResult) {
 	if len(results) == 0 {
 		return
 	}
-	fmt.Println()
-	fmt.Println("Recipe summary:")
+	r.println()
+	r.println("Recipe summary:")
 	width := 0
 	for _, res := range results {
 		if len(res.Name) > width {
@@ -259,6 +271,6 @@ func printSummary(results []TaskResult) {
 			mark = "✗"
 			color = errColor
 		}
-		fmt.Printf("  %-*s  %s %s\n", width, res.Name, aec.Apply(mark, color), formatElapsed(res.Duration))
+		r.printf("  %-*s  %s %s\n", width, res.Name, aec.Apply(mark, color), formatElapsed(res.Duration))
 	}
 }

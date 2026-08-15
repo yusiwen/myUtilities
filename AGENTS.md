@@ -135,6 +135,13 @@ The `internal/core/` directory contains reusable business logic:
   - `!`-prefixed commands run interactively (`runInteractive`), suspending the display (`display.pause`/`resume`); piped/redirected stdout falls back to plain output (`runPlain`)
   - Ctrl-C is handled via `signal.NotifyContext`: the signal is forwarded to the currently executing child (`setActive`/`signalActive`), execution stops after the current step, `Run` returns `ErrInterrupted`, and `internal/runner` maps that to exit code 130
   - Recipe orchestration: `mu run --file <recipe.yaml>` runs named YAML tasks via `internal/core/runner/recipe.go` (types, `LoadRecipe` strict validation via `KnownFields(true)`, `TopologicalOrder`) and `recipe_runner.go` (`RunRecipe`, `RecipeRunOptions`, `TaskResult`). Tasks support `depends`, `env`, `workdir` (default CWD), `timeout`, `retry`, `continue_on_error`, and `{{.key}}` templating (`missingkey=error`). Interactive (`!`) commands are rejected at load. `display.update()` no longer exits on failure so retries/keep-going reuse the display. The editor JSON Schema (`docs/schema/recipe-schema.json`, embedded + printed by `mu run --schema`) is independent of runtime checks; breaking format changes bump its `x-recipe-version` in sync with `recipe.go`
+  - Headless output: `CommandRunner.OutputWriter` + `NewCommandRunnerWithWriter` tee plain-mode output to an injected `io.Writer` (used by the fleet agent to stream output); `RunRecipe` accepts a `Workdir` base so tasks without an explicit `workdir` run inside a job staging dir; `ParseRecipe([]byte)` decodes recipe text without a file
+- `internal/core/fleet/` - Remote batch execution (dispatcher + agent, poll model)
+  - `dispatcher.go` — HTTP API (`RegisterHandlers`, Go 1.22 `{...}` paths): submit/list/status jobs, agent register/poll, output/complete, file download; token auth in `auth.go`; job files stored under `DataDir/jobs/<id>/files/`
+  - `store.go` — BoltDB buckets `agents`/`jobs`/`runs`/`run_output`; `ClaimNextRun` marks a host's pending run running; run output appended with a 1MB cap (`[truncated]`); agent `Online` is derived from `LastSeen`
+  - `agent.go` — `RunAgent`/`RunAgentContext`: register with retry backoff, poll, download+sha256-verify+auto-extract files, execute via `core/runner` (recipe or command), stream output in chunks (`outputStreamer`), report completion
+  - `client.go` — `Client` for controller (SubmitJob multipart/JobStatus/ListAgents/ListJobs) and agent (Register/Poll/UploadOutput/ReportCompletion/DownloadFile)
+  - `transfer.go` — `ArchiveExt` (suffix-based `.tar.gz`/`.tgz`/`.tar`/`.zip`), `ExtractArchive`, `ComputeSHA256`
 - `internal/core/watcher/` - Event-driven resource watching system
   - Implements a Kubernetes-style watch pattern with `WatchServer`, `EventStore`
   - `Watcher` interface for pluggable resource monitors
@@ -194,6 +201,11 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/runner/` - Command runner
   - Executes bash commands sequentially
   - Displays real-time output with ANSI colors
+
+- `internal/fleet/` - Remote batch execution CLI (`mu fleet`)
+  - `options.go` — subcommands: `serve` (dispatcher), `agent`, `run`, `hosts`, `status`, `jobs`; `Run` methods take no args (kong), config via `--config`
+  - `command.go` — wires subcommands to `internal/core/fleet`; `run --watch` polls job status and prints incremental output + per-host summary
+  - `config.go` — `fleet-config.json` (server/token/hostname/groups/poll_interval/port/db_path/data_dir); missing file → defaults
 
 - `internal/wol/` - Wake-on-LAN HTTP server and agent
   - `serve` subcommand: HTTP server with Svelte frontend, alias CRUD, WOL magic packet sending

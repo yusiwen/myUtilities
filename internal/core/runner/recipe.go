@@ -43,6 +43,13 @@ func LoadRecipe(path string) (*Recipe, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseRecipe(data)
+}
+
+// ParseRecipe strictly decodes and validates recipe bytes. It is used by
+// LoadRecipe and by the fleet agent, which receives recipe text from a
+// dispatcher instead of a file path.
+func ParseRecipe(data []byte) (*Recipe, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	var r Recipe
