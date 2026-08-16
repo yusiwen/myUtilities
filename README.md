@@ -8,31 +8,31 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 
 | Command | Type | Description | Web UI |
 |---|---|---|---|
-| [install](docs/install.md) | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
-| [mock](docs/mock.md) | Testing | Mock servers: mock-server, file-server, oauth-server, dynamic-server with admin UI | ✓ |
-| [qrcode](docs/qrcode.md) | Utils | Generate QR codes (terminal, PNG, web UI) | ✓ |
-| [serve](docs/serve.md) | DevOps | Static file server with CORS and logging | – |
-| [svcreg](docs/svcreg.md) | Ops | Service registry server (ServiceCenter-compatible) + dashboard | ✓ |
-| [proxy](docs/proxy.md) | Ops | Database proxy with failover (Oracle) | – |
-| [run](docs/run.md) | DevOps | Command runner with live display + YAML recipe orchestration | – |
-| [wol](docs/wol.md) | Ops | Wake-on-LAN server, boot/shutdown agent, interface discovery | ✓ |
-| [es](docs/es.md) | Data | Elasticsearch query tool (status, indices, search) | ✓ |
-| [git](docs/git.md) | Dev | AI commit messages, multi-turn code review, .gitignore templates | – |
-| [watch](docs/watch.md) | Ops | Watch filesystem / git remotes for changes | – |
-| [k8s](docs/k8s.md) | Cloud | Kubernetes Secret YAML generator + resource browser | ✓ |
-| [jar](docs/jar.md) | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
-| [gateway](docs/gateway.md) | Ops | Unified portal serving all web-enabled modules | ✓ |
-| [diff](docs/diff.md) | Dev | Side-by-side text/file comparison | ✓ |
-| [network](docs/network.md) | Net | DNS, DIG, and WHOIS lookups | ✓ |
-| [misc](docs/misc.md) | Utils | JSON format/validate, UUID, timestamp, hash, trackers | ✓ |
-| [crypto](docs/crypto.md) | Utils | Encrypt/decrypt, passwords, JWT, encode/decode | ✓ |
 | [ask](docs/ask.md) | AI | Ask an LLM questions (optional web search) | – |
 | [budget](docs/budget.md) | AI | Track LLM API usage/balance across providers | ✓ |
-| [metrics](docs/metrics.md) | Ops | Time-series host metrics collection and querying | – |
-| [scip](docs/git.md#scip-semantic-code-intelligence) | Dev | SCIP semantic code intelligence (indexers + index) | – |
-| [fleet](docs/fleet.md) | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
 | [completion](docs/completion.md) | Dev | Generate bash/zsh completion scripts | – |
+| [crypto](docs/crypto.md) | Utils | Encrypt/decrypt, passwords, JWT, encode/decode | ✓ |
+| [diff](docs/diff.md) | Dev | Side-by-side text/file comparison | ✓ |
+| [es](docs/es.md) | Data | Elasticsearch query tool (status, indices, search) | ✓ |
+| [fleet](docs/fleet.md) | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
+| [gateway](docs/gateway.md) | Ops | Unified portal serving all web-enabled modules | ✓ |
+| [git](docs/git.md) | Dev | AI commit messages, multi-turn code review, .gitignore templates | – |
+| [install](docs/install.md) | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
+| [jar](docs/jar.md) | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
+| [k8s](docs/k8s.md) | Cloud | Kubernetes Secret YAML generator + resource browser | ✓ |
+| [metrics](docs/metrics.md) | Ops | Time-series host metrics collection and querying | – |
+| [misc](docs/misc.md) | Utils | JSON format/validate, UUID, timestamp, hash, trackers | ✓ |
+| [mock](docs/mock.md) | Testing | Mock servers: mock-server, file-server, oauth-server, dynamic-server with admin UI | ✓ |
+| [network](docs/network.md) | Net | DNS, DIG, and WHOIS lookups | ✓ |
+| [proxy](docs/proxy.md) | Ops | Database proxy with failover (Oracle) | – |
+| [qrcode](docs/qrcode.md) | Utils | Generate QR codes (terminal, PNG, web UI) | ✓ |
+| [run](docs/run.md) | DevOps | Command runner with live display + YAML recipe orchestration | – |
+| [scip](docs/git.md#scip-semantic-code-intelligence) | Dev | SCIP semantic code intelligence (indexers + index) | – |
+| [serve](docs/serve.md) | DevOps | Static file server with CORS and logging | – |
 | [set](docs/set.md) | Ops | Unified module configuration | – |
+| [svcreg](docs/svcreg.md) | Ops | Service registry server (ServiceCenter-compatible) + dashboard | ✓ |
+| [watch](docs/watch.md) | Ops | Watch filesystem / git remotes for changes | – |
+| [wol](docs/wol.md) | Ops | Wake-on-LAN server, boot/shutdown agent, interface discovery | ✓ |
 
 ## Build
 
