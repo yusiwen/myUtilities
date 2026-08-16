@@ -1,6 +1,6 @@
 # Codebase Restructure Plan
 
-本文档记录了 myUtilities 项目代码组织与结构优化（对应 `docs/tasks.md` 第 6-11 项）的详细计划。
+本文档记录了 myUtilities 项目代码组织与结构优化（对应 `tasks.md` 第 6-11 项）的详细计划。
 
 ## 现状问题清单
 

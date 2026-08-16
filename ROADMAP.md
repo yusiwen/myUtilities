@@ -17,7 +17,7 @@ Potential features for future consideration, ordered by implementation priority.
 | 9 | `mu encode` / `mu cert` | ✅ Done (via `mu crypto` / `mu network`) |
 | 10 | `mu tail` — File tail / log follower | ⬜ Not implemented |
 | 11 | `mu port` — TCP connectivity check | ⬜ Not implemented |
-| 12 | `mu secret` — OS keyring credential storage | 📋 Planned (see [docs/keyring-module-plan.md](./docs/keyring-module-plan.md)) |
+| 12 | `mu secret` — OS keyring credential storage | 📋 Planned (see [docs/plan/keyring-module-plan.md](./docs/plan/keyring-module-plan.md)) |
 
 ## Proposed Features
 

@@ -403,7 +403,7 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 3 | `core/scip/index.go` + `index_test.go`（SCIP 加载 + 4 个查询 API） | ~350 行 |
 | 4 | `core/git/agent.go` 接入（3 新工具 + read_function 升级 + 降级） | ~200 行 |
 | 5 | `scip/` CLI + `git-config.json` scip 配置 + review 集成（`--no-scip`/`--refresh-scip`） | ~250 行 |
-| 6 | README 文档 + `docs/tasks.md` 更新 + 全项目编译/测试/lint | — |
+| 6 | README 文档 + `tasks.md` 更新 + 全项目编译/测试/lint | — |
 | 7 | Rust 支持：registry 加 rust + `generate()` 数据驱动 + 裸 `.gz` 解压 | ~80 行 |
 | 8 | Java 支持：`AssetName` 按名下载 + registry 启用 + `generate()` 适配 + 自动构建/fail-fast | ~120 行 |
 
@@ -420,7 +420,7 @@ github.com/sourcegraph/scip/bindings/go   SCIP protobuf 官方 Go 绑定
 | 首次 review 下载+索引延迟 | commit 缓存复用；verbose 打印进度；`--refresh-scip` 手动控制 |
 | 大仓 dirty 反复重索引 | 按 commit 缓存 + 仅 dirty 时重生成 working 索引；dirty 时按源文件 mtime 新鲜度决定是否重建 |
 | 行号↔offset 转换错误 | 每文件缓存行起始 offset 表，单元测试覆盖多字节字符（中文注释） |
-| 与 `docs/tree-sitter-wasm-plan.md` 重叠 | SCIP 方案 supersede 该文件中的 Option A/C（find_definition 目标），完成后可在该文档标注已由 SCIP 实现 |
+| 与 `tree-sitter-wasm-plan.md` 重叠 | SCIP 方案 supersede 该文件中的 Option A/C（find_definition 目标），完成后可在该文档标注已由 SCIP 实现 |
 
 ## 12. 实现进度
 

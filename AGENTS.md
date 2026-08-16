@@ -374,4 +374,4 @@ When making a new release:
 
 - The project uses Go 1.24 (see `go.mod`)
 - Cross-compilation is supported for multiple platforms (Linux, macOS, Windows, FreeBSD, MIPS)
-- The `docs/tasks.md` file contains a backlog of improvement tasks
+- The `docs/plan/tasks.md` file contains a backlog of improvement tasks
