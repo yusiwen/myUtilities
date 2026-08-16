@@ -1,38 +1,38 @@
-# mu fleet 模块计划（远程批量执行与部署）
+# mu fleet module plan (remote batch execution and deployment)
 
-## 一、不同场景的完整工作流
+## 1. Complete workflows for different scenarios
 
-### 场景 A：临时快速操作（单条命令，无需文件）
+### Scenario A: Quick ad-hoc operation (single command, no files)
 
 ```bash
 mu fleet run --hosts h1,h2 --command "systemctl restart nginx && systemctl status nginx"
 ```
 
-完整流程：
+Full flow:
 
-1. 控制器（MacBook）读取 `~/.config/mu/fleet-config.json`，获得 dispatcher URL 与 token。
-2. 控制器以一次 **multipart** 请求提交 job：`POST /api/fleet/jobs`，携带 JSON 元数据（`command` 文本、`targets: ["h1","h2"]`，无文件）。
-3. dispatcher 创建 job，并为每个目标主机生成一条 `run`（状态 `pending`）入队；返回 job id。
-4. h1、h2 上的 agent（`mu fleet agent`）各自轮询 `POST /api/fleet/agents/<name>/poll`，领取属于自己的 `pending` run。
-5. agent 复用 `internal/core/runner`（headless plain 模式）执行 command，边执行边分块回传输出：`POST /api/fleet/agents/<name>/runs/<id>/output`。
-6. 执行结束 agent 上报结果：`POST .../complete`（成功/失败 + 退出码 + 耗时）。
-7. 控制器带 `--watch` 时，以约 1s 间隔轮询 `GET /api/fleet/jobs/<id>`，实时刷新各主机输出；无 `--watch` 则一次性返回当前状态。
-8. 结束打印每主机汇总（✓/✗ + 耗时），任一失败返回非零退出码。
+1. The controller (MacBook) reads `~/.config/mu/fleet-config.json` for the dispatcher URL and token.
+2. The controller submits the job in one **multipart** request: `POST /api/fleet/jobs`, carrying JSON metadata (the `command` text, `targets: ["h1","h2"]`, no files).
+3. The dispatcher creates the job and enqueues one `run` (state `pending`) per target host; it returns the job id.
+4. The agents on h1/h2 (`mu fleet agent`) each poll `POST /api/fleet/agents/<name>/poll` and claim their own `pending` run.
+5. The agent executes the command via `internal/core/runner` (headless plain mode), streaming output back in chunks: `POST /api/fleet/agents/<name>/runs/<id>/output`.
+6. On completion the agent reports the result: `POST .../complete` (success/failure + exit code + elapsed time).
+7. With `--watch` the controller polls `GET /api/fleet/jobs/<id>` every ~1s to refresh each host's output live; without `--watch` it returns the current state once.
+8. A per-host summary is printed (✓/✗ + elapsed time); any failure yields a non-zero exit code.
 
-### 场景 B：带归档的部署（文件传输 + 自动解压）
+### Scenario B: Deployment with an archive (file transfer + auto-extract)
 
 ```bash
-./build.sh                                    # 本地构建产出 dist/app.tar.gz
+./build.sh                                    # local build produces dist/app.tar.gz
 mu fleet run --hosts h1,h2 --file deploy.yaml \
   --files dist/app.tar.gz --var version=1.2
 ```
 
-完整流程：
+Full flow:
 
-1. 控制器把本地 `dist/app.tar.gz` 作为 multipart 文件段随 job 一次上传到 dispatcher；dispatcher 计算并记录 sha256，落盘到 `~/.cache/mu/fleet/jobs/<id>/files/`。
-2. agent 轮询领取 run 后，先下载任务文件：`GET /api/fleet/agents/<name>/runs/<id>/files/app.tar.gz`，校验 sha256。
-3. agent 建立任务工作目录，把文件放入并**自动解压 `.tar.gz`**（`.zip` 同理）。
-4. agent 以该工作目录为 recipe 的 workdir 执行 `deploy.yaml`，相对路径天然落在任务目录内：
+1. The controller uploads the local `dist/app.tar.gz` as a multipart file segment with the job; the dispatcher computes and records the sha256, storing it under `~/.cache/mu/fleet/jobs/<id>/files/`.
+2. After claiming a run, the agent downloads the task files: `GET /api/fleet/agents/<name>/runs/<id>/files/app.tar.gz`, verifying the sha256.
+3. The agent creates a job work directory, places the file in it, and **auto-extracts `.tar.gz`** (`.zip` works the same way).
+4. The agent runs `deploy.yaml` with that work directory as the recipe workdir, so relative paths naturally resolve inside the task directory:
    ```yaml
    tasks:
      install:
@@ -41,92 +41,92 @@ mu fleet run --hosts h1,h2 --file deploy.yaml \
        depends: [install]
        command: systemctl restart app
    ```
-5. 输出分块回传、结果上报，与场景 A 一致；任务目录用完即弃，不污染主机。
-6. 汇总打印各主机部署结果。
+5. Output chunking and result reporting match scenario A; the task directory is discarded after use and never pollutes the host.
+6. A summary of each host's deployment result is printed.
 
-### 场景 C：批量 + 多变量 + 部分失败
+### Scenario C: Batch + multiple variables + partial failure
 
 ```bash
 mu fleet run --hosts prod-web-1,prod-web-2,prod-db-1 --file rollout.yaml \
   --var version=2.0 --var registry=ghcr.io/me/app --watch
 ```
 
-完整流程：
+Full flow:
 
-1. 三台主机各自并行领取 run（互不阻塞）。
-2. `{{.version}}`、`{{.registry}}` 等模板变量在**每台 agent** 上解析（复用 `core/runner` 的 recipe 模板能力）。
-3. 某台主机任务失败时，**该主机**按 recipe 的失败策略停止（默认即停，`continue_on_error`/`--keep-going` 例外），其余主机继续执行。
-4. dispatcher 记录每台 run 的状态；控制器 `--watch` 下汇总表按主机列出，标出部分失败。
+1. All three hosts claim runs in parallel (no blocking).
+2. Template variables like `{{.version}}` and `{{.registry}}` are resolved on **each agent** (reusing `core/runner`'s recipe templating).
+3. If one host's task fails, **that host** stops per the recipe's failure policy (default stop; `continue_on_error` / `--keep-going` excepted), while the other hosts continue.
+4. The dispatcher records each run's state; with `--watch` the summary lists per-host results and highlights the partial failure.
 
-### 场景 D：离线主机补跑（poll 模型的核心价值）
+### Scenario D: Offline host catch-up (the core value of the poll model)
 
-1. 提交 job 时 `prod-db-1` 掉线 → dispatcher 仍为它保留 `pending` run（不丢失）。
-2. `prod-db-1` 上线后，agent 轮询领取该 run → 下载文件 → 执行 → 上报。
-3. 之后控制器执行 `mu fleet status <job-id>`，仍能看到该主机的完整结果与历史输出（BoltDB 持久化）。
+1. If `prod-db-1` is offline when the job is submitted, the dispatcher still keeps its `pending` run (nothing is lost).
+2. When `prod-db-1` comes back online, the agent polls, claims the run, downloads files, executes, and reports.
+3. `mu fleet status <job-id>` later still shows that host's full result and historical output (persisted in BoltDB).
 
-### 场景 E：状态与运维
+### Scenario E: Status and operations
 
 ```bash
-mu fleet hosts            # 在线 agent 列表（心跳超时自动判离线）
-mu fleet status <job-id>  # 各主机任务状态与输出（含历史）
-mu fleet jobs             # 最近任务列表
+mu fleet hosts            # online agent list (offline after heartbeat timeout)
+mu fleet status <job-id>  # per-host task status and output (including history)
+mu fleet jobs             # recent job list
 ```
 
-## 二、背景与动机
+## 2. Background and motivation
 
-`mu run --file <recipe.yaml>` 把单机任务编排做成了「本地 mini-CI」，但部署通常需要**批量在多个主机上执行**。本模块提供一个类 ansible 的能力：由一台机器（如 MacBook）发起远程批量执行与部署。
+`mu run --file <recipe.yaml>` turned single-machine task orchestration into a "local mini-CI", but deployments usually need to **execute on multiple hosts in batch**. This module provides an ansible-like capability: one machine (e.g. a MacBook) initiates remote batch execution and deployment.
 
-设计取舍：
+Design trade-offs:
 
-- **模型 A（dispatcher + agent poll）**，而非 ansible 的 push 直连：
-  - agent 无需开放入站端口（适合 homelab / NAT）；
-  - 发出的任务**不依赖发起者在线**（发完可断开，agent 继续跑，回来查结果）；
-  - 临时离线的主机上线后能补跑；
-  - 单点鉴权。
-- 大量复用已有资产：`core/runner`（recipe 执行引擎）、`core/wol/agent.go`（注册 + 退避重试模式）、`core/store`（BoltDB）、模块配置约定。
+- **Model A (dispatcher + agent poll)** instead of ansible-style push/direct connection:
+  - agents need no inbound ports (suitable for homelab / NAT);
+  - dispatched tasks **do not depend on the initiator staying online** (disconnect after submitting; agents keep running; check results when back);
+  - temporarily offline hosts catch up when they return;
+  - single-point authentication.
+- Heavy reuse of existing assets: `core/runner` (recipe execution engine), `core/wol/agent.go` (registration + backoff retry pattern), `core/store` (BoltDB), module config conventions.
 
-## 三、总体架构
+## 3. Overall architecture
 
 ```
 MacBook (controller) ──HTTP──▶ mu fleet serve (dispatcher)
                                     │  └─ BoltDB: agents / jobs / runs / run_output
-                                    │  └─ 文件目录: ~/.cache/mu/fleet/jobs/<id>/files/
+                                    │  └─ files: ~/.cache/mu/fleet/jobs/<id>/files/
                     ┌───────────────┼───────────────┐
                  h1 agent        h2 agent        h3 agent
-              (mu fleet agent)  (poll 领取 + 本地执行)
+              (mu fleet agent)  (poll claim + local execute)
 ```
 
-数据流向：
+Data flow:
 
-- 控制器 → dispatcher：提交 job（multipart，含文件）、查询状态/输出。
-- dispatcher → agent：poll 返回待执行 run（含 recipe/command、vars、文件清单）。
-- agent → dispatcher：注册、输出分块、完成结果、心跳（poll 即心跳）。
-- agent → dispatcher 文件下载：领取 run 后按需拉取任务文件。
+- Controller → dispatcher: submit job (multipart, may include files), query status/output.
+- Dispatcher → agent: poll returns a pending run (recipe/command, vars, file manifest).
+- Agent → dispatcher: register, output chunks, completion result, heartbeat (poll doubles as heartbeat).
+- Agent → dispatcher file download: pull task files after claiming a run.
 
-## 四、目录结构
+## 4. Directory structure
 
 ```
 internal/core/fleet/
-  ├── types.go        Agent / Job / JobRun / 状态常量
-  ├── store.go        BoltDB 持久化（agents / jobs / runs / run_output）
+  ├── types.go        Agent / Job / JobRun / state constants
+  ├── store.go        BoltDB persistence (agents / jobs / runs / run_output)
   ├── dispatcher.go   dispatcher HTTP handlers + RegisterHandlers
-  ├── auth.go         X-Auth-Token 中间件
-  ├── agent.go        agent 循环（register → poll → 执行 → 上报）
-  ├── client.go       controller / agent 的 HTTP 客户端
-  ├── transfer.go     文件上传下载 + 归档解压（.tar.gz / .zip）
-  └── *_test.go       单元 + 集成测试
+  ├── auth.go         X-Auth-Token middleware
+  ├── agent.go        agent loop (register → poll → execute → report)
+  ├── client.go       HTTP client for controller / agent
+  ├── transfer.go     file upload/download + archive extraction (.tar.gz / .zip)
+  └── *_test.go       unit + integration tests
 
-internal/fleet/       CLI wrapper（仅解析 + 调用 core）
-  ├── options.go      子命令与选项定义
-  ├── command.go      Run() 实现
-  └── config.go       fleet-config.json 加载/保存
+internal/fleet/       CLI wrapper (parse only + call core)
+  ├── options.go      subcommand and option definitions
+  ├── command.go      Run() implementations
+  └── config.go       fleet-config.json load/save
 
-cmd/mu/myutilities.go  注册 Fleet 顶级命令
+cmd/mu/myutilities.go  register the Fleet top-level command
 ```
 
-核心逻辑全部在 `internal/core/fleet`，`internal/fleet` 只做 CLI 包装（遵循项目约定）。
+All core logic lives in `internal/core/fleet`; `internal/fleet` is only a CLI wrapper (following project conventions).
 
-## 五、CLI 设计
+## 5. CLI design
 
 ```
 mu fleet serve [--port 8890]
@@ -137,90 +137,90 @@ mu fleet status <job-id> [--watch]
 mu fleet jobs [--limit 20]
 ```
 
-规则：
+Rules:
 
-- `run` 的 `--file` 与 `--command` 互斥（必选其一）。
-- `--hosts` 必填，逗号分隔或重复。
-- `--files` 可重复；`--var` 可重复。
-- 配置：`~/.config/mu/fleet-config.json`，字段：`server`、`token`、`hostname`、`groups`、`poll_interval`、`port`、`db_path`、`data_dir`；支持 `--config-dir` 覆盖目录；含密钥 → 文件权限 `0600`。
+- `run`'s `--file` and `--command` are mutually exclusive (exactly one required).
+- `--hosts` is required, comma-separated or repeated.
+- `--files` is repeatable; `--var` is repeatable.
+- Config: `~/.config/mu/fleet-config.json`, fields: `server`, `token`, `hostname`, `groups`, `poll_interval`, `port`, `db_path`, `data_dir`; `--config-dir` overrides the base directory; contains secrets → file permission `0600`.
 
-## 六、数据模型与存储
+## 6. Data model and storage
 
 ```
 Agent   { hostname, groups, lastSeen }
-Job     { id, recipe 文本 | command, vars, targets, files[] {name,size,sha256}, createdAt }
+Job     { id, recipe text | command, vars, targets, files[] {name,size,sha256}, createdAt }
 JobRun  { jobID+hostname, state(pending/running/succeeded/failed), startedAt, finishedAt, error }
 ```
 
-BoltDB buckets：
+BoltDB buckets:
 
 | Bucket | Key → Value |
 |---|---|
-| `agents` | hostname → Agent 序列化 |
-| `jobs` | job id → Job 序列化 |
-| `runs` | `<jobID>/<hostname>` → JobRun 元数据 |
-| `run_output` | `<jobID>/<hostname>` → 累积输出 |
+| `agents` | hostname → serialized Agent |
+| `jobs` | job id → serialized Job |
+| `runs` | `<jobID>/<hostname>` → JobRun metadata |
+| `run_output` | `<jobID>/<hostname>` → accumulated output |
 
-- **输出持久化**：agent 分块回传（约每 100ms 或每 N 行一批），dispatcher 每批 append 到 `run_output`，避免逐行写库。每 run 输出默认截断 1MB（可配置），超限保留尾部并标记 `[truncated]`，防止无界膨胀。
-- dispatcher 重启后：agents/jobs/runs/run_output 全部恢复，任务不丢、历史输出可查。
-- job 文件落盘 `~/.cache/mu/fleet/jobs/<id>/files/`，按任务隔离。
-- 离线 agent 的 pending run **保持等待**（供补跑），agent 的 Online 状态由 lastSeen 动态推导。
+- **Output persistence**: agents report in chunks (roughly every 100ms or every N lines); the dispatcher appends each batch to `run_output` to avoid per-line writes. Each run's output is truncated at 1MB by default (configurable); past the limit the tail is kept and marked `[truncated]` to prevent unbounded growth.
+- After a dispatcher restart: agents/jobs/runs/run_output are all restored — tasks are not lost and historical output is queryable.
+- Job files are stored under `~/.cache/mu/fleet/jobs/<id>/files/`, isolated per task.
+- Offline agents' pending runs **stay waiting** (for catch-up); an agent's Online state is derived dynamically from lastSeen.
 
-## 七、Dispatcher API（`X-Auth-Token` 鉴权）
+## 7. Dispatcher API (`X-Auth-Token` auth)
 
-| Method | Path | 用途 |
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/fleet/jobs` | controller 提交 job（multipart：`job` JSON 字段 + 若干 `file` 段） |
-| GET | `/api/fleet/jobs` | 最近任务列表 |
-| GET | `/api/fleet/jobs/{id}` | 查 job 状态与各主机输出 |
-| POST | `/api/fleet/register` | agent 注册（hostname/groups） |
-| POST | `/api/fleet/agents/{name}/poll` | agent 领取 pending run + 心跳 |
-| POST | `/api/fleet/agents/{name}/runs/{id}/output` | 上报输出块 |
-| POST | `/api/fleet/agents/{name}/runs/{id}/complete` | 上报完成结果 |
-| GET | `/api/fleet/agents/{name}/runs/{id}/files/{name}` | agent 下载任务文件 |
-| GET | `/api/fleet/agents` | 在线 agent 列表 |
+| POST | `/api/fleet/jobs` | Controller submits a job (multipart: `job` JSON field + `file` segments) |
+| GET | `/api/fleet/jobs` | Recent job list |
+| GET | `/api/fleet/jobs/{id}` | Job status and per-host output |
+| POST | `/api/fleet/register` | Agent registration (hostname/groups) |
+| POST | `/api/fleet/agents/{name}/poll` | Agent claims a pending run + heartbeat |
+| POST | `/api/fleet/agents/{name}/runs/{id}/output` | Reports an output chunk |
+| POST | `/api/fleet/agents/{name}/runs/{id}/complete` | Reports completion result |
+| GET | `/api/fleet/agents/{name}/runs/{id}/files/{name}` | Agent downloads a task file |
+| GET | `/api/fleet/agents` | Online agent list |
 
-job 状态派生规则：全部 succeeded → succeeded；任一 failed → failed；否则 pending/running。
+Job state derivation: all runs `succeeded` → `succeeded`; any `failed` → `failed`; otherwise `pending`/`running`.
 
-## 八、Agent 生命周期
+## 8. Agent lifecycle
 
-1. **注册**：`POST /api/fleet/register`，带 hostname/groups；失败按退避重试（复用 `core/wol` 的 `agentMaxRetries` 模式）。
-2. **循环**：
-   - `poll`（即心跳，更新 dispatcher 侧 lastSeen）：有 `pending` run 则领取；无则 sleep `poll_interval`。
-   - 领取后：下载任务文件 → 校验 sha256 → 解压归档 → 在任务工作目录执行（recipe 用 `RunRecipe`，command 用 `Run`，均走 core/runner plain 模式）→ 边跑边 POST 输出块 → 结束后 POST complete。
-3. 断线重连与心跳超时：dispatcher 按 lastSeen 超时判离线（默认 3×poll_interval）。
+1. **Register**: `POST /api/fleet/register` with hostname/groups; retry with backoff on failure (reusing `core/wol`'s `agentMaxRetries` pattern).
+2. **Loop**:
+   - `poll` (doubles as heartbeat, updates lastSeen on the dispatcher side): if a `pending` run exists, claim it; otherwise sleep `poll_interval`.
+   - After claiming: download task files → verify sha256 → extract archives → execute in the task work directory (recipe via `RunRecipe`, command via `Run`, both in core/runner plain mode) → POST output chunks while running → POST complete when finished.
+3. Reconnection and heartbeat timeout: the dispatcher marks agents offline based on lastSeen timeout (default 3×poll_interval).
 
-## 九、文件传输与归档解压
+## 9. File transfer and archive extraction
 
-- 控制器 `--files` 一次 multipart 上传；dispatcher 记录 sha256、落盘。
-- agent 下载后校验 sha256，放入任务工作目录。
-- `.tar.gz` / `.zip` 自动解压（类似 ansible `unarchive`）；其余文件原样放置。
-- recipe 以任务工作目录为默认 workdir；任务目录用完即弃。
+- The controller uploads all `--files` in one multipart request; the dispatcher records sha256 and stores them on disk.
+- The agent verifies the sha256 after download and places the files in the task work directory.
+- `.tar.gz` / `.zip` are auto-extracted (like ansible `unarchive`); other files are placed as-is.
+- Recipes use the task work directory as their default workdir; the directory is discarded after use.
 
-## 十、鉴权与安全
+## 10. Auth and security
 
-- 共享 token：所有请求带 `X-Auth-Token`（沿用 WOL 模式）；`fleet-config.json` 权限 `0600`。
-- **风险说明**：agent 会执行控制器提交的任意命令 = RCE 面，仅适用于受信局域网；后续可升级 mTLS / 按 agent 独立凭据。
+- Shared token: every request carries `X-Auth-Token` (same pattern as WOL); `fleet-config.json` permission `0600`.
+- **Risk note**: an agent executes arbitrary commands submitted by the controller = RCE surface; only suitable for a trusted LAN. Future hardening could use mTLS / per-agent credentials.
 
-## 十一、core/runner 小改动
+## 11. Small core/runner changes
 
-- plain 输出目前直接写 `os.Stdout`。给 `CommandRunner` 增加可注入的 `io.Writer`（默认 os.Stdout），供 agent 把输出 tee 到分块回传通道；TTY 显示路径不受影响。
-- recipe 解析增加 `ParseRecipe([]byte)`，供 agent 直接解析下发的 recipe 文本（免临时文件）。
-- `RunRecipe` 已返回 `[]TaskResult`，供 agent 汇总。
+- Plain output currently writes directly to `os.Stdout`. Add an injectable `io.Writer` to `CommandRunner` (default `os.Stdout`) so the agent can tee output to a chunked report channel; the TTY display path is unaffected.
+- Add `ParseRecipe([]byte)` to recipe parsing so the agent can parse dispatched recipe text directly (no temp files).
+- `RunRecipe` already returns `[]TaskResult` for the agent to aggregate.
 
-## 十二、测试计划
+## 12. Test plan
 
-- 单元：`store`（CRUD/输出 append/截断/Online 推导）、dispatcher handlers（`httptest`，含鉴权与文件上传下载）、`transfer`（归档解压）、agent 循环（fake dispatcher）、runner OutputWriter。
-- 集成：进程内起 dispatcher + agent + controller client，跑一个小 recipe 与一个带 `--files` 的任务，断言各主机结果、输出落库、文件落地与解压。
-- 保持现有 264 个测试基线绿。
+- Unit: `store` (CRUD / output append / truncation / Online derivation), dispatcher handlers (`httptest`, including auth and file upload/download), `transfer` (archive extraction), agent loop (fake dispatcher), runner OutputWriter.
+- Integration: spin up an in-process dispatcher + agent + controller client, run a small recipe and a task with `--files`, assert per-host results, output persisted to DB, files landed and extracted.
+- Keep the existing baseline of 264 tests green.
 
-## 十三、文档更新
+## 13. Documentation updates
 
-- `README.md` 新增准确的 `### fleet` 段（命令用法 + 工作流示例）。
-- `AGENTS.md` 新增 core/fleet 与 command/fleet 条目。
-- `CODEBASE.md` 目录树补充。
+- `README.md` gains an accurate `### fleet` section (command usage + workflow examples).
+- `AGENTS.md` gains core/fleet and command/fleet entries.
+- `CODEBASE.md` directory tree updated.
 
-## 十四、分阶段
+## 14. Phases
 
-- **Phase 1（本计划）**：上述全部——serve/agent/run/hosts/status/jobs + 文件传输与自动解压 + token 鉴权 + BoltDB（含输出持久化）+ 轮询式输出（`--watch`）。
-- **Phase 2**：SSE/WebSocket 实时输出流、inventory 分组别名（`--hosts 组名`）、gateway 任务/主机 Web 页、mTLS。
+- **Phase 1 (this plan)**: everything above — serve/agent/run/hosts/status/jobs + file transfer and auto-extract + token auth + BoltDB (including output persistence) + polled output (`--watch`).
+- **Phase 2**: SSE/WebSocket real-time output streaming, inventory group aliases (`--hosts groupname`), gateway task/host web pages, mTLS.
