@@ -1,39 +1,39 @@
-# mu metrics 模块完整计划
+# mu metrics module plan
 
-## 总体架构
+## Overall architecture
 
 ```
 mu metrics
-  ├── serve    HTTP server（接收 Agent 上报 + 查询 API + 前端）
-  ├── agent    采集 daemon（按间隔抓取并写入本地 bbolt 或推送到远端 server）
-  └── compact  手动压缩 / 清理过期数据
+  ├── serve    HTTP server (receives agent reports + query API + frontend)
+  ├── agent    collection daemon (collects on an interval, writes to local bbolt or pushes to a remote server)
+  └── compact  manual compaction / expiry of old data
 ```
 
-### 两种角色
+### Two roles
 
-- **`mu metrics serve`** — 启动 HTTP server，可选 `--agent` 参数同时启动本地采集（嵌入模式，单机用）
-- **`mu metrics agent`** — 采集本机指标，有 `--server` 则推送到远端 server，否则写入本地 bbolt
+- **`mu metrics serve`** — starts the HTTP server; optional `--agent` also starts local collection (embedded mode, for single-machine use)
+- **`mu metrics agent`** — collects local metrics; with `--server` it pushes to a remote server, otherwise it writes to local bbolt
 
-## 目录结构
+## Directory structure
 
 ```
 core/metrics/
-  ├── model.go           Metric / DataPoint / WriteRequest 类型
-  ├── tsdb.go            bbolt 写入 / 查询 / 压缩
+  ├── model.go           Metric / DataPoint / WriteRequest types
+  ├── tsdb.go            bbolt write / query / compact
   ├── tsdb_test.go
   └── collector/
-      ├── collector.go   Collector 接口 + go-metrics Registry 集成
-      └── os.go          gopsutil → Gauge 更新
+      ├── collector.go   Collector interface + go-metrics Registry integration
+      └── os.go          gopsutil → Gauge updates
 
 metrics/
-  ├── command.go         mu metrics serve / agent 入口
-  ├── options.go         参数结构体
-  └── config.go          metrics-config.json 加载
+  ├── command.go         mu metrics serve / agent entry points
+  ├── options.go         option structs
+  └── config.go          metrics-config.json loading
 ```
 
 ---
 
-## 1. 核心数据模型 — `core/metrics/model.go`
+## 1. Core data model — `core/metrics/model.go`
 
 ```go
 type DataPoint struct {
@@ -50,58 +50,58 @@ type Metric struct {
 type WriteRequest struct {
     Metric    string            `json:"metric"`
     Tags      map[string]string `json:"tags"`
-    Timestamp int64             `json:"time,omitempty"` // UnixNano，为空时 server 端取当前时间
+    Timestamp int64             `json:"time,omitempty"` // UnixNano; when empty the server uses the current time
     Value     float64           `json:"value"`
 }
 ```
 
 ---
 
-## 2. TSDB 引擎 — `core/metrics/tsdb.go`
+## 2. TSDB engine — `core/metrics/tsdb.go`
 
-使用 `go.etcd.io/bbolt`（已从 `coreos/bbolt` 迁移完成），数据库文件独立。
+Uses `go.etcd.io/bbolt` (migration from `coreos/bbolt` already complete), with a dedicated database file.
 
-### bbolt Key 设计
+### bbolt Key design
 
 ```
 Bucket: "series"
-  Key: <metric_name>\x00<fnv64a(sorted_tags)>\x00<timestamp_be(8字节)>
-  Value: <float64bits(value)(8字节)>
+  Key: <metric_name>\x00<fnv64a(sorted_tags)>\x00<timestamp_be(8 bytes)>
+  Value: <float64bits(value)(8 bytes)>
 ```
 
-- `fnv64a(sorted_tags)` = FNV-1a 64bit hash of sorted `k1=v1,k2=v2` → 相同的 metric+tags 聚簇存储
-- `timestamp_be` = big-endian int64 UnixNano → 有序，支持 `Cursor.Seek()` 范围扫描
-- 单条记录 ~40 字节，百万级数据量对 bbolt 无压力
+- `fnv64a(sorted_tags)` = FNV-1a 64bit hash of sorted `k1=v1,k2=v2` → identical metric+tags cluster together
+- `timestamp_be` = big-endian int64 UnixNano → ordered, supports `Cursor.Seek()` range scans
+- A single record is ~40 bytes; million-level data volumes are no problem for bbolt
 
-### 接口
+### Interface
 
 ```go
 type DB struct { db *bolt.DB }
 
 func Open(path string) (*DB, error)
 
-// Write 写入单个数据点
+// Write writes a single data point
 func (db *DB) Write(name string, tags map[string]string, ts time.Time, value float64) error
 
-// WriteBatch 批量写入（agent 每次 flush 用）
+// WriteBatch writes in batch (used by the agent on each flush)
 func (db *DB) WriteBatch(metrics []Metric) error
 
-// Query 按 metric + tags + 时间范围查询
+// Query queries by metric + tags + time range
 func (db *DB) Query(name string, tags map[string]string, from, to time.Time, limit int) ([]Metric, error)
 
-// ListMetrics 返回所有 metric 名称
+// ListMetrics returns all metric names
 func (db *DB) ListMetrics() ([]string, error)
 
-// Compact 删除 cutoff 之前的数据点（retention<=0 时跳过）
+// Compact deletes data points before cutoff (skipped when retention<=0)
 func (db *DB) Compact(retention time.Duration) error
 ```
 
-### Compact 实现策略
+### Compact implementation strategy
 
 ```go
 func (db *DB) Compact(retention time.Duration) error {
     if retention <= 0 {
-        return nil  // 永久保留
+        return nil  // keep forever
     }
     cutoff := time.Now().Add(-retention)
     cutoffBE := uint64ToBE(uint64(cutoff.UnixNano()))
@@ -110,8 +110,8 @@ func (db *DB) Compact(retention time.Duration) error {
         b := tx.Bucket([]byte("series"))
         c := b.Cursor()
         for k, _ := c.First(); k != nil; k, _ = c.Next() {
-            // Key 格式: <name>\x00<hash>\x00<timestamp_be(8字节)>
-            // timestamp_be 是最后 8 字节
+            // Key format: <name>\x00<hash>\x00<timestamp_be(8 bytes)>
+            // timestamp_be is the last 8 bytes
             ts := k[len(k)-8:]
             if bytes.Compare(ts, cutoffBE) < 0 {
                 if err := c.Delete(); err != nil {
@@ -128,7 +128,7 @@ func (db *DB) Compact(retention time.Duration) error {
 
 ## 3. Collector — `core/metrics/collector/`
 
-### Collector 接口
+### Collector interface
 
 ```go
 type Collector interface {
@@ -137,30 +137,30 @@ type Collector interface {
 }
 ```
 
-**go-metrics Registry 的角色**：Agent 进程内持有的一棵当前值树，每次采集 tick 更新所有 Gauge，然后 flush 到 bbolt。
+**Role of the go-metrics Registry**: a current-value tree held in the agent process; each collection tick updates all Gauges, then flushes to bbolt.
 
-### OS 指标采集清单 — `os.go`
+### OS metric collection list — `os.go`
 
-依赖 `github.com/shirou/gopsutil/v4`。
+Depends on `github.com/shirou/gopsutil/v4`.
 
-| Metric | Tags | 来源 |
-|--------|------|------|
+| Metric | Tags | Source |
+|--------|------|--------|
 | `cpu.used.percent` | — | gopsutil `cpu.Percent(0, false)` |
 | `cpu.per_cpu.percent` | `cpu=N` | gopsutil `cpu.Percent(0, true)` |
 | `memory.used.percent` | — | gopsutil `mem.VirtualMemory().UsedPercent` |
-| `memory.used.bytes` | — | 同上 `.Used` |
+| `memory.used.bytes` | — | same `.Used` |
 | `disk.used.percent` | `mount=/`, `device=sda1` | gopsutil `disk.Usage()` |
 | `disk.io.bytes` | `device=sda`, `direction=read/write` | gopsutil `disk.IOCounters()` |
 | `net.io.bytes` | `interface=eth0`, `direction=in/out` | gopsutil `net.IOCounters()` |
 | `load.1m` / `load.5m` / `load.15m` | — | gopsutil `load.Avg()` |
 
-采集时调用 gopsutil 获取值，然后更新 go-metrics Registry 中对应 `Gauge` / `GaugeFloat64`。
+At collection time gopsutil is called to get the values, then the corresponding `Gauge` / `GaugeFloat64` in the go-metrics Registry is updated.
 
 ---
 
-## 4. CLI 命令 — `metrics/`
+## 4. CLI commands — `metrics/`
 
-### 参数定义 — `options.go`
+### Option definitions — `options.go`
 
 ```go
 type ServeOptions struct {
@@ -171,14 +171,14 @@ type ServeOptions struct {
 }
 
 type AgentOptions struct {
-    Server   string `help:"Metrics server URL to report to." default:""`
-    Interval string `help:"Collect interval." default:"30s"`
-    Hostname string `help:"Override hostname for tags." default:""`
+    Server    string `help:"Metrics server URL to report to." default:""`
+    Interval  string `help:"Collect interval." default:"30s"`
+    Hostname  string `help:"Override hostname for tags." default:""`
     Retention string `help:"Local data retention (when no server)." default:"0"`
 }
 ```
 
-### 配置示例 — `metrics-config.json`
+### Example config — `metrics-config.json`
 
 ```json
 {
@@ -189,11 +189,11 @@ type AgentOptions struct {
 }
 ```
 
-- `"retention"` 支持格式：`"30d"`、`"7d"`、`"24h"`、`"90d"`。`"0"` 或不设置 = 永久保留。
-- `"hostname"` 可选，默认 `os.Hostname()`。Agent 会在每次写入时自动注入 `host` tag。
-- `server_url` 仅 agent 使用，为空时写入本地 bbolt。
+- `"retention"` supported formats: `"30d"`, `"7d"`, `"24h"`, `"90d"`. `"0"` or unset = keep forever.
+- `"hostname"` optional, defaults to `os.Hostname()`. The agent injects a `host` tag on every write.
+- `server_url` is used only by the agent; when empty it writes to local bbolt.
 
-### 主入口 — `command.go`
+### Main entry — `command.go`
 
 ```go
 type MetricsCmd struct {
@@ -202,49 +202,49 @@ type MetricsCmd struct {
 }
 ```
 
-注册到 `myutilities.go`：
+Registered in `myutilities.go`:
 ```go
 Metrics MetricsCmd `cmd:"" name:"metrics" help:"Time-series metrics collection and querying."`
 ```
 
-### 具体行为
+### Concrete behavior
 
 ```bash
-# 启动 server（HTTP API，接收 agent 上报 + 查询 + compact）
+# Start server (HTTP API, receives agent reports + query + compact)
 mu metrics serve --port 8096 --retention 30d
 
-# 启动 agent（采集本机指标 → 上报 server）
+# Start agent (collect local metrics → report to server)
 mu metrics agent --server http://metrics-server:8096 --interval 30s
 
-# 启动 agent+server 合一（嵌入模式，单机用）
+# Start agent+server combined (embedded mode, single-machine use)
 mu metrics serve --agent --interval 30s --retention 30d
 
-# 手动触发 compaction（不启动 agent/server）
+# Manually trigger compaction (without starting agent/server)
 mu metrics compact --retention 30d
 ```
 
 ---
 
-## 5. HTTP API — `serve` 模式
+## 5. HTTP API — `serve` mode
 
-| 端点 | 方法 | 说明 |
+| Endpoint | Method | Description |
 |------|------|------|
-| `/api/metrics` | `GET` | 列出所有 metric 名称 |
-| `/api/metrics/:name` | `GET` | 查询数据点 |
-| `/api/metrics/write` | `POST` | Agent 上报数据 |
+| `/api/metrics` | `GET` | List all metric names |
+| `/api/metrics/:name` | `GET` | Query data points |
+| `/api/metrics/write` | `POST` | Agent reports data |
 
-### 查询 `GET /api/metrics/:name`
+### Query `GET /api/metrics/:name`
 
-参数：
+Parameters:
 
-| 参数 | 说明 | 示例 |
+| Param | Description | Example |
 |------|------|------|
-| `from` | 起始时间（RFC3339） | `2024-01-01T00:00:00Z` |
-| `to` | 结束时间 | `2024-01-02T00:00:00Z` |
+| `from` | Start time (RFC3339) | `2024-01-01T00:00:00Z` |
+| `to` | End time | `2024-01-02T00:00:00Z` |
 | `tags` | URL encoded `k=v,k=v` | `host%3DHostA,cpu%3D0` |
-| `limit` | 最大返回点数 | `1000` |
+| `limit` | Max points returned | `1000` |
 
-响应：
+Response:
 
 ```json
 {
@@ -257,13 +257,13 @@ mu metrics compact --retention 30d
 }
 ```
 
-### 列出所有 metrics `GET /api/metrics`
+### List all metrics `GET /api/metrics`
 
 ```json
 ["cpu.used.percent", "memory.used.bytes", "disk.used.percent"]
 ```
 
-### Agent 上报 `POST /api/metrics/write`
+### Agent report `POST /api/metrics/write`
 
 ```json
 [
@@ -281,12 +281,12 @@ mu metrics compact --retention 30d
 ]
 ```
 
-- `time` 可选，为空时 server 取当前时间
-- `host` tag 由 Agent 自动注入，默认为 `os.Hostname()`，可通过 `--hostname` 或配置文件覆盖
+- `time` is optional; when empty the server uses the current time
+- The `host` tag is injected automatically by the agent, defaulting to `os.Hostname()`, overridable via `--hostname` or the config file
 
 ---
 
-## 6. Agent 采集循环
+## 6. Agent collection loop
 
 ```go
 func (a *Agent) Run(ctx context.Context) error {
@@ -299,7 +299,7 @@ func (a *Agent) Run(ctx context.Context) error {
     ticker := time.NewTicker(interval)
     defer ticker.Stop()
 
-    // 首次采集
+    // first collection
     a.collectAndFlush(ctx, registry, collectors)
 
     for {
@@ -315,12 +315,12 @@ func (a *Agent) Run(ctx context.Context) error {
 func (a *Agent) collectAndFlush(ctx context.Context, r metrics.Registry, collectors []Collector) {
     ts := time.Now()
 
-    // 1. 采集 → 更新 go-metrics Gauges
+    // 1. collect → update go-metrics Gauges
     for _, c := range collectors {
         c.Collect(r)
     }
 
-    // 2. flush 到 bbolt 或远端 server
+    // 2. flush to bbolt or remote server
     var batch []Metric
     r.Each(func(name string, i interface{}) {
         switch m := i.(type) {
@@ -347,9 +347,9 @@ func (a *Agent) collectAndFlush(ctx context.Context, r metrics.Registry, collect
 }
 ```
 
-### Server 推送失败处理
+### Server push failure handling
 
-当 agent 配置了 `server_url` 推送到远端 server 时，如果 server 不可达，采用**指数退避重试 + 本地缓存**策略：
+When the agent is configured with `server_url` to push to a remote server and that server is unreachable, it uses an **exponential backoff retry + local cache** strategy:
 
 ```go
 const maxRetries = 3
@@ -377,12 +377,12 @@ func (a *Agent) pushToServer(ctx context.Context, batch []Metric) {
         resp, err := http.Post(url, "application/json", bytes.NewReader(data))
         if err == nil {
             resp.Body.Close()
-            return // 推送成功
+            return // push succeeded
         }
         log.Printf("Push to server failed (attempt %d/%d): %v", attempt+1, maxRetries, err)
     }
 
-    // 最终失败 → 写入本地 bbolt 缓存，避免数据丢失
+    // final failure → write to local bbolt cache to avoid data loss
     log.Printf("Server unreachable, caching locally")
     if a.cfg.tsdb != nil {
         if err := a.cfg.tsdb.WriteBatch(batch); err != nil {
@@ -392,42 +392,42 @@ func (a *Agent) pushToServer(ctx context.Context, batch []Metric) {
 }
 ```
 
-**行为：**
+**Behavior:**
 
-| 场景 | 结果 |
+| Scenario | Result |
 |------|------|
-| Server 正常 | 推送到 server，不写本地 |
-| Server 临时故障 | 退避重试 3 次（1s → 2s → 4s） |
-| Server 长期不可达 | 回退写入本地 bbolt，数据不丢 |
-| Server 恢复后 agent 下次推送 | 恢复 online 模式，直接推 server |
-| 无 server（纯本地模式） | 每次直接写入本地 bbolt |
+| Server healthy | Push to server, no local write |
+| Server transient failure | Backoff retry 3 times (1s → 2s → 4s) |
+| Server unreachable long-term | Falls back to local bbolt, no data loss |
+| Server recovers | Next push returns to online mode, pushes directly |
+| No server (pure local mode) | Writes directly to local bbolt each time |
 
-### Agent 自动注入 `host` tag
+### Agent auto-injected `host` tag
 
-- 默认值：`os.Hostname()` 自动获取
-- 可覆盖：`--hostname my-custom-name` 或 `metrics-config.json` 中的 `hostname` 字段
-- 写入时 agent 在每一条数据的 tags 中注入 `host:<hostname>`
+- Default: `os.Hostname()` automatically
+- Overridable: `--hostname my-custom-name` or the `hostname` field in `metrics-config.json`
+- On write the agent injects `host:<hostname>` into every data point's tags
 
-### 查询时区分主机
+### Distinguishing hosts at query time
 
 ```bash
-# HostA 的所有 CPU 指标
+# All CPU metrics for HostA
 GET /api/metrics/cpu.used.percent?tags=host%3DHostA
 
-# 所有主机的 CPU 指标
+# CPU metrics for all hosts
 GET /api/metrics/cpu.used.percent
 
-# HostA 的 0 号 CPU
+# HostA's CPU 0
 GET /api/metrics/cpu.used.percent?tags=host%3DHostA,cpu%3D0
 ```
 
-bbolt key 中的 `fnv64a(sorted_tags)` 因为包含 `host`，不同主机的数据自动进入不同的 key 空间，查询时按 `metric_name + tags_hash` 前缀扫描即可区分。
+Because `fnv64a(sorted_tags)` in the bbolt key includes `host`, data from different hosts automatically lands in different key spaces; queries scan by the `metric_name + tags_hash` prefix to distinguish them.
 
 ---
 
-## 7. Compaction（数据过期）
+## 7. Compaction (data expiry)
 
-### 配置
+### Configuration
 
 ```json
 {
@@ -435,16 +435,16 @@ bbolt key 中的 `fnv64a(sorted_tags)` 因为包含 `host`，不同主机的数�
 }
 ```
 
-- `"0"`、`""`、不设置 → 永久保存
-- `"30d"` → 保留 30 天
-- `"7d"` → 保留 7 天
-- `"24h"` → 保留 24 小时
+- `"0"`, `""`, or unset → keep forever
+- `"30d"` → keep 30 days
+- `"7d"` → keep 7 days
+- `"24h"` → keep 24 hours
 
-### 自动触发
+### Automatic trigger
 
-Agent 或 Server 启动时执行一次 `Compact(retention)`。之后每小时自动执行一次。`Compact(0)` 不做任何操作（永久保存）。
+A `Compact(retention)` runs once when the Agent or Server starts. Afterwards it runs automatically every hour. `Compact(0)` does nothing (permanent retention).
 
-### 手动触发
+### Manual trigger
 
 ```bash
 mu metrics compact --retention 30d
@@ -452,141 +452,141 @@ mu metrics compact --retention 30d
 
 ---
 
-## 8. 数据文件路径
+## 8. Data file paths
 
-- **数据库文件**：`~/.local/share/mu/metrics/metrics.db`
-- **配置文件**：`~/.config/mu/metrics-config.json`
-
----
-
-## 9. 新增依赖
-
-```
-go.etcd.io/bbolt v1.3.11         （已完成迁移）
-github.com/rcrowley/go-metrics    → 内存指标 Registry
-github.com/shirou/gopsutil/v4     → OS 指标采集
-```
+- **Database file**: `~/.local/share/mu/metrics/metrics.db`
+- **Config file**: `~/.config/mu/metrics-config.json`
 
 ---
 
-## 10. 实现顺序
+## 9. New dependencies
 
-| 阶段 | 内容 | 预计改动量 |
+```
+go.etcd.io/bbolt v1.3.11         (migration complete)
+github.com/rcrowley/go-metrics    → in-memory metric Registry
+github.com/shirou/gopsutil/v4     → OS metric collection
+```
+
+---
+
+## 10. Implementation order
+
+| Phase | Content | Estimated changes |
 |------|------|-----------|
-| 1 | `core/metrics/model.go` + `tsdb.go`（Write/Query/Compact/ListMetrics） | ~300 行 |
-| 2 | `core/metrics/collector/`（collector.go + os.go，go-metrics 集成） | ~200 行 |
-| 3 | `metrics/options.go` + `config.go` + `command.go`（serve 子命令 + HTTP API） | ~250 行 |
-| 4 | `metrics/command.go`（agent 子命令 + 采集循环 + flush + compact） | ~200 行 |
+| 1 | `core/metrics/model.go` + `tsdb.go` (Write/Query/Compact/ListMetrics) | ~300 lines |
+| 2 | `core/metrics/collector/` (collector.go + os.go, go-metrics integration) | ~200 lines |
+| 3 | `metrics/options.go` + `config.go` + `command.go` (serve subcommand + HTTP API) | ~250 lines |
+| 4 | `metrics/command.go` (agent subcommand + collection loop + flush + compact) | ~200 lines |
 
 ---
 
-## 11. 采集模型设计
+## 11. Collection model design
 
-### 11.1 三种采集模型对比
+### 11.1 Comparison of three collection models
 
-#### HTTP Push（当前 agent 模式）
+#### HTTP Push (current agent mode)
 
 ```
-Agent（定时 tick）
-  └── POST /api/metrics/write ──→ Server（接收并写入 bbolt）
+Agent (timed tick)
+  └── POST /api/metrics/write ──→ Server (receives and writes to bbolt)
 ```
 
-| 特性 | 说明 |
+| Feature | Description |
 |------|------|
-| Agent 端口 | 不需要暴露端口 |
-| 数据流 | Agent → Server（单向） |
-| 数据缓存 | Agent 本地 bbolt（失败时回退） |
-| 离线处理 | Agent 带重试，最终回退本地缓存 |
-| Server 压力 | 被动接收，不控制采集节奏 |
+| Agent port | No port exposure needed |
+| Data flow | Agent → Server (one-way) |
+| Data cache | Agent-local bbolt (fallback on failure) |
+| Offline handling | Agent retries, eventually falls back to local cache |
+| Server pressure | Passively receives, does not control collection cadence |
 
-#### HTTP Pull（Prometheus / node-exporter 风格）
+#### HTTP Pull (Prometheus / node-exporter style)
 
 ```
-Server（定时 tick）
-  └── GET http://agent:9100/metrics ──→ Agent（实时采集并返回）
-                                            └─ 写入 Server bbolt
+Server (timed tick)
+  └── GET http://agent:9100/metrics ──→ Agent (collects live and returns)
+                                            └─ writes to Server bbolt
 ```
 
-| 特性 | 说明 |
+| Feature | Description |
 |------|------|
-| Agent 端口 | **需要暴露端口**，或被 Server 可达 |
-| 数据流 | Server → Agent（Server 拉取） |
-| 数据缓存 | Agent 不需要任何持久化存储 |
-| 离线处理 | Server 感知拉取失败，跳过该 tick |
-| Server 压力 | 主动控制采集节奏，管理所有 agent 定时器 |
+| Agent port | **Needs an exposed port**, or be reachable by the Server |
+| Data flow | Server → Agent (Server pulls) |
+| Data cache | Agent needs no persistence at all |
+| Offline handling | Server notices the pull failure and skips that tick |
+| Server pressure | Actively controls collection cadence, manages all agent timers |
 
-#### WebSocket Pull（折中方案，推荐未来方向）
+#### WebSocket Pull (compromise; recommended future direction)
 
 ```
-Agent（主动发起 WS 连接）
+Agent (initiates WS connection)
   │  ws://server:8096/ws/metrics
   │
-Server ←── 连接建立 ──→ Agent（零端口暴露）
+Server ←── connection established ──→ Agent (zero port exposure)
   │                       │
-  │  ──{"type":"collect"}──►（Server 控制节奏）
-  │  ◄──{"type":"metrics"}──（Agent 实时采集并返回）
+  │  ──{"type":"collect"}──►(Server controls cadence)
+  │  ◄──{"type":"metrics"}──(Agent collects live and returns)
   │                       │
   │  ──{"type":"collect"}──►
   │  ◄──{"type":"metrics"}──
 ```
 
-| 特性 | 说明 |
+| Feature | Description |
 |------|------|
-| Agent 端口 | 不需要暴露任何端口 |
-| 数据流 | Agent 发起 WS 连接，Server 在 WS 上发指令拉取（逻辑上是 Pull） |
-| 数据缓存 | Agent 不需要本地持久化 |
-| 离线处理 | Agent 指数退避重连，Server 断开即标记 offline |
+| Agent port | No port exposure needed |
+| Data flow | Agent initiates the WS connection; Server sends pull commands over it (logically Pull) |
+| Data cache | Agent needs no local persistence |
+| Offline handling | Agent reconnects with exponential backoff; Server marks offline on disconnect |
 
-### 11.2 WebSocket Pull 详细设计
+### 11.2 WebSocket Pull detailed design
 
-#### WS 协议消息
+#### WS protocol messages
 
-**请求/应答同步语义：** WS 本身是全双工异步的，但 Server 端保证串行化——**Server 在收到上一个 `collect` 的 `metrics` 响应之前，不会发送下一个 `collect`**。每条消息带 `id` 字段，用于关联请求和响应，以及检测乱序和超时。
+**Request/response synchronous semantics:** WS itself is full-duplex and asynchronous, but the Server guarantees serialization — **the Server does not send the next `collect` until it receives the `metrics` response for the previous one**. Each message carries an `id` field to correlate requests and responses and to detect out-of-order delivery and timeouts.
 
-所有整型数值均以 JSON number 表示，时间戳为 UnixNano。
+All integer values are represented as JSON numbers; timestamps are UnixNano.
 
 ```
-Agent → Server（第一条消息，注册）：
+Agent → Server (first message, registration):
 {
   "type": "hello",
   "hostname": "agent-a",
-  "capabilities": ["os"]       // 本 agent 支持的能力列表
+  "capabilities": ["os"]       // list of capabilities this agent supports
 }
 
-Server → Agent：
+Server → Agent:
 {
   "type": "collect",
-  "id": 1                      // 递增的请求 ID
+  "id": 1                      // incrementing request ID
 }
 {
   "type": "collect_interval",
-  "interval": 30               // 动态设置采集间隔（秒）
+  "interval": 30               // dynamically set the collection interval (seconds)
 }
 
-Agent → Server（collect 应答）：
+Agent → Server (collect response):
 {
   "type": "metrics",
-  "id": 1,                     // 对应 collect 的 id
+  "id": 1,                     // corresponds to the collect id
   "data": [
     {"metric":"cpu.used.percent","tags":{"host":"agent-a"},"value":45.2,"time":1704067200000000000}
   ]
 }
 
-Agent → Server（错误报告）：
+Agent → Server (error report):
 {
   "type": "error",
-  "id": 1,                     // 对应 collect 的 id，非 collect 场景可为 0
-  "message": "采集失败原因"
+  "id": 1,                     // corresponds to the collect id; 0 for non-collect scenarios
+  "message": "collection failure reason"
 }
 ```
 
-**交互时序示例：**
+**Example interaction sequence:**
 
 ```
 Server                              Agent
   │                                   │
   │──{"type":"collect","id":1}───────►│
-  │                                   │ (Agent 采集 ~50ms)
+  │                                   │ (Agent collects ~50ms)
   │◄──{"type":"metrics","id":1,       │
   │        "data":[...]}              │
   │                                   │
@@ -595,141 +595,141 @@ Server                              Agent
   │        "data":[...]}              │
 ```
 
-Server 发送 `collect` 后启动超时定时器（如 10s）。超时未收到对应 `id` 的 `metrics`，Server 关闭该 agent 连接，等待 agent 重连。
+After sending `collect` the Server starts a timeout timer (e.g. 10s). If the `metrics` for the corresponding `id` is not received within the timeout, the Server closes that agent's connection and waits for the agent to reconnect.
 
-#### Agent 断线重连
+#### Agent reconnect with backoff
 
-指数退避 + jitter，上限 60s：
+Exponential backoff + jitter, capped at 60s:
 
 ```
-attempt 1 → 立即连接
-  失败 → 等 1s（+随机 0~500ms）
-attempt 2 → 重连
-  失败 → 等 2s（+随机 0~500ms）
-attempt 3 → 重连
-  失败 → 等 4s（+随机 0~500ms）
+attempt 1 → connect immediately
+   failure → wait 1s (+ random 0~500ms)
+attempt 2 → reconnect
+   failure → wait 2s (+ random 0~500ms)
+attempt 3 → reconnect
+   failure → wait 4s (+ random 0~500ms)
   ...
-attempt N → 重连
-  失败 → 等 60s（上限）
+attempt N → reconnect
+   failure → wait 60s (cap)
 ```
 
-#### 心跳保活
+#### Heartbeat keep-alive
 
 ```
-Server → Agent: WebSocket Ping（每 30s）
+Server → Agent: WebSocket Ping (every 30s)
 Agent  → Server: WebSocket Pong
 ```
 
-连续 N 次（如 3 次）Pong 超时 → Server 断开连接，标记 agent offline。
+N consecutive Pong timeouts (e.g. 3) → the Server disconnects and marks the agent offline.
 
-#### Server 端 Agent 管理
+#### Server-side agent management
 
 ```
 AgentManager
   ├── agents: map[hostname]*AgentConn
   │     ├── conn    *websocket.Conn
   │     ├── caps    []string           // capabilities
-  │     ├── ticker  *time.Ticker       // 按 interval 发 collect
+  │     ├── ticker  *time.Ticker       // sends collect per interval
   │     └── lastSeen time.Time
   ├── Register(conn, hostname, caps)
   ├── Unregister(hostname)
   └── List() → []AgentInfo
 ```
 
-每个 agent 连接后，server 为其创建一个定时器，按 interval 发 `collect` 指令。agent 返回 `metrics` 后，server 写入本地 bbolt。
+After each agent connects, the server creates a timer for it that sends `collect` commands per interval. When the agent returns `metrics`, the server writes them to local bbolt.
 
-#### 数据完整性策略
+#### Data integrity strategy
 
-断连期间的数据处理选项：
+Options for handling data during disconnects:
 
-| 方案 | 说明 | 复杂度 |
+| Approach | Description | Complexity |
 |------|------|--------|
-| **丢弃**（推荐） | 网络抖动丢几个 tick 无所谓，metrics 是采样数据 | 最低 |
-| Agent 内存缓存 | 环形缓冲区保留最近 N 个 tick，重连后补发 | 中 |
-| Agent 本地 bbolt | 和当前 push 一样写本地文件，重连后同步 | 高 |
+| **Discard** (recommended) | Losing a few ticks during network jitter is fine; metrics are sampled data | Lowest |
+| Agent in-memory cache | Ring buffer keeps the last N ticks, replay after reconnect | Medium |
+| Agent-local bbolt | Like current push, writes to a local file, syncs after reconnect | High |
 
-#### WebSocket Pull 的优缺点
+#### Pros and cons of WebSocket Pull
 
-| 优点 | 缺点 |
+| Pros | Cons |
 |------|------|
-| Agent 零端口暴露 | Server 必须维护所有 agent 的连接 goroutine + 定时器 |
-| Server 控制采集节奏 | Server 重启后所有 agent 需要全部重新连入 |
-| 天然离线检测（WS 断开即知） | 调试不便（不能直接 `curl` 看数据） |
-| 适合动态环境（NAT/防火墙） | WS 有帧控制/心跳/编解码，比 HTTP GET 复杂 |
-| 网络层面更高效（无 HTTP 反复握手） | 代理/负载均衡需要额外配置长连接超时 |
+| Agent has zero port exposure | Server must maintain all agents' connection goroutines + timers |
+| Server controls collection cadence | After a Server restart all agents must reconnect |
+| Natural offline detection (WS disconnect is immediately known) | Harder to debug (cannot directly `curl` the data) |
+| Suits dynamic environments (NAT/firewalls) | WS has frame control/heartbeat/encode-decode, more complex than HTTP GET |
+| More network-efficient (no repeated HTTP handshakes) | Proxies/load balancers need extra long-connection timeout config |
 
-### 11.3 路线图
+### 11.3 Roadmap
 
 ```
-v1 (当前)    → HTTP Push（agent 定时推送到 server，本地 bbolt 缓存）
-v2（未来）   → WebSocket Pull（agent 直连 server，server 控制采集节奏）
-v3（未来）   → WebSocket Agent 嵌入 server（`mu metrics serve --agent` 直接 WS 接入）
+v1 (current)   → HTTP Push (agent pushes to server on a timer, local bbolt cache)
+v2 (future)    → WebSocket Pull (agent connects directly to server, server controls collection cadence)
+v3 (future)    → WebSocket agent embedded in server (`mu metrics serve --agent` connects via WS directly)
 ```
 
 ---
 
-## 12. 未来可扩展（当前版本不做）
+## 12. Future extensibility (not in the current version)
 
-| 功能 | 时机 |
+| Feature | Timing |
 |------|------|
-| Docker 容器指标采集（cgroup 或 Docker SDK） | 第二版 |
-| Agent token 认证（`--token` + server 校验 + 自动绑定 host） | 安全需求时 |
-| Web 前端图表（gateway 集成 `/metrics/`） | 集中展示时 |
-| 聚合查询（`avg`/`max`/`min`/`sum` + `window` 时间窗口） | 查询需求明确时 |
-| Prometheus remote write 兼容 | 需要接入 Grafana 时 |
+| Docker container metrics collection (cgroup or Docker SDK) | Second release |
+| Agent token auth (`--token` + server validation + auto host binding) | When security is required |
+| Web frontend charts (gateway integration `/metrics/`) | When centralized display is needed |
+| Aggregation queries (`avg`/`max`/`min`/`sum` + `window`) | When query requirements are clear |
+| Prometheus remote write compatibility | When Grafana integration is needed |
 
 ---
 
-## 13. 名词约定
+## 13. Terminology
 
-| 术语 | 含义 |
+| Term | Meaning |
 |------|------|
-| **metric** | 指标名称，如 `cpu.used.percent` |
-| **tags** | 标签键值对，用于区分同一指标的不同维度，如 `{host: HostA, cpu: 0}` |
-| **data point** | 一个时间戳 + 值的组合 |
-| **agent** | 采集端，运行在被监控机器上 |
-| **server** | 存储 + 查询端，接收 agent 上报的数据 |
-| **retention** | 数据保留时长 |
-| **compaction** | 删除过期数据的操作 |
+| **metric** | Metric name, e.g. `cpu.used.percent` |
+| **tags** | Tag key-value pairs distinguishing dimensions of the same metric, e.g. `{host: HostA, cpu: 0}` |
+| **data point** | A timestamp + value pair |
+| **agent** | The collection side, running on the monitored machine |
+| **server** | The storage + query side, receiving agent-reported data |
+| **retention** | Data retention duration |
+| **compaction** | The operation of deleting expired data |
 
 ---
 
-## 14. 实现进度
+## 14. Implementation progress
 
-| 阶段 | 内容 | 状态 |
+| Phase | Content | Status |
 |------|------|------|
-| 1 | `core/metrics/model.go` + `tsdb.go`（Write/Query/Compact/ListMetrics） | ✅ |
-| 2 | `core/metrics/collector/`（collector.go + os.go，go-metrics 集成） | ✅ |
-| 3 | `metrics/options.go` + `config.go` + `command.go`（serve 子命令 + HTTP API） | ✅ |
-| 4 | 注册 `metrics` 命令到 `myutilities.go`，全项目编译通过 | ✅ |
-| 5 | `core/metrics/tsdb_test.go`（9 个测试全部通过） | ✅ |
-| 6 | `metrics/options.go` 新增 `QueryOptions` + `query` 子命令 | ✅ |
-| 7 | `metrics/command.go` 新增 `query.Run()`（table/json/csv 三格式输出） | ✅ |
-| 8 | Agent 推送重试 + 本地缓存策略实现 | ✅ |
-| 9 | Debug 日志（`--debug` flag + `debug_log` 配置 + 关键路径日志） | ✅ |
-| 10 | `query` 和 `compact` 改为通过 HTTP API 与 server 交互（不再读本地 bbolt） | ✅ |
-| 11 | TSDB `Query` 修复：tags 为空时扫描 metric 下所有 tag 组合（而非只查无标签数据） | ✅ |
+| 1 | `core/metrics/model.go` + `tsdb.go` (Write/Query/Compact/ListMetrics) | ✅ |
+| 2 | `core/metrics/collector/` (collector.go + os.go, go-metrics integration) | ✅ |
+| 3 | `metrics/options.go` + `config.go` + `command.go` (serve subcommand + HTTP API) | ✅ |
+| 4 | Register `metrics` command in `myutilities.go`, project compiles | ✅ |
+| 5 | `core/metrics/tsdb_test.go` (all 9 tests pass) | ✅ |
+| 6 | `metrics/options.go` adds `QueryOptions` + `query` subcommand | ✅ |
+| 7 | `metrics/command.go` adds `query.Run()` (table/json/csv three formats) | ✅ |
+| 8 | Agent push retry + local cache strategy implemented | ✅ |
+| 9 | Debug logging (`--debug` flag + `debug_log` config + key-path logs) | ✅ |
+| 10 | `query` and `compact` now interact with the server via HTTP API (no longer read local bbolt) | ✅ |
+| 11 | TSDB `Query` fix: empty tags scans all tag combinations under the metric (not just tag-less data) | ✅ |
 
-### 已创建的文件清单
+### Created file list
 
 ```
 core/metrics/
-  ├── model.go             数据类型定义
-  ├── tsdb.go              核心 TSDB 引擎
-  ├── tsdb_test.go         9 个测试用例
+  ├── model.go             data type definitions
+  ├── tsdb.go              core TSDB engine
+  ├── tsdb_test.go         9 test cases
   └── collector/
-      ├── collector.go     Collector 接口
-      └── os.go            OS 指标采集（gopsutil → go-metrics）
+      ├── collector.go     Collector interface
+      └── os.go            OS metric collection (gopsutil → go-metrics)
 
 metrics/
-  ├── command.go           CLI 入口 + HTTP handlers + Agent 循环
-  ├── options.go           参数结构体
-  └── config.go            配置加载
+  ├── command.go           CLI entry + HTTP handlers + Agent loop
+  ├── options.go           option structs
+  └── config.go            config loading
 ```
 
-### 已验证
+### Verified
 
-- `go build ./...` 编译通过
-- `go vet ./core/metrics/... ./metrics/...` 通过
-- `go test ./core/metrics/...` — 9 tests passed（2 packages）
-- 累计代码 ~1000 行
+- `go build ./...` compiles
+- `go vet ./core/metrics/... ./metrics/...` passes
+- `go test ./core/metrics/...` — 9 tests passed (2 packages)
+- ~1000 lines of code total
