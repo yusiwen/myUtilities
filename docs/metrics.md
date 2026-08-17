@@ -263,6 +263,18 @@ sudo systemctl enable --now mu-metrics-agent.service
 Tune retention/interval/hostname via `~/.config/mu/metrics-config.json` (loaded
 from the service's `HOME=/root`), or edit `ExecStart` in the unit files.
 
+Stop and disable both:
+
+```bash
+sudo systemctl disable --now mu-metrics-server.service mu-metrics-agent.service
+```
+
+**Coexistence with the gateway:** when the server runs under systemd it holds
+`:8096`, so a gateway started with the default `--metrics-manage` detects the
+external server and proxies to it directly (external mode) instead of spawning a
+managed subprocess — no extra configuration needed. See [gateway.md](gateway.md)
+for the flags.
+
 Design details: [plan/metrics-module-plan.md](plan/metrics-module-plan.md).
 
 ## Appendix: Design notes

@@ -20,7 +20,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [install](docs/install.md) | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
 | [jar](docs/jar.md) | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
 | [k8s](docs/k8s.md) | Cloud | Kubernetes Secret YAML generator + resource browser | ✓ |
-| [metrics](docs/metrics.md) | Ops | Time-series host metrics collection and querying | – |
+| [metrics](docs/metrics.md) | Ops | Time-series host metrics collection and querying | ✓ |
 | [misc](docs/misc.md) | Utils | JSON format/validate, UUID, timestamp, hash, trackers | ✓ |
 | [mock](docs/mock.md) | Testing | Mock servers: mock-server, file-server, oauth-server, dynamic-server with admin UI | ✓ |
 | [network](docs/network.md) | Net | DNS, DIG, and WHOIS lookups | ✓ |
