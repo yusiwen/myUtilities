@@ -56,3 +56,5 @@ internal/svcreg/frontend/node_modules/
 internal/svcreg/frontend/dist/
 internal/budget/frontend/node_modules/
 internal/budget/frontend/dist/
+# CocoIndex Code (ccc)
+/.cocoindex_code/
