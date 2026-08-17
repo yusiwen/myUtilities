@@ -1,0 +1,18 @@
+[Unit]
+Description=mu Metrics Agent
+Documentation=https://github.com/yusiwen/myUtilities
+After=network-online.target mu-metrics-server.service
+Wants=network-online.target mu-metrics-server.service
+
+[Service]
+Type=simple
+Environment=HOME=/root
+# Collection interval can be changed via /root/.config/mu/metrics-config.json
+ExecStart=/usr/local/bin/mu metrics agent --server http://localhost:8096 --interval 30s
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=2
+StartLimitIntervalSec=30
+
+[Install]
+WantedBy=multi-user.target

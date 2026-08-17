@@ -239,6 +239,30 @@ Configured via `--retention` or the config file. Supported formats: `30d`, `7d`,
 Data files: DB at `~/.local/share/mu/metrics/metrics.db`; config at
 `~/.config/mu/metrics-config.json`.
 
+## systemd
+
+Example systemd service files are provided for running the server and agent as
+long-running daemons:
+
+- `mu-metrics-server.service` — runs `mu metrics serve` (HTTP API + dashboard on
+  `:8096`).
+- `mu-metrics-agent.service` — runs `mu metrics agent` pushing to
+  `http://localhost:8096` every 30s. It uses a soft dependency (`Wants`+`After`)
+  on the server, so a server restart does not interrupt collection and the agent
+  falls back to its local BoltDB buffer while the server is unreachable.
+
+Install and start both:
+
+```bash
+sudo cp mu-metrics-server.service mu-metrics-agent.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mu-metrics-server.service
+sudo systemctl enable --now mu-metrics-agent.service
+```
+
+Tune retention/interval/hostname via `~/.config/mu/metrics-config.json` (loaded
+from the service's `HOME=/root`), or edit `ExecStart` in the unit files.
+
 Design details: [plan/metrics-module-plan.md](plan/metrics-module-plan.md).
 
 ## Appendix: Design notes

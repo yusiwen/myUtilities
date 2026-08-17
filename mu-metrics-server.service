@@ -1,0 +1,18 @@
+[Unit]
+Description=mu Metrics Server
+Documentation=https://github.com/yusiwen/myUtilities
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=HOME=/root
+# Retention/interval/etc. can be set via /root/.config/mu/metrics-config.json
+ExecStart=/usr/local/bin/mu metrics serve --port 8096
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=2
+StartLimitIntervalSec=30
+
+[Install]
+WantedBy=multi-user.target
