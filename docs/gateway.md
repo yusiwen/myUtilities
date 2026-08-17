@@ -36,6 +36,39 @@ By default, module configs are read from `~/.config/mu/`:
 | `/network/` | Network | DNS, DIG, and WHOIS query tools |
 | `/svcreg/` | Service Registry | Register and discover microservices |
 | `/budget/` | API Budget | Track LLM API balance across providers |
+| `/metrics/` | Metrics | System monitoring charts (read-only proxy to `mu metrics serve`) |
 
 All services are optional — if a config file is missing (mock), the corresponding route is
 skipped with a warning and the rest of the gateway starts normally.
+
+The metrics route proxies read-only to a running `mu metrics serve` backend
+(default `http://localhost:8096`, override with `--metrics-server` or `MU_METRICS_SERVER`).
+Only `GET /api/metrics` and `GET /api/metrics/{name}` are forwarded; the
+write/compact endpoints are never exposed through the gateway.
+
+## Managed metrics server
+
+By default the gateway manages its own `mu metrics serve` subprocess instead of
+relying on an external one:
+
+```bash
+mu gateway --port 8080                      # auto-starts a managed server on :8096
+mu gateway --metrics-port 19096             # different port
+mu gateway --metrics-auto-start=false       # manage but don't auto-start
+mu gateway --metrics-manage=false           # pure proxy to --metrics-server
+```
+
+- The subprocess is spawned as `mu metrics serve --port <p> --agent` (same
+  binary as the gateway) and follows the gateway's lifecycle: on SIGTERM/SIGINT
+  the gateway stops it first; on a hard SIGKILL the child dies with the parent
+  (Linux `PDEATHSIG`).
+- **Port probing:** if the port is already served by a `mu metrics` server the
+  gateway detects it and enters `external` mode (no subprocess spawned, proxy
+  direct). If the port is occupied by a non-metrics service the gateway reports
+  an `error` state and the dashboard shows it.
+- The metrics page shows an admin control bar (status, pid, uptime, recent
+  logs) with Start/Stop/Restart buttons, backed by:
+  - `GET  /api/metrics/admin/status`
+  - `POST /api/metrics/admin/start`
+  - `POST /api/metrics/admin/stop`
+  - `POST /api/metrics/admin/restart`

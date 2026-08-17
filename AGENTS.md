@@ -2,17 +2,6 @@
 
 This file provides guidance to coding agents when working with code in this repository.
 
-## Code Search
-
-When searching for code, prioritize the `ccc` MCP (semantic search) over
-keyword-based tools (grep/glob):
-
-- Use `ccc_search` for understanding code, locating implementations, or finding
-  code by meaning when exact keywords are unknown.
-- Use it first before falling back to `grep`/`glob` when the query is ambiguous.
-- Use the `paths` / `languages` parameters to filter noisy results, since the
-  ranking tends to over-weight markdown docs.
-
 ## Build Commands
 
 This is a Go project using a Makefile for builds:

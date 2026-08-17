@@ -3,6 +3,7 @@ package metrics
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"math"
@@ -13,7 +14,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-var seriesBucket = []byte("series")
+var (
+	seriesBucket = []byte("series")
+	metaBucket   = []byte("meta")
+)
 
 func Open(path string) (*DB, error) {
 	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 1 * time.Second})
@@ -21,7 +25,10 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("metrics: open db: %w", err)
 	}
 	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(seriesBucket)
+		if _, err := tx.CreateBucketIfNotExists(seriesBucket); err != nil {
+			return err
+		}
+		_, err := tx.CreateBucketIfNotExists(metaBucket)
 		return err
 	}); err != nil {
 		db.Close()
@@ -39,19 +46,30 @@ func (d *DB) Close() error {
 }
 
 func (d *DB) Write(name string, tags map[string]string, ts time.Time, value float64) error {
+	hash := tagsHash(tags)
 	key := makeSeriesKey(name, tags, ts)
 	val := makeValueBytes(value)
+	metaKey := makeSeriesPrefix([]byte(name), hash)
+	metaVal, _ := json.Marshal(tags)
 	return d.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(seriesBucket).Put(key, val)
+		if err := tx.Bucket(seriesBucket).Put(key, val); err != nil {
+			return err
+		}
+		return tx.Bucket(metaBucket).Put(metaKey, metaVal)
 	})
 }
 
 func (d *DB) WriteBatch(metrics []Metric) error {
 	return d.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(seriesBucket)
+		mb := tx.Bucket(metaBucket)
 		for _, m := range metrics {
 			hash := tagsHash(m.Tags)
 			prefix := makeSeriesPrefix([]byte(m.Name), hash)
+			metaVal, _ := json.Marshal(m.Tags)
+			if err := mb.Put(prefix[:len(prefix):len(prefix)], metaVal); err != nil {
+				return err
+			}
 			for _, p := range m.Points {
 				key := append(prefix[:len(prefix):len(prefix)], makeTimestampBytes(p.Timestamp)...)
 				val := makeValueBytes(p.Value)
@@ -65,22 +83,23 @@ func (d *DB) WriteBatch(metrics []Metric) error {
 }
 
 func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limit int) ([]Metric, error) {
-	var prefix []byte
-	if len(tags) > 0 {
-		prefix = makeSeriesPrefix([]byte(name), tagsHash(tags))
-	} else {
-		prefix = makeNamePrefix([]byte(name))
-	}
-
 	fromNano := from.UnixNano()
 	toNano := to.UnixNano()
 
 	var result []Metric
-	var current *Metric
+	var curIdx = -1
+	var curKey []byte
 
 	err := d.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(seriesBucket)
 		c := b.Cursor()
+
+		var prefix []byte
+		if len(tags) > 0 {
+			prefix = makeSeriesPrefix([]byte(name), tagsHash(tags))
+		} else {
+			prefix = makeNamePrefix([]byte(name))
+		}
 
 		totalPoints := 0
 		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
@@ -93,15 +112,23 @@ func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limi
 				break
 			}
 
-			if current == nil {
-				current = &Metric{
-					Name:   name,
-					Tags:   copyTags(tags),
-					Points: make([]DataPoint, 0, 64),
+			if curIdx < 0 || (len(tags) == 0 && !bytes.Equal(curKey, k[:len(k)-8])) {
+				var seriesTags map[string]string
+				if len(tags) > 0 {
+					seriesTags = copyTags(tags)
+				} else {
+					seriesTags = tagsFromMeta(tx.Bucket(metaBucket), k[:len(k)-8])
 				}
+				result = append(result, Metric{
+					Name:   name,
+					Tags:   seriesTags,
+					Points: make([]DataPoint, 0, 64),
+				})
+				curIdx = len(result) - 1
+				curKey = append(curKey[:0], k[:len(k)-8]...)
 			}
 
-			current.Points = append(current.Points, DataPoint{
+			result[curIdx].Points = append(result[curIdx].Points, DataPoint{
 				Timestamp: ts,
 				Value:     math.Float64frombits(binary.LittleEndian.Uint64(v)),
 			})
@@ -117,10 +144,26 @@ func (d *DB) Query(name string, tags map[string]string, from, to time.Time, limi
 	if err != nil {
 		return nil, err
 	}
-	if current != nil {
-		result = append(result, *current)
+	if len(result) == 0 {
+		return nil, nil
 	}
 	return result, nil
+}
+
+// tagsFromMeta loads the stored tags for a series key prefix (name + hash).
+func tagsFromMeta(meta *bolt.Bucket, key []byte) map[string]string {
+	if meta == nil {
+		return nil
+	}
+	v := meta.Get(key)
+	if v == nil {
+		return nil
+	}
+	var tags map[string]string
+	if err := json.Unmarshal(v, &tags); err != nil {
+		return nil
+	}
+	return tags
 }
 
 func makeNamePrefix(name []byte) []byte {
@@ -157,6 +200,36 @@ func (d *DB) ListMetrics() ([]string, error) {
 	return result, nil
 }
 
+// ListHosts returns the unique host tag values stored in the series metadata.
+func (d *DB) ListHosts() ([]string, error) {
+	seen := make(map[string]struct{})
+
+	err := d.db.View(func(tx *bolt.Tx) error {
+		mb := tx.Bucket(metaBucket)
+		c := mb.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var tags map[string]string
+			if err := json.Unmarshal(v, &tags); err != nil {
+				continue
+			}
+			if h := tags["host"]; h != "" {
+				seen[h] = struct{}{}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]string, 0, len(seen))
+	for host := range seen {
+		result = append(result, host)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 func (d *DB) Compact(retention time.Duration) error {
 	if retention <= 0 {
 		return nil
@@ -171,6 +244,19 @@ func (d *DB) Compact(retention time.Duration) error {
 			ts := k[len(k)-8:]
 			if bytes.Compare(ts, cutoffBE) < 0 {
 				if err := c.Delete(); err != nil {
+					return err
+				}
+			}
+		}
+
+		// Prune series metadata with no remaining data points.
+		mb := tx.Bucket(metaBucket)
+		mc := mb.Cursor()
+		sc := b.Cursor()
+		for mk, _ := mc.First(); mk != nil; mk, _ = mc.Next() {
+			sk, _ := sc.Seek(mk)
+			if sk == nil || !bytes.HasPrefix(sk, mk) {
+				if err := mc.Delete(); err != nil {
 					return err
 				}
 			}

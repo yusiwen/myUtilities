@@ -16,9 +16,10 @@ MISC_FRONTEND_DIR=internal/misc/frontend
 NETWORK_FRONTEND_DIR=internal/network/frontend
 SVCREG_FRONTEND_DIR=internal/svcreg/frontend
 BUDGET_FRONTEND_DIR=internal/budget/frontend
+METRICS_FRONTEND_DIR=internal/metrics/frontend
 THEME_PARTIAL=web/shared/frontend/theme-partial.html
 COMMON_PARTIAL=web/shared/frontend/common-partial.html
-FRONTEND_DIRS=internal/wol internal/es internal/mock internal/qrcode internal/jarinfo internal/crypto internal/diff internal/k8s internal/misc internal/network internal/svcreg internal/budget
+FRONTEND_DIRS=internal/wol internal/es internal/mock internal/qrcode internal/jarinfo internal/crypto internal/diff internal/k8s internal/misc internal/network internal/svcreg internal/budget internal/metrics
 GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/yusiwen/myUtilities/internal/core/version.Version=$(VERSION)" \
 		-X "github.com/yusiwen/myUtilities/internal/core/version.CommitSHA=$(COMMIT_SHA)" \
 		-X "github.com/yusiwen/myUtilities/internal/core/version.BuildTime=$(BUILDTIME)" \
@@ -78,6 +79,8 @@ frontend: inject-shared
 	@echo '{"version": "$(VERSION)"}' > $(SVCREG_FRONTEND_DIR)/dist/version.json
 	@echo "Building Budget Svelte frontend..."
 	cd $(BUDGET_FRONTEND_DIR) && npm install --silent && npm run build
+	@echo "Building Metrics Svelte frontend..."
+	cd $(METRICS_FRONTEND_DIR) && npm install --silent && npm run build
 	@for dir in $(FRONTEND_DIRS); do \
 	  git checkout -- "$$dir/frontend/index.html" 2>/dev/null || true; \
 	done

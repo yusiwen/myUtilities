@@ -27,6 +27,7 @@ func NewServer(tsdb *DB, hostname string, retention time.Duration, debug bool) h
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/metrics", s.handleListMetrics)
+	mux.HandleFunc("GET /api/metrics/hosts", s.handleListHosts)
 	mux.HandleFunc("GET /api/metrics/{name}", s.handleQueryMetric)
 	mux.HandleFunc("POST /api/metrics/write", s.handleWrite)
 	mux.HandleFunc("POST /api/metrics/compact", s.handleCompact)
@@ -55,6 +56,24 @@ func (s *Server) handleListMetrics(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(names)
+}
+
+func (s *Server) handleListHosts(w http.ResponseWriter, r *http.Request) {
+	s.debugLog("ListHosts request")
+
+	hosts, err := s.tsdb.ListHosts()
+	if err != nil {
+		s.debugLog("ListHosts failed: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if hosts == nil {
+		hosts = []string{}
+	}
+	s.debugLog("ListHosts returned %d hosts", len(hosts))
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(hosts)
 }
 
 func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {

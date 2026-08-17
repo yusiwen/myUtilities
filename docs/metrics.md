@@ -40,9 +40,20 @@ The server exposes JSON APIs under `/api/metrics`:
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/metrics` | GET | List all metric names |
+| `/api/metrics/hosts` | GET | List all known host tag values |
 | `/api/metrics/{name}` | GET | Query data points |
 | `/api/metrics/write` | POST | Agent reports data |
 | `/api/metrics/compact` | POST | Trigger compaction |
+
+### List hosts `GET /api/metrics/hosts`
+
+Returns the unique `host` tag values seen across all stored series (from the series
+metadata, so series written before the metadata bucket existed are only reflected
+once new data arrives):
+
+```json
+["nuc12wski5", "prod-web-01"]
+```
 
 ### Query `GET /api/metrics/{name}`
 
@@ -94,6 +105,58 @@ Response:
 - The `host` tag is injected automatically by the agent (default `os.Hostname()`,
   overridable via `--hostname` or the config file).
 
+## Web UI
+
+`mu metrics serve` also serves a charting dashboard at `/` (Svelte + Chart.js):
+time-range selector (15m/1h/6h/24h), auto-refresh, per-metric line charts with
+latest/max/min stats, and CPU/memory/load summary cards. The chart x-axis is pinned
+to the selected time range (not auto-scaled to data), so gaps in collection show up
+as empty segments on the axis.
+
+A **host selector** in the toolbar filters the view:
+
+- **All hosts** (default) — every card draws one colored line per host (legend shown,
+  colors are consistent per host across cards). Stats reflect the most recent host.
+- **A specific host** — cards draw a single line for that host, and a host chip is
+  shown next to the metric name. The CPU/memory/load summary cards follow the selection.
+
+```bash
+mu metrics serve --agent --interval 30s   # then open http://localhost:8096
+```
+
+### Gateway integration
+
+The gateway exposes the dashboard at `/metrics/` and proxies the read-only API
+endpoints (`GET /api/metrics`, `GET /api/metrics/hosts`, `GET /api/metrics/{name}`)
+to a running `mu metrics serve` backend:
+
+```bash
+mu metrics serve --agent --interval 30s   # metrics backend on :8096
+mu gateway --metrics-server http://localhost:8096
+# open http://localhost:8080/metrics/
+```
+
+Only the GET read endpoints are forwarded — `POST /api/metrics/write` and
+`POST /api/metrics/compact` are never exposed through the gateway. The default
+backend is `http://localhost:8096` (override with `--metrics-server` or the
+`MU_METRICS_SERVER` env var).
+
+### Managed server (gateway default)
+
+Since the gateway manages its own `mu metrics serve` subprocess by default, no
+separate `metrics serve` is needed:
+
+```bash
+mu gateway --port 8080     # auto-starts a managed server on :8096
+```
+
+The managed subprocess runs `mu metrics serve --port <p> --agent` (same binary),
+follows the gateway's lifecycle, and is controllable from the dashboard's admin
+control bar (Start/Stop/Restart, status, pid, uptime, recent logs). If the port is
+already served by a metrics server the gateway detects it and proxies directly
+(`external` mode); if a non-metrics service occupies the port the dashboard shows
+an `error`. See [gateway.md](gateway.md) for the flags and the admin API routes.
+
 ## Agent behavior
 
 ### Collection
@@ -128,13 +191,14 @@ retries with **exponential backoff + local caching**:
 ### Querying per host
 
 The `host` tag is part of the tag hash that clusters series in BoltDB, so different
-hosts land in different key spaces automatically:
+hosts land in different key spaces automatically. Querying without tags returns one
+series per distinct host (grouped by tag hash, tags restored from series metadata):
 
 ```bash
 # All CPU metrics for HostA
 GET /api/metrics/cpu.used.percent?tags=host%3DHostA
 
-# CPU metrics for all hosts
+# CPU metrics for all hosts (one series per host)
 GET /api/metrics/cpu.used.percent
 
 # HostA's CPU 0

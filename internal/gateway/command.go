@@ -6,11 +6,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/yusiwen/myUtilities/internal/budget"
 	corees "github.com/yusiwen/myUtilities/internal/core/es"
+	coremetrics "github.com/yusiwen/myUtilities/internal/core/metrics"
 	"github.com/yusiwen/myUtilities/internal/core/store"
 	coresv "github.com/yusiwen/myUtilities/internal/core/svcreg"
 	corewol "github.com/yusiwen/myUtilities/internal/core/wol"
@@ -19,6 +22,7 @@ import (
 	"github.com/yusiwen/myUtilities/internal/es"
 	"github.com/yusiwen/myUtilities/internal/jarinfo"
 	"github.com/yusiwen/myUtilities/internal/k8s"
+	"github.com/yusiwen/myUtilities/internal/metrics"
 	"github.com/yusiwen/myUtilities/internal/misc"
 	"github.com/yusiwen/myUtilities/internal/mock"
 	"github.com/yusiwen/myUtilities/internal/network"
@@ -164,6 +168,11 @@ func landingPage(hasMock bool) string {
       <div class="app-icon">&#128176;</div>
       <div class="app-name">API Budget</div>
       <div class="app-desc">Track LLM API balance and usage</div>
+    </a>
+    <a href="/metrics/" class="app-card">
+      <div class="app-icon">&#128200;</div>
+      <div class="app-name">Metrics</div>
+      <div class="app-desc">System monitoring time-series charts</div>
     </a>` + mockCard + `
   </div>
   <p class="footer"><span class="version">` + versionStr + `</span> &mdash; mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
@@ -345,6 +354,33 @@ func (o *Options) Run() error {
 	mux.Handle("/budget/", http.StripPrefix("/budget", withGateway(budget.FrontendHandler())))
 	log.Printf("Gateway:   /budget/* -> API Budget frontend")
 
+	var metricsBackend string
+	var metricsMgr *coremetrics.ManagedServer
+	metricsProxyTarget := o.MetricsServer
+
+	if o.MetricsManage {
+		metricsMgr = coremetrics.NewManagedServer(o.MetricsPort)
+		metricsProxyTarget = fmt.Sprintf("http://localhost:%d", o.MetricsPort)
+		if o.MetricsAutoStart {
+			if err := metricsMgr.Start(); err != nil {
+				log.Printf("Gateway: metrics manage: %v", err)
+			}
+		}
+		coremetrics.RegisterManagedAPI(mux, metricsMgr)
+		metricsBackend = fmt.Sprintf("managed localhost:%d", o.MetricsPort)
+		st := metricsMgr.Status()
+		log.Printf("Gateway: metrics manage: state=%s", st.State)
+		if st.Error != "" {
+			log.Printf("Gateway: metrics manage: %s", st.Error)
+		}
+	} else {
+		metricsBackend = o.MetricsServer
+	}
+
+	coremetrics.RegisterProxyAPI(mux, metricsProxyTarget)
+	mux.Handle("/metrics/", http.StripPrefix("/metrics", withGateway(metrics.FrontendHandler())))
+	log.Printf("Gateway:   /metrics/* -> Metrics dashboard (backend: %s)", metricsBackend)
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -357,5 +393,24 @@ func (o *Options) Run() error {
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Gateway: starting on http://localhost%s", addr)
-	return http.ListenAndServe(addr, mux)
+
+	srv := &http.Server{Addr: addr, Handler: mux}
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+		<-sigCh
+		log.Printf("Gateway: shutting down")
+		srv.Close()
+	}()
+
+	err = srv.ListenAndServe()
+	if metricsMgr != nil {
+		if err := metricsMgr.Stop(); err != nil {
+			log.Printf("Gateway: stop managed metrics: %v", err)
+		}
+	}
+	if err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }

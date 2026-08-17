@@ -254,7 +254,116 @@ func TestParseRetention(t *testing.T) {
 	}
 }
 
+func TestListHosts(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer db.Close()
+
+	hosts, err := db.ListHosts()
+	if err != nil {
+		t.Fatalf("ListHosts on empty db failed: %v", err)
+	}
+	if len(hosts) != 0 {
+		t.Fatalf("expected 0 hosts on empty db, got %d", len(hosts))
+	}
+
+	now := time.Now()
+	db.Write("cpu.test", map[string]string{"host": "hostB"}, now, 1.0)
+	db.Write("cpu.test", map[string]string{"host": "hostA"}, now, 2.0)
+	db.Write("mem.test", map[string]string{"host": "hostA"}, now, 3.0)
+	db.Write("net.test", nil, now, 4.0)
+
+	hosts, err = db.ListHosts()
+	if err != nil {
+		t.Fatalf("ListHosts failed: %v", err)
+	}
+	want := []string{"hostA", "hostB"}
+	if len(hosts) != len(want) {
+		t.Fatalf("expected %v, got %v", want, hosts)
+	}
+	for i := range want {
+		if hosts[i] != want[i] {
+			t.Errorf("expected %v, got %v", want, hosts)
+		}
+	}
+}
+
+func TestQueryAllHostsGroupsPerSeries(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now()
+	db.Write("cpu.used.percent", map[string]string{"host": "hostA"}, now, 10.0)
+	db.Write("cpu.used.percent", map[string]string{"host": "hostA"}, now.Add(10*time.Second), 11.0)
+	db.Write("cpu.used.percent", map[string]string{"host": "hostB"}, now, 20.0)
+
+	metrics, err := db.Query("cpu.used.percent", nil, now.Add(-1*time.Hour), now.Add(1*time.Hour), 0)
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	if len(metrics) != 2 {
+		t.Fatalf("expected 2 series, got %d", len(metrics))
+	}
+
+	// Two series: hostA (2 points) and hostB (1 point).
+	var gotA, gotB *Metric
+	for i := range metrics {
+		if metrics[i].Tags["host"] == "hostA" {
+			gotA = &metrics[i]
+		}
+		if metrics[i].Tags["host"] == "hostB" {
+			gotB = &metrics[i]
+		}
+	}
+	if gotA == nil || gotB == nil {
+		t.Fatalf("expected series for hostA and hostB, got %v", metrics)
+	}
+	if len(gotA.Points) != 2 {
+		t.Errorf("expected 2 points for hostA, got %d", len(gotA.Points))
+	}
+	if len(gotB.Points) != 1 {
+		t.Errorf("expected 1 point for hostB, got %d", len(gotB.Points))
+	}
+	if gotA.Points[0].Value != 10.0 || gotB.Points[0].Value != 20.0 {
+		t.Errorf("unexpected values: hostA=%v hostB=%v", gotA.Points, gotB.Points)
+	}
+}
+
+func TestCompactPrunesMeta(t *testing.T) {
+	dir := t.TempDir()
+	db, err := Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer db.Close()
+
+	now := time.Now()
+	db.Write("cpu.test", map[string]string{"host": "gone"}, now.Add(-2*time.Hour), 1.0)
+
+	if err := db.Compact(30 * time.Minute); err != nil {
+		t.Fatalf("Compact failed: %v", err)
+	}
+
+	hosts, err := db.ListHosts()
+	if err != nil {
+		t.Fatalf("ListHosts failed: %v", err)
+	}
+	if len(hosts) != 0 {
+		t.Fatalf("expected meta pruned for expired series, got hosts %v", hosts)
+	}
+}
+
 func TestMain(m *testing.M) {
-	code := m.Run()
-	os.Exit(code)
+	if os.Getenv("GO_WANT_HELPER") == "1" {
+		helperServe()
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
 }

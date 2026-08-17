@@ -93,12 +93,16 @@ func (o *ServeOptions) Run() error {
 		log.Printf("Retention set to %s, compaction enabled", retention)
 	}
 
-	handler := coremetrics.NewServer(tsdb, hostname, retention, debugEnabled)
+	apiHandler := coremetrics.NewServer(tsdb, hostname, retention, debugEnabled)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api/", apiHandler)
+	mux.Handle("/", FrontendHandler())
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Metrics server listening on %s", addr)
 
-	srv := &http.Server{Addr: addr, Handler: handler}
+	srv := &http.Server{Addr: addr, Handler: mux}
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)
