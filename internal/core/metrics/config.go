@@ -22,6 +22,37 @@ type Config struct {
 // DefaultCompactInterval is used when compact_interval is unset or invalid.
 const DefaultCompactInterval = 24 * time.Hour
 
+// ResolveConfigDir returns the effective config directory: the given dir with
+// a leading ~/ expanded, or ~/.config/mu when empty.
+func ResolveConfigDir(configDir string) string {
+	if configDir != "" {
+		return ExpandTilde(configDir)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".config", "mu")
+}
+
+// FormatDuration renders a duration compactly: days, hours, or minutes when
+// whole, otherwise Go's default string form.
+func FormatDuration(d time.Duration) string {
+	if d <= 0 {
+		return "0"
+	}
+	if d >= 24*time.Hour && d%(24*time.Hour) == 0 {
+		return fmt.Sprintf("%dd", d/(24*time.Hour))
+	}
+	if d >= time.Hour && d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", d/time.Hour)
+	}
+	if d >= time.Minute && d%time.Minute == 0 {
+		return fmt.Sprintf("%dm", d/time.Minute)
+	}
+	return d.String()
+}
+
 func DefaultConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

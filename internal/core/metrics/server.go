@@ -9,35 +9,90 @@ import (
 	"time"
 )
 
+// Mode constants reported by the status UDS / info endpoint.
+const (
+	ModeServer          = "server"
+	ModeServerWithAgent = "server-with-agent"
+	ModeAgentLocal      = "agent-local"
+	ModeAgentRemote     = "agent-remote"
+)
+
+// ServerInfo describes a running serve/agent process. It is served both by the
+// HTTP /api/metrics/info endpoint and the per-process Unix socket.
+type ServerInfo struct {
+	Mode            string `json:"mode"`
+	Pid             int    `json:"pid"`
+	StartedAt       string `json:"started_at"`
+	Version         string `json:"version"`
+	ConfigDir       string `json:"config_dir"`
+	ConfigFile      string `json:"config_file"`
+	DBPath          string `json:"db_path"`
+	Retention       string `json:"retention"`
+	CompactInterval string `json:"compact_interval"`
+	CollectInterval string `json:"collect_interval"`
+	Hostname        string `json:"hostname"`
+	Port            int    `json:"port,omitempty"`
+	Server          string `json:"server,omitempty"`
+	Agent           bool   `json:"agent"`
+	Debug           bool   `json:"debug"`
+	Series          int64  `json:"series,omitempty"`
+	Points          int64  `json:"points,omitempty"`
+}
+
 // Server exposes the metrics TSDB over HTTP.
 type Server struct {
 	tsdb             *DB
-	defaultHostname  string
+	info             ServerInfo
 	defaultRetention time.Duration
 	debug            bool
 }
 
 // NewServer builds an http.Handler exposing the metrics API.
-func NewServer(tsdb *DB, hostname string, retention time.Duration, debug bool) http.Handler {
+func NewServer(tsdb *DB, info ServerInfo) http.Handler {
+	debug := info.Debug
+	retention := ParseRetention(info.Retention)
 	s := &Server{
 		tsdb:             tsdb,
-		defaultHostname:  hostname,
+		info:             info,
 		defaultRetention: retention,
 		debug:            debug,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/metrics", s.handleListMetrics)
 	mux.HandleFunc("GET /api/metrics/hosts", s.handleListHosts)
+	mux.HandleFunc("GET /api/metrics/info", s.handleInfo)
 	mux.HandleFunc("GET /api/metrics/{name}", s.handleQueryMetric)
 	mux.HandleFunc("POST /api/metrics/write", s.handleWrite)
 	mux.HandleFunc("POST /api/metrics/compact", s.handleCompact)
 	return mux
 }
 
+// ServeStatusPayload serializes the status info for the Unix socket, filling
+// in point/series counts from the TSDB.
+func ServeStatusPayload(info ServerInfo, tsdb *DB) ([]byte, error) {
+	if tsdb != nil {
+		if stats, err := tsdb.Stats(); err == nil {
+			info.Series = stats.Series
+			info.Points = stats.Points
+		}
+	}
+	return json.Marshal(info)
+}
+
 func (s *Server) debugLog(format string, args ...interface{}) {
 	if s.debug {
 		log.Printf("metrics: "+format, args...)
 	}
+}
+
+func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
+	info := s.info
+	if stats, err := s.tsdb.Stats(); err == nil {
+		info.Series = stats.Series
+		info.Points = stats.Points
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(info)
 }
 
 func (s *Server) handleListMetrics(w http.ResponseWriter, r *http.Request) {
@@ -96,8 +151,8 @@ func (s *Server) handleWrite(w http.ResponseWriter, r *http.Request) {
 		if req.Tags == nil {
 			req.Tags = make(map[string]string)
 		}
-		if req.Tags["host"] == "" && s.defaultHostname != "" {
-			req.Tags["host"] = s.defaultHostname
+		if req.Tags["host"] == "" && s.info.Hostname != "" {
+			req.Tags["host"] = s.info.Hostname
 		}
 		ts := now
 		if req.Timestamp > 0 {

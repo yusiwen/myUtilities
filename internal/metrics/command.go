@@ -16,6 +16,7 @@ import (
 	"time"
 
 	coremetrics "github.com/yusiwen/myUtilities/internal/core/metrics"
+	"github.com/yusiwen/myUtilities/internal/core/version"
 )
 
 var debugEnabled bool
@@ -34,6 +35,7 @@ func resolveDebug(flagVal bool, cfg *coremetrics.Config) bool {
 }
 
 func (o *ServeOptions) Run() error {
+	startedAt := time.Now()
 	cfg, err := coremetrics.LoadConfigDir(o.ConfigDir)
 	if err != nil {
 		return err
@@ -109,11 +111,38 @@ func (o *ServeOptions) Run() error {
 		}()
 	}
 
-	apiHandler := coremetrics.NewServer(tsdb, hostname, retention, debugEnabled)
+	configDir := coremetrics.ResolveConfigDir(o.ConfigDir)
+	info := coremetrics.ServerInfo{
+		Mode:            coremetrics.ModeServer,
+		Pid:             os.Getpid(),
+		StartedAt:       startedAt.Format(time.RFC3339),
+		Version:         version.Version,
+		ConfigDir:       configDir,
+		ConfigFile:      filepath.Join(configDir, "metrics-config.json"),
+		DBPath:          dbPath,
+		Retention:       coremetrics.FormatDuration(retention),
+		CompactInterval: coremetrics.FormatDuration(compactInterval),
+		CollectInterval: coremetrics.FormatDuration(interval),
+		Hostname:        hostname,
+		Port:            o.Port,
+		Debug:           debugEnabled,
+	}
+	if o.Agent {
+		info.Mode = coremetrics.ModeServerWithAgent
+		info.Agent = true
+	}
+
+	apiHandler := coremetrics.NewServer(tsdb, info)
 
 	mux := http.NewServeMux()
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/", FrontendHandler())
+
+	uds := coremetrics.ServeUDS(filepath.Join(configDir, "metrics.sock"), func() []byte {
+		b, _ := coremetrics.ServeStatusPayload(info, tsdb)
+		return b
+	})
+	defer uds.Close()
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Metrics server listening on %s", addr)
@@ -132,6 +161,7 @@ func (o *ServeOptions) Run() error {
 }
 
 func (o *AgentOptions) Run() error {
+	startedAt := time.Now()
 	cfg, err := coremetrics.LoadConfigDir(o.ConfigDir)
 	if err != nil {
 		return err
@@ -158,11 +188,13 @@ func (o *AgentOptions) Run() error {
 		serverURL, interval, hostname, retention)
 
 	var tsdb *coremetrics.DB
+	var agentDBPath string
 	if serverURL == "" {
 		dbPath, err := coremetrics.ResolveDBPath(o.ConfigDir, cfg.DataDir, o.DBPath)
 		if err != nil {
 			return err
 		}
+		agentDBPath = dbPath
 		if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
 			return fmt.Errorf("create data dir: %w", err)
 		}
@@ -190,6 +222,31 @@ func (o *AgentOptions) Run() error {
 		Debug:       debugEnabled,
 		AutoCompact: true,
 	})
+
+	configDir := coremetrics.ResolveConfigDir(o.ConfigDir)
+	agentInfo := coremetrics.ServerInfo{
+		Mode:            coremetrics.ModeAgentLocal,
+		Pid:             os.Getpid(),
+		StartedAt:       startedAt.Format(time.RFC3339),
+		Version:         version.Version,
+		ConfigDir:       configDir,
+		ConfigFile:      filepath.Join(configDir, "metrics-config.json"),
+		Retention:       coremetrics.FormatDuration(retention),
+		CollectInterval: coremetrics.FormatDuration(interval),
+		Hostname:        hostname,
+		Debug:           debugEnabled,
+	}
+	if serverURL != "" {
+		agentInfo.Mode = coremetrics.ModeAgentRemote
+		agentInfo.Server = serverURL
+	} else {
+		agentInfo.DBPath = agentDBPath
+	}
+	uds := coremetrics.ServeUDS(filepath.Join(configDir, "agent.sock"), func() []byte {
+		b, _ := coremetrics.ServeStatusPayload(agentInfo, tsdb)
+		return b
+	})
+	defer uds.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

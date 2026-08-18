@@ -126,26 +126,46 @@ mu metrics serve --agent --interval 30s   # then open http://localhost:8096
 
 ## Status
 
-`mu metrics status` prints the resolved configuration, whether a metrics server
-is running, and DB statistics:
+`mu metrics status` reports the running metrics processes and their state. Both
+`mu metrics serve` and `mu metrics agent` create a Unix domain socket under
+their config dir (`<config-dir>/metrics.sock` and `<config-dir>/agent.sock`,
+permissions 0600) that answer a JSON status payload; `serve` also exposes the
+same data over HTTP at `GET /api/metrics/info`.
 
 ```bash
-mu metrics status
-mu metrics status --config-dir /etc/mu      # match a gateway-managed server
-mu metrics status --server http://host:8096 # inspect a remote server
+mu metrics status                       # default config dir ~/.config/mu
+mu metrics status --config-dir /etc/mu  # locate sockets under /etc/mu
+mu metrics status --server http://host:8096   # remote server over HTTP
 ```
 
-Example output:
+Discovery order: `--config-dir` sockets first, then an HTTP fallback on the
+port (covers older binaries without a socket). If nothing is running the command
+prints `no running metrics server found on <url>` and exits 1. A running server
+or agent exits 0.
+
+The reported **mode** identifies how each process runs:
+
+| Mode | Meaning |
+|---|---|
+| `server` | `mu metrics serve` without an embedded agent |
+| `server-with-agent` | `mu metrics serve --agent` (also how the gateway manages it) |
+| `agent-local` | `mu metrics agent` writing to the local BoltDB |
+| `agent-remote` | `mu metrics agent --server` pushing to a remote server |
+
+Example output for a running server:
 
 ```
 Config:
+  mode             server-with-agent
+  pid              1234
+  started_at       2026-08-19T01:36:33+08:00
+  version          v1.3.6.3
   config-dir       /etc/mu
   config file      /etc/mu/metrics-config.json (found)
-  retention        7d
+  retention        0 (forever)
   compact_interval 1d
   collect_interval 30s
-  hostname         nuc12wski5
-  server_url       (none)
+  hostname         GL-MT6000
   db-path          /etc/mu/metrics.db
   debug            false
 
@@ -159,13 +179,13 @@ DB:
   modified         2026-08-18 07:00:00 +0000
   series           47
   points           1,234,567
-  hosts            [nuc12wski5]
+  hosts            GL-MT6000
   metrics          cpu.used.percent, memory.used.percent, ... (47 total)
 ```
 
-When a local server is running its BoltDB file is locked, so point/series counts
-come from the HTTP API instead of a read-only open. `--server` inspects a remote
-server over HTTP and skips the local DB section.
+When only an agent is running, `status` prints an `Agent:` section instead
+(mode, pid, server/db-path, interval) and still exits 0. Configuration defaults
+are documented in `mu metrics serve --help` / `mu metrics agent --help`.
 
 ### Gateway integration
 

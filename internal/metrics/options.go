@@ -10,9 +10,9 @@ type Options struct {
 
 type ServeOptions struct {
 	Port      int    `help:"HTTP API port." default:"8096"`
-	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json; also the default DB directory."`
-	DBPath    string `name:"db-path" help:"Override BoltDB file path from config."`
-	Retention string `help:"Data retention (e.g. 30d, 7d, 0=forever). Empty inherits the config file."`
+	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json and the default DB directory. Default: ~/.config/mu."`
+	DBPath    string `name:"db-path" help:"Override BoltDB file path. Default: <config-dir>/metrics.db, else ~/.local/share/mu/metrics/metrics.db."`
+	Retention string `help:"Data retention (e.g. 30d, 7d, 0=forever, default 0). Empty inherits the config file."`
 	Agent     bool   `help:"Also run agent locally."`
 	Interval  string `help:"Collect interval (only with --agent)." default:"30s"`
 	Hostname  string `help:"Override hostname for tags."`
@@ -21,19 +21,18 @@ type ServeOptions struct {
 
 type AgentOptions struct {
 	Server    string `help:"Metrics server URL to report to."`
-	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json; also the default DB directory."`
-	DBPath    string `name:"db-path" help:"Override BoltDB file path from config."`
+	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json and the default DB directory. Default: ~/.config/mu."`
+	DBPath    string `name:"db-path" help:"Override BoltDB file path. Default: <config-dir>/metrics.db, else ~/.local/share/mu/metrics/metrics.db."`
 	Interval  string `help:"Collect interval." default:"30s"`
 	Hostname  string `help:"Override hostname for tags."`
-	Retention string `help:"Local data retention (when no server). Empty inherits the config file."`
+	Retention string `help:"Local data retention (when no server). Default 0=forever. Empty inherits the config file."`
 	Debug     bool   `help:"Enable debug logging."`
 }
 
 type StatusOptions struct {
-	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json; also the default DB directory."`
-	DBPath    string `name:"db-path" help:"Override BoltDB file path from config."`
-	Port      int    `help:"Metrics server port to check." default:"8096"`
-	Server    string `help:"Remote metrics server URL to check instead of the local port."`
+	ConfigDir string `name:"config-dir" help:"Directory to look for the metrics Unix sockets. Default: ~/.config/mu."`
+	Port      int    `help:"Metrics server port to check (HTTP fallback)." default:"8096"`
+	Server    string `help:"Remote metrics server URL to check over HTTP instead of local sockets."`
 }
 
 type CompactOptions struct {

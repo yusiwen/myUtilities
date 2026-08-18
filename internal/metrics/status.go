@@ -1,7 +1,9 @@
 package metrics
 
 import (
+	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,115 +12,193 @@ import (
 	coremetrics "github.com/yusiwen/myUtilities/internal/core/metrics"
 )
 
+// runStatusError is returned when no metrics process is found (exit 1).
+type runStatusError struct{ msg string }
+
+func (e *runStatusError) Error() string { return e.msg }
+
 func (o *StatusOptions) Run() error {
-	cfg, err := coremetrics.LoadConfigDir(o.ConfigDir)
-	if err != nil {
-		return err
-	}
-
-	cfgPath := ""
-	if o.ConfigDir != "" {
-		cfgPath = filepath.Join(coremetrics.ExpandTilde(o.ConfigDir), "metrics-config.json")
-	} else {
-		cfgPath, _ = coremetrics.DefaultConfigPath()
-	}
-
-	retention := coremetrics.ParseRetention(cfg.Retention)
-	compactInterval := coremetrics.ResolveCompactInterval(cfg.CompactInterval)
-	interval := coremetrics.ResolveInterval("", cfg.Interval)
-	hostname := coremetrics.ResolveHostname("", cfg.Hostname)
-	dbPath, err := coremetrics.ResolveDBPath(o.ConfigDir, cfg.DataDir, o.DBPath)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println("Config:")
-	fmt.Printf("  config-dir       %s\n", displayDir(o.ConfigDir))
-	fmt.Printf("  config file      %s (%s)\n", cfgPath, existsMark(cfgPath))
-	fmt.Printf("  retention        %s\n", displayRetention(retention))
-	fmt.Printf("  compact_interval %s\n", displayRetention(compactInterval))
-	fmt.Printf("  collect_interval %s\n", interval)
-	fmt.Printf("  hostname         %s\n", hostname)
-	if cfg.ServerURL != "" {
-		fmt.Printf("  server_url       %s\n", cfg.ServerURL)
-	} else {
-		fmt.Printf("  server_url       (none)\n")
-	}
-	fmt.Printf("  db-path          %s\n", dbPath)
-	fmt.Printf("  debug            %v\n", cfg.DebugLog)
-	fmt.Println()
-
-	// Running state: remote server or the local port.
-	baseURL := fmt.Sprintf("http://localhost:%d", o.Port)
 	if o.Server != "" {
-		baseURL = strings.TrimRight(o.Server, "/")
+		return o.reportRemote()
 	}
-	names, namesErr := coremetrics.FetchMetricNames(baseURL)
-	hosts, _ := coremetrics.FetchHosts(baseURL)
-	running := namesErr == nil
 
-	fmt.Println("Running:")
-	fmt.Printf("  server           %s\n", baseURL)
-	if running {
-		fmt.Printf("  state            running (%d metrics)\n", len(names))
-	} else {
-		fmt.Printf("  state            not running\n")
-	}
-	fmt.Println()
+	configDir := coremetrics.ResolveConfigDir(o.ConfigDir)
 
-	// DB stats: file stat always; counts via read-only open when the local
-	// server is not running. Remote mode skips the local file entirely.
-	fmt.Println("DB:")
-	remote := o.Server != ""
-	if !remote {
-		if st, statErr := os.Stat(dbPath); statErr == nil {
-			fmt.Printf("  file             %s\n", dbPath)
-			fmt.Printf("  size             %s\n", humanSize(st.Size()))
-			fmt.Printf("  modified         %s\n", st.ModTime().Format("2006-01-02 15:04:05 MST"))
-		} else {
-			fmt.Printf("  file             %s (not found)\n", dbPath)
-		}
+	// Unix sockets are authoritative for local process state.
+	serverInfo, agentInfo := readLocalSockets(configDir)
+
+	// HTTP fallback covers older binaries without a socket.
+	if serverInfo == nil {
+		base := fmt.Sprintf("http://localhost:%d", o.Port)
+		serverInfo = fetchServerInfo(base)
 	}
 
 	switch {
-	case !remote && !running:
-		ro, openErr := coremetrics.OpenReadOnly(dbPath)
-		if openErr != nil {
-			fmt.Printf("  note             cannot open read-only: %v\n", openErr)
-		} else {
-			defer ro.Close()
-			stats, statsErr := ro.Stats()
-			dbHosts, _ := ro.ListHosts()
-			metricNames, _ := ro.ListMetricNames()
-			if statsErr != nil {
-				fmt.Printf("  note             stats error: %v\n", statsErr)
-			} else {
-				fmt.Printf("  series           %d\n", stats.Series)
-				fmt.Printf("  points           %d\n", stats.Points)
-			}
-			fmt.Printf("  hosts            %s\n", listPreview(dbHosts))
-			fmt.Printf("  metrics          %s (%d total)\n", listPreview(metricNames), len(metricNames))
-		}
-	case running:
-		if remote {
-			fmt.Printf("  series           (remote server; counts via HTTP)\n")
-		} else {
-			fmt.Printf("  series           (locked by running server; counts via HTTP)\n")
-		}
-		fmt.Printf("  hosts            %s\n", listPreview(hosts))
-		fmt.Printf("  metrics          %s (%d total)\n", listPreview(names), len(names))
-	case remote:
-		fmt.Printf("  note             remote server unreachable; local DB not inspected\n")
+	case serverInfo != nil:
+		printServer(fmt.Sprintf("http://localhost:%d", o.Port), serverInfo, agentInfo)
+		return nil
+	case agentInfo != nil:
+		printAgent(agentInfo)
+		return nil
+	default:
+		return &runStatusError{fmt.Sprintf("no running metrics server found on http://localhost:%d", o.Port)}
 	}
+}
 
+func (o *StatusOptions) reportRemote() error {
+	base := strings.TrimRight(o.Server, "/")
+	info := fetchServerInfo(base)
+	if info == nil {
+		return &runStatusError{fmt.Sprintf("no running metrics server found on %s", base)}
+	}
+	printServer(base, info, nil)
 	return nil
 }
 
-func displayDir(dir string) string {
-	if dir == "" {
-		return "(default ~/.config/mu)"
+// readLocalSockets dials the per-process Unix sockets and decodes the payloads.
+func readLocalSockets(configDir string) (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
+	var serverInfo, agentInfo *coremetrics.ServerInfo
+	for _, entry := range []struct {
+		name string
+		out  **coremetrics.ServerInfo
+	}{
+		{"metrics.sock", &serverInfo},
+		{"agent.sock", &agentInfo},
+	} {
+		data, err := dialUDS(filepath.Join(configDir, entry.name))
+		if err != nil {
+			continue
+		}
+		var info coremetrics.ServerInfo
+		if json.Unmarshal(data, &info) != nil {
+			continue
+		}
+		*entry.out = &info
 	}
-	return coremetrics.ExpandTilde(dir)
+	return serverInfo, agentInfo
+}
+
+func dialUDS(path string) ([]byte, error) {
+	conn, err := net.DialTimeout("unix", path, 500*time.Millisecond)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(3 * time.Second))
+	buf := make([]byte, 0, 4096)
+	tmp := make([]byte, 4096)
+	for {
+		n, err := conn.Read(tmp)
+		buf = append(buf, tmp[:n]...)
+		if n == 0 {
+			break
+		}
+		if err != nil {
+			break
+		}
+		if len(buf) > 1<<20 {
+			break
+		}
+	}
+	return buf, nil
+}
+
+// fetchServerInfo queries the info endpoint; on older servers that lack it,
+// it falls back to the names endpoint and returns a minimal info.
+func fetchServerInfo(base string) *coremetrics.ServerInfo {
+	if resp, err := httpGet(base + "/api/metrics/info"); err == nil {
+		var info coremetrics.ServerInfo
+		if json.Unmarshal(resp, &info) == nil {
+			return &info
+		}
+	}
+	if _, err := coremetrics.FetchMetricNames(base); err == nil {
+		return &coremetrics.ServerInfo{Mode: "older-server"}
+	}
+	return nil
+}
+
+func printServer(base string, info *coremetrics.ServerInfo, agent *coremetrics.ServerInfo) {
+	fmt.Println("Config:")
+	fmt.Printf("  mode             %s\n", info.Mode)
+	if info.Pid > 0 {
+		fmt.Printf("  pid              %d\n", info.Pid)
+	}
+	if info.StartedAt != "" {
+		fmt.Printf("  started_at       %s\n", info.StartedAt)
+	}
+	if info.Version != "" {
+		fmt.Printf("  version          %s\n", info.Version)
+	}
+	fmt.Printf("  config-dir       %s\n", displayStr(info.ConfigDir, "(default ~/.config/mu)"))
+	fmt.Printf("  config file      %s (%s)\n", displayStr(info.ConfigFile, "-"), existsMark(info.ConfigFile))
+	fmt.Printf("  retention        %s\n", displayRetention(info.Retention))
+	fmt.Printf("  compact_interval %s\n", displayStr(info.CompactInterval, "1d"))
+	fmt.Printf("  collect_interval %s\n", displayStr(info.CollectInterval, "30s"))
+	fmt.Printf("  hostname         %s\n", displayStr(info.Hostname, "-"))
+	fmt.Printf("  db-path          %s\n", displayStr(info.DBPath, "-"))
+	fmt.Printf("  debug            %v\n", info.Debug)
+	if agent != nil {
+		fmt.Printf("  agent            running (pid %d, %s)\n", agent.Pid, agent.Mode)
+	}
+	fmt.Println()
+
+	fmt.Println("Running:")
+	fmt.Printf("  server           %s\n", base)
+	names, namesErr := coremetrics.FetchMetricNames(base)
+	if namesErr != nil {
+		fmt.Printf("  state            running (info only; HTTP query unavailable)\n")
+	} else {
+		fmt.Printf("  state            running (%d metrics)\n", len(names))
+	}
+	fmt.Println()
+
+	fmt.Println("DB:")
+	if info.DBPath != "" {
+		if st, statErr := os.Stat(info.DBPath); statErr == nil {
+			fmt.Printf("  file             %s\n", info.DBPath)
+			fmt.Printf("  size             %s\n", humanSize(st.Size()))
+			fmt.Printf("  modified         %s\n", st.ModTime().Format("2006-01-02 15:04:05 MST"))
+		} else {
+			fmt.Printf("  file             %s (not found)\n", info.DBPath)
+		}
+	}
+	if info.Series > 0 || info.Points > 0 {
+		fmt.Printf("  series           %d\n", info.Series)
+		fmt.Printf("  points           %d\n", info.Points)
+	}
+	if namesErr == nil {
+		hosts, _ := coremetrics.FetchHosts(base)
+		fmt.Printf("  hosts            %s\n", listPreview(hosts))
+		fmt.Printf("  metrics          %s (%d total)\n", listPreview(names), len(names))
+	}
+}
+
+func printAgent(info *coremetrics.ServerInfo) {
+	fmt.Println("Agent:")
+	fmt.Printf("  mode             %s\n", info.Mode)
+	fmt.Printf("  pid              %d\n", info.Pid)
+	if info.StartedAt != "" {
+		fmt.Printf("  started_at       %s\n", info.StartedAt)
+	}
+	fmt.Printf("  version          %s\n", info.Version)
+	fmt.Printf("  config-dir       %s\n", displayStr(info.ConfigDir, "(default ~/.config/mu)"))
+	if info.Server != "" {
+		fmt.Printf("  server           %s\n", info.Server)
+	}
+	if info.DBPath != "" {
+		fmt.Printf("  db-path          %s\n", info.DBPath)
+	}
+	fmt.Printf("  collect_interval %s\n", displayStr(info.CollectInterval, "30s"))
+	fmt.Printf("  hostname         %s\n", displayStr(info.Hostname, "-"))
+	fmt.Println()
+}
+
+func displayStr(s, def string) string {
+	if s == "" {
+		return def
+	}
+	return s
 }
 
 func existsMark(path string) string {
@@ -128,20 +208,11 @@ func existsMark(path string) string {
 	return "not found"
 }
 
-func displayRetention(r time.Duration) string {
-	if r <= 0 {
+func displayRetention(r string) string {
+	if r == "" || r == "0" {
 		return "0 (forever)"
 	}
-	if r >= 24*time.Hour && r%(24*time.Hour) == 0 {
-		return fmt.Sprintf("%dd", r/(24*time.Hour))
-	}
-	if r >= time.Hour && r%time.Hour == 0 {
-		return fmt.Sprintf("%dh", r/time.Hour)
-	}
-	if r >= time.Minute && r%time.Minute == 0 {
-		return fmt.Sprintf("%dm", r/time.Minute)
-	}
-	return r.String()
+	return r
 }
 
 func listPreview(items []string) string {
@@ -155,7 +226,7 @@ func listPreview(items []string) string {
 	}
 	s := strings.Join(parts, ", ")
 	if len(items) > max {
-		s += fmt.Sprintf(", ...")
+		s += ", ..."
 	}
 	return s
 }

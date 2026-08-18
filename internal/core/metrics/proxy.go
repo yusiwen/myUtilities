@@ -27,5 +27,6 @@ func RegisterProxyAPI(mux *http.ServeMux, serverURL string) {
 
 	mux.HandleFunc("GET /api/metrics", rp.ServeHTTP)
 	mux.HandleFunc("GET /api/metrics/hosts", rp.ServeHTTP)
+	mux.HandleFunc("GET /api/metrics/info", rp.ServeHTTP)
 	mux.HandleFunc("GET /api/metrics/{name}", rp.ServeHTTP)
 }
