@@ -10,13 +10,17 @@ import (
 )
 
 type Config struct {
-	Retention string `json:"retention,omitempty"`
-	Interval  string `json:"collect_interval,omitempty"`
-	Hostname  string `json:"hostname,omitempty"`
-	ServerURL string `json:"server_url,omitempty"`
-	DataDir   string `json:"data_dir,omitempty"`
-	DebugLog  bool   `json:"debug_log,omitempty"`
+	Retention       string `json:"retention,omitempty"`
+	Interval        string `json:"collect_interval,omitempty"`
+	CompactInterval string `json:"compact_interval,omitempty"`
+	Hostname        string `json:"hostname,omitempty"`
+	ServerURL       string `json:"server_url,omitempty"`
+	DataDir         string `json:"data_dir,omitempty"`
+	DebugLog        bool   `json:"debug_log,omitempty"`
 }
+
+// DefaultCompactInterval is used when compact_interval is unset or invalid.
+const DefaultCompactInterval = 24 * time.Hour
 
 func DefaultConfigPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -98,13 +102,27 @@ func LoadConfig(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
+// ResolveRetention resolves the retention window. Semantics:
+//
+//	flag ""   -> use the configured value (cfgVal)
+//	flag "0"  -> 0 (keep forever), explicitly overriding cfgVal
+//	flag "Nd" or a Go duration -> that value
+//	invalid flag -> 0 (keep forever)
 func ResolveRetention(flagVal, cfgVal string) time.Duration {
-	if flagVal != "0" {
-		if d := ParseRetention(flagVal); d > 0 {
-			return d
-		}
+	if flagVal != "" {
+		return ParseRetention(flagVal)
 	}
 	return ParseRetention(cfgVal)
+}
+
+// ResolveCompactInterval returns the configured compact interval, falling back
+// to DefaultCompactInterval when unset, invalid, or non-positive.
+func ResolveCompactInterval(cfgVal string) time.Duration {
+	d, err := time.ParseDuration(cfgVal)
+	if err != nil || d <= 0 {
+		return DefaultCompactInterval
+	}
+	return d
 }
 
 func ResolveInterval(flagVal, cfgVal string) time.Duration {

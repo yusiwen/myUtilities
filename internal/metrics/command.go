@@ -42,11 +42,12 @@ func (o *ServeOptions) Run() error {
 	debugEnabled = resolveDebug(o.Debug, cfg)
 
 	retention := coremetrics.ResolveRetention(o.Retention, cfg.Retention)
+	compactInterval := coremetrics.ResolveCompactInterval(cfg.CompactInterval)
 	interval := coremetrics.ResolveInterval(o.Interval, cfg.Interval)
 	hostname := coremetrics.ResolveHostname(o.Hostname, cfg.Hostname)
 
-	debugLog("Serve starting: port=%d, retention=%s, agent=%v, interval=%s, hostname=%s",
-		o.Port, retention, o.Agent, interval, hostname)
+	debugLog("Serve starting: port=%d, retention=%s, compact_interval=%s, agent=%v, interval=%s, hostname=%s",
+		o.Port, retention, compactInterval, o.Agent, interval, hostname)
 
 	dbPath, err := coremetrics.ResolveDBPath(o.ConfigDir, cfg.DataDir, o.DBPath)
 	if err != nil {
@@ -71,11 +72,12 @@ func (o *ServeOptions) Run() error {
 
 	if o.Agent {
 		ag := coremetrics.NewAgent(coremetrics.AgentConfig{
-			TSDB:      tsdb,
-			Interval:  interval,
-			Hostname:  hostname,
-			Retention: retention,
-			Debug:     debugEnabled,
+			TSDB:        tsdb,
+			Interval:    interval,
+			Hostname:    hostname,
+			Retention:   retention,
+			Debug:       debugEnabled,
+			AutoCompact: false, // serve runs its own compaction loop
 		})
 		go ag.Run(ctx)
 
@@ -86,7 +88,25 @@ func (o *ServeOptions) Run() error {
 		if err := tsdb.Compact(retention); err != nil {
 			log.Printf("Compact on startup: %v", err)
 		}
-		log.Printf("Retention set to %s, compaction enabled", retention)
+		log.Printf("Retention set to %s, compaction enabled (every %s)", retention, compactInterval)
+
+		go func() {
+			ticker := time.NewTicker(compactInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					before := time.Now()
+					if err := tsdb.Compact(retention); err != nil {
+						log.Printf("Periodic compact failed: %v", err)
+						continue
+					}
+					log.Printf("Periodic compact done in %s", time.Since(before))
+				}
+			}
+		}()
 	}
 
 	apiHandler := coremetrics.NewServer(tsdb, hostname, retention, debugEnabled)
@@ -112,7 +132,7 @@ func (o *ServeOptions) Run() error {
 }
 
 func (o *AgentOptions) Run() error {
-	cfg, err := coremetrics.LoadConfig("")
+	cfg, err := coremetrics.LoadConfigDir(o.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -137,20 +157,15 @@ func (o *AgentOptions) Run() error {
 	debugLog("Agent starting: server=%s, interval=%s, hostname=%s, retention=%s",
 		serverURL, interval, hostname, retention)
 
-	dataDir, err := coremetrics.DefaultDataDir()
-	if err != nil {
-		return err
-	}
-	if cfg.DataDir != "" {
-		dataDir = cfg.DataDir
-	}
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
-		return fmt.Errorf("create data dir: %w", err)
-	}
-
 	var tsdb *coremetrics.DB
 	if serverURL == "" {
-		dbPath := filepath.Join(dataDir, "metrics.db")
+		dbPath, err := coremetrics.ResolveDBPath(o.ConfigDir, cfg.DataDir, o.DBPath)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
+			return fmt.Errorf("create data dir: %w", err)
+		}
 		tsdb, err = coremetrics.Open(dbPath)
 		if err != nil {
 			return fmt.Errorf("open tsdb: %w", err)
@@ -167,12 +182,13 @@ func (o *AgentOptions) Run() error {
 	}
 
 	ag := coremetrics.NewAgent(coremetrics.AgentConfig{
-		TSDB:      tsdb,
-		ServerURL: serverURL,
-		Interval:  interval,
-		Hostname:  hostname,
-		Retention: retention,
-		Debug:     debugEnabled,
+		TSDB:        tsdb,
+		ServerURL:   serverURL,
+		Interval:    interval,
+		Hostname:    hostname,
+		Retention:   retention,
+		Debug:       debugEnabled,
+		AutoCompact: true,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())

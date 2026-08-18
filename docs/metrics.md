@@ -124,6 +124,49 @@ A **host selector** in the toolbar filters the view:
 mu metrics serve --agent --interval 30s   # then open http://localhost:8096
 ```
 
+## Status
+
+`mu metrics status` prints the resolved configuration, whether a metrics server
+is running, and DB statistics:
+
+```bash
+mu metrics status
+mu metrics status --config-dir /etc/mu      # match a gateway-managed server
+mu metrics status --server http://host:8096 # inspect a remote server
+```
+
+Example output:
+
+```
+Config:
+  config-dir       /etc/mu
+  config file      /etc/mu/metrics-config.json (found)
+  retention        7d
+  compact_interval 1d
+  collect_interval 30s
+  hostname         nuc12wski5
+  server_url       (none)
+  db-path          /etc/mu/metrics.db
+  debug            false
+
+Running:
+  server           http://localhost:8096
+  state            running (47 metrics)
+
+DB:
+  file             /etc/mu/metrics.db
+  size             1.2 MB
+  modified         2026-08-18 07:00:00 +0000
+  series           47
+  points           1,234,567
+  hosts            [nuc12wski5]
+  metrics          cpu.used.percent, memory.used.percent, ... (47 total)
+```
+
+When a local server is running its BoltDB file is locked, so point/series counts
+come from the HTTP API instead of a read-only open. `--server` inspects a remote
+server over HTTP and skips the local DB section.
+
 ### Gateway integration
 
 The gateway exposes the dashboard at `/metrics/` and proxies the read-only API
@@ -207,15 +250,18 @@ to a remote server or to the local BoltDB. Available metric names:
 ### Push failure handling
 
 When the agent is configured with `server_url` and the server is unreachable, it
-retries with **exponential backoff + local caching**:
+retries with **exponential backoff** (3 attempts: 1s → 2s → 4s). After the last
+failed attempt the batch is dropped:
 
 | Scenario | Result |
 |---|---|
-| Server healthy | Push to server, no local write |
+| Server healthy | Push to server |
 | Server transient failure | Backoff retry 3 times (1s → 2s → 4s) |
-| Server unreachable long-term | Falls back to local BoltDB, no data loss |
-| Server recovers | Next push returns to online mode and pushes directly |
+| Server unreachable long-term | Batch dropped after retries (no local cache) |
 | No server (pure local mode) | Writes directly to local BoltDB each time |
+
+> Local buffering for `agent --server` (fall back to BoltDB while offline, then
+> catch up) is planned but not yet implemented.
 
 ### Querying per host
 
@@ -236,11 +282,21 @@ GET /api/metrics/cpu.used.percent?tags=host%3DHostA,cpu%3D0
 
 ## Retention and compaction
 
-Configured via `--retention` or the config file. Supported formats: `30d`, `7d`,
-`24h`, `90d`. `0` (or unset) = keep forever.
+Configured via `--retention` or the config file `retention` field. Supported
+formats: `30d`, `7d`, `24h`, `90d`, `30m`. `0` = keep forever.
 
-- **Auto**: a `Compact(retention)` runs on serve/agent startup, then every hour.
-  `0` disables it (permanent retention).
+`--retention` semantics:
+
+| `--retention` | Meaning |
+|---|---|
+| (empty, not passed) | Inherit the config file's `retention` |
+| `0` | Keep forever, explicitly overriding the config file |
+| `30d` / `24h` / etc. | Keep data at most this old, overriding the config file |
+
+- **Auto**: `Compact(retention)` runs on serve/agent startup, then periodically
+  every `compact_interval` (default `1d`, configurable in
+  `metrics-config.json`). With `retention` unset/`0` no auto-compaction runs and
+  data is kept forever.
 - **Manual**: `mu metrics compact --retention 30d` triggers compaction immediately.
 
 ## Config
@@ -251,6 +307,7 @@ Configured via `--retention` or the config file. Supported formats: `30d`, `7d`,
 {
   "retention": "30d",
   "collect_interval": "30s",
+  "compact_interval": "1d",
   "hostname": "Prod-Web-01",
   "server_url": "http://metrics-server:8096",
   "data_dir": "",
@@ -259,6 +316,8 @@ Configured via `--retention` or the config file. Supported formats: `30d`, `7d`,
 ```
 
 - `retention` — data retention; `0`/unset = forever.
+- `compact_interval` — how often auto-compaction runs (when `retention` is set);
+  default `1d`.
 - `hostname` — optional, default `os.Hostname()`; the agent injects a `host` tag on
   every write.
 - `server_url` — used only by the agent; when empty the agent writes to local BoltDB.

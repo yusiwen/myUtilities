@@ -15,12 +15,13 @@ import (
 const maxPushRetries = 3
 
 type AgentConfig struct {
-	TSDB      *DB
-	ServerURL string
-	Interval  time.Duration
-	Hostname  string
-	Retention time.Duration
-	Debug     bool
+	TSDB        *DB
+	ServerURL   string
+	Interval    time.Duration
+	Hostname    string
+	Retention   time.Duration
+	Debug       bool
+	AutoCompact bool
 }
 
 type Agent struct {
@@ -56,11 +57,23 @@ func (a *Agent) Run(ctx context.Context) error {
 	ticker := time.NewTicker(a.cfg.Interval)
 	defer ticker.Stop()
 
+	var compactTicker *time.Ticker
+	var compactC <-chan time.Time
+	if a.cfg.AutoCompact && a.cfg.TSDB != nil && a.cfg.Retention > 0 {
+		compactTicker = time.NewTicker(DefaultCompactInterval)
+		defer compactTicker.Stop()
+		compactC = compactTicker.C
+	}
+
 	for {
 		a.collectAndFlush(ctx, hostTags)
 
 		select {
 		case <-ticker.C:
+		case <-compactC:
+			if err := a.cfg.TSDB.Compact(a.cfg.Retention); err != nil {
+				log.Printf("Auto compact error: %v", err)
+			}
 		case <-ctx.Done():
 			return nil
 		}

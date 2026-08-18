@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -314,6 +315,12 @@ func portListening(port int) bool {
 	return true
 }
 
+// PortListening reports whether something is accepting TCP connections on the
+// given localhost port. Exported for the `mu metrics status` command.
+func PortListening(port int) bool {
+	return portListening(port)
+}
+
 // probeMetrics reports whether the service on the given port looks like a mu
 // metrics server (GET /api/metrics returns a JSON string array).
 func probeMetrics(port int) bool {
@@ -335,4 +342,46 @@ func probeMetrics(port int) bool {
 		return false
 	}
 	return true
+}
+
+// ProbeMetrics reports whether the service on the given port looks like a mu
+// metrics server. Exported for the `mu metrics status` command.
+func ProbeMetrics(port int) bool {
+	return probeMetrics(port)
+}
+
+// FetchMetricNames returns the metric name list from a running metrics server.
+func FetchMetricNames(baseURL string) ([]string, error) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(strings.TrimRight(baseURL, "/") + "/api/metrics")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("metrics server returned %d", resp.StatusCode)
+	}
+	var names []string
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&names); err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+// FetchHosts returns the host list from a running metrics server.
+func FetchHosts(baseURL string) ([]string, error) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(strings.TrimRight(baseURL, "/") + "/api/metrics/hosts")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("metrics server returned %d", resp.StatusCode)
+	}
+	var hosts []string
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&hosts); err != nil {
+		return nil, err
+	}
+	return hosts, nil
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func writeConfig(cfg *Config, path string) error {
@@ -75,5 +76,44 @@ func TestLoadConfigDir(t *testing.T) {
 	}
 	if empty.DataDir != "" {
 		t.Fatalf("expected empty config, got %+v", empty)
+	}
+}
+
+func TestResolveRetention(t *testing.T) {
+	cases := []struct {
+		flag, cfg string
+		want      time.Duration
+	}{
+		{"", "7d", 7 * 24 * time.Hour},  // empty flag inherits config
+		{"", "", 0},                     // nothing set -> forever
+		{"0", "7d", 0},                  // explicit 0 overrides config (forever)
+		{"7d", "", 7 * 24 * time.Hour},  // flag wins
+		{"30m", "7d", 30 * time.Minute}, // Go duration
+		{"abc", "7d", 0},                // invalid flag -> 0 (forever)
+	}
+	for _, c := range cases {
+		got := ResolveRetention(c.flag, c.cfg)
+		if got != c.want {
+			t.Errorf("ResolveRetention(%q, %q) = %v, want %v", c.flag, c.cfg, got, c.want)
+		}
+	}
+}
+
+func TestResolveCompactInterval(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Duration
+	}{
+		{"", DefaultCompactInterval},
+		{"1h", time.Hour},
+		{"5s", 5 * time.Second},
+		{"0", DefaultCompactInterval},
+		{"abc", DefaultCompactInterval},
+	}
+	for _, c := range cases {
+		got := ResolveCompactInterval(c.in)
+		if got != c.want {
+			t.Errorf("ResolveCompactInterval(%q) = %v, want %v", c.in, got, c.want)
+		}
 	}
 }

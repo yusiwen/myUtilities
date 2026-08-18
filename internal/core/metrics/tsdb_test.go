@@ -360,6 +360,75 @@ func TestCompactPrunesMeta(t *testing.T) {
 	}
 }
 
+func TestStatsAndListMetricNames(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	now := time.Now()
+	db.Write("cpu.used.percent", map[string]string{"host": "a"}, now, 1.0)
+	db.Write("cpu.used.percent", map[string]string{"host": "a"}, now.Add(time.Second), 2.0)
+	db.Write("memory.used.bytes", map[string]string{"host": "b"}, now, 3.0)
+
+	stats, err := db.Stats()
+	if err != nil {
+		t.Fatalf("Stats failed: %v", err)
+	}
+	if stats.Points != 3 {
+		t.Fatalf("expected 3 points, got %d", stats.Points)
+	}
+	if stats.Series != 2 {
+		t.Fatalf("expected 2 series, got %d", stats.Series)
+	}
+
+	names, err := db.ListMetricNames()
+	if err != nil {
+		t.Fatalf("ListMetricNames failed: %v", err)
+	}
+	if len(names) != 2 || names[0] != "cpu.used.percent" || names[1] != "memory.used.bytes" {
+		t.Fatalf("unexpected metric names: %v", names)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Read-only open sees the same counts and works while the file is closed.
+	ro, err := OpenReadOnly(path)
+	if err != nil {
+		t.Fatalf("OpenReadOnly failed: %v", err)
+	}
+	defer ro.Close()
+	roStats, err := ro.Stats()
+	if err != nil {
+		t.Fatalf("read-only Stats failed: %v", err)
+	}
+	if roStats.Points != 3 || roStats.Series != 2 {
+		t.Fatalf("read-only stats mismatch: %+v", roStats)
+	}
+}
+
+func TestOpenReadOnlyMissing(t *testing.T) {
+	if _, err := OpenReadOnly(filepath.Join(t.TempDir(), "nope.db")); err == nil {
+		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestOpenReadOnlyLocked(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.db")
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer db.Close()
+
+	if _, err := OpenReadOnly(path); err == nil {
+		t.Fatal("expected read-only open to fail while writer holds the lock")
+	}
+}
+
 func TestMain(m *testing.M) {
 	if os.Getenv("GO_WANT_HELPER") == "1" {
 		helperServe()

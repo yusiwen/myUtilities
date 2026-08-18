@@ -37,6 +37,67 @@ func Open(path string) (*DB, error) {
 	return &DB{db: db}, nil
 }
 
+// OpenReadOnly opens the DB for inspection without taking the write lock. It
+// fails if the file is missing or is exclusively locked by a running server.
+func OpenReadOnly(path string) (*DB, error) {
+	db, err := bolt.Open(path, 0600, &bolt.Options{ReadOnly: true, Timeout: 1 * time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("metrics: open db read-only: %w", err)
+	}
+	return &DB{db: db}, nil
+}
+
+// DBStats summarizes the series and point counts in the DB. Both counts come
+// from bucket headers (O(1), no scan).
+type DBStats struct {
+	Series int64
+	Points int64
+}
+
+// Stats returns per-bucket key counts: Series = distinct name+tags series,
+// Points = stored data points.
+func (d *DB) Stats() (DBStats, error) {
+	var st DBStats
+	err := d.db.View(func(tx *bolt.Tx) error {
+		s := tx.Bucket(seriesBucket)
+		if s != nil {
+			st.Points = int64(s.Stats().KeyN)
+		}
+		m := tx.Bucket(metaBucket)
+		if m != nil {
+			st.Series = int64(m.Stats().KeyN)
+		}
+		return nil
+	})
+	return st, err
+}
+
+// ListMetricNames returns the unique metric names from the series metadata
+// (scans only the meta bucket, so it is cheap relative to a full point scan).
+func (d *DB) ListMetricNames() ([]string, error) {
+	seen := make(map[string]struct{})
+	err := d.db.View(func(tx *bolt.Tx) error {
+		c := tx.Bucket(metaBucket).Cursor()
+		for k, _ := c.First(); k != nil; k, _ = c.Next() {
+			idx := bytes.IndexByte(k, 0)
+			if idx < 0 {
+				continue
+			}
+			seen[string(k[:idx])] = struct{}{}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(seen))
+	for name := range seen {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
 type DB struct {
 	db *bolt.DB
 }
