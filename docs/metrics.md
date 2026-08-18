@@ -150,12 +150,41 @@ separate `metrics serve` is needed:
 mu gateway --port 8080     # auto-starts a managed server on :8096
 ```
 
-The managed subprocess runs `mu metrics serve --port <p> --agent` (same binary),
-follows the gateway's lifecycle, and is controllable from the dashboard's admin
-control bar (Start/Stop/Restart, status, pid, uptime, recent logs). If the port is
-already served by a metrics server the gateway detects it and proxies directly
-(`external` mode); if a non-metrics service occupies the port the dashboard shows
-an `error`. See [gateway.md](gateway.md) for the flags and the admin API routes.
+The managed subprocess runs `mu metrics serve --port <p> --agent` (same binary)
+with the gateway's `--config-dir` passed through, so its config and DB live
+alongside the gateway's other configs. The subprocess follows the gateway's
+lifecycle and is controllable from the dashboard's admin control bar
+(Start/Stop/Restart, status, pid, uptime, recent logs). If the port is already
+served by a metrics server the gateway detects it and proxies directly
+(`external` mode); if a non-metrics service occupies the port the dashboard
+shows an `error`. See [gateway.md](gateway.md) for the flags and the admin API
+routes.
+
+### Config file location and DB path (`mu metrics serve`)
+
+`mu metrics serve` accepts `--config-dir` and `--db-path`:
+
+```bash
+mu metrics serve --config-dir /etc/mu --port 8096
+mu metrics serve --db-path /var/lib/mu/metrics.db
+```
+
+- `--config-dir` — directory holding `metrics-config.json` (instead of the
+  default `~/.config/mu/`).
+- `--db-path` — full path to the BoltDB file, overriding everything below.
+
+The DB file path is resolved by priority:
+
+| Priority | Source | Result |
+|---|---|---|
+| 1 | `--db-path` | used as-is (full file path) |
+| 2 | config `data_dir` | `<data_dir>/metrics.db` |
+| 3 | `--config-dir` | `<config-dir>/metrics.db` |
+| 4 | default | `~/.local/share/mu/metrics/metrics.db` |
+
+When the gateway manages the subprocess it passes its own `--config-dir`
+through, so a gateway started with `--config-dir=/etc/mu` stores the metrics DB
+at `/etc/mu/metrics.db`.
 
 ## Agent behavior
 
@@ -236,8 +265,9 @@ Configured via `--retention` or the config file. Supported formats: `30d`, `7d`,
 - `data_dir` — optional, default `~/.local/share/mu/metrics/`.
 - `debug_log` — enable debug logging (`--debug` flag also works).
 
-Data files: DB at `~/.local/share/mu/metrics/metrics.db`; config at
-`~/.config/mu/metrics-config.json`.
+Data files (defaults): DB at `~/.local/share/mu/metrics/metrics.db`; config at
+`~/.config/mu/metrics-config.json`. Both can be relocated with `--config-dir` /
+`--db-path` (see above).
 
 ## systemd
 

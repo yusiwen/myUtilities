@@ -9,6 +9,8 @@ type Options struct {
 
 type ServeOptions struct {
 	Port      int    `help:"HTTP API port." default:"8096"`
+	ConfigDir string `name:"config-dir" help:"Directory for metrics-config.json; also the default DB directory."`
+	DBPath    string `name:"db-path" help:"Override BoltDB file path from config."`
 	Retention string `help:"Data retention (e.g. 30d, 7d, 0=forever)." default:"0"`
 	Agent     bool   `help:"Also run agent locally."`
 	Interval  string `help:"Collect interval (only with --agent)." default:"30s"`

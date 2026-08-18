@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -133,16 +134,27 @@ func TestManagedSpawnLifecycle(t *testing.T) {
 	mgr := NewManagedServer(port)
 	mgr.Bin = exe
 	mgr.Env = append(os.Environ(), "GO_WANT_HELPER=1")
+	mgr.ConfigDir = "/etc/mu"
 
 	if err := mgr.Start(); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	waitState(t, mgr, managedStateRunning)
-	if st := mgr.Status(); st.Pid == 0 {
+	st := mgr.Status()
+	if st.Pid == 0 {
 		t.Fatalf("expected pid, got %+v", st)
 	}
 	if !portListening(port) {
 		t.Fatal("expected managed server to be listening")
+	}
+	found := false
+	for _, l := range st.Log {
+		if strings.Contains(l, "--config-dir /etc/mu") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected --config-dir in log, got %v", st.Log)
 	}
 
 	if err := mgr.Stop(); err != nil {

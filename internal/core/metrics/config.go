@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,44 @@ func DefaultDataDir() (string, error) {
 		return "", fmt.Errorf("find home dir: %w", err)
 	}
 	return filepath.Join(home, ".local", "share", "mu", "metrics"), nil
+}
+
+// ExpandTilde expands a leading "~/" to the user's home directory.
+func ExpandTilde(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, p[2:])
+		}
+	}
+	return p
+}
+
+// LoadConfigDir loads metrics-config.json from dir. An empty dir falls back to
+// the default config path under the user's home.
+func LoadConfigDir(dir string) (*Config, error) {
+	if dir == "" {
+		return LoadConfig("")
+	}
+	return LoadConfig(filepath.Join(ExpandTilde(dir), "metrics-config.json"))
+}
+
+// ResolveDBPath picks the metrics DB file path. Priority: --db-path flag >
+// config data_dir > --config-dir > the legacy default under the user's home.
+func ResolveDBPath(configDir, cfgDataDir, dbPath string) (string, error) {
+	if dbPath != "" {
+		return ExpandTilde(dbPath), nil
+	}
+	if cfgDataDir != "" {
+		return filepath.Join(ExpandTilde(cfgDataDir), "metrics.db"), nil
+	}
+	if configDir != "" {
+		return filepath.Join(ExpandTilde(configDir), "metrics.db"), nil
+	}
+	dir, err := DefaultDataDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "metrics.db"), nil
 }
 
 func LoadConfig(configPath string) (*Config, error) {

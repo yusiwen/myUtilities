@@ -41,6 +41,9 @@ type ManagedServer struct {
 	Bin string
 	// Port the managed server should listen on.
 	Port int
+	// ConfigDir is passed through as --config-dir to the subprocess; it controls
+	// both the metrics config file location and the default DB directory.
+	ConfigDir string
 	// Args are extra arguments appended after the default serve args.
 	Args []string
 	// Env overrides the child environment (defaults to os.Environ()).
@@ -104,9 +107,17 @@ func (m *ManagedServer) Start() error {
 	m.errMsg = ""
 	m.pid = 0
 	m.stopping = false
-	m.logLocked("starting %s metrics serve --port %d --agent", m.BinPath(), port)
+	cfgArg := ""
+	if m.ConfigDir != "" {
+		cfgArg = " --config-dir " + m.ConfigDir
+	}
+	m.logLocked("starting %s metrics serve --port %d --agent%s", m.BinPath(), port, cfgArg)
 
-	args := append([]string{"metrics", "serve", "--port", strconv.Itoa(port), "--agent"}, m.Args...)
+	args := []string{"metrics", "serve", "--port", strconv.Itoa(port), "--agent"}
+	if m.ConfigDir != "" {
+		args = append(args, "--config-dir", m.ConfigDir)
+	}
+	args = append(args, m.Args...)
 	cmd := exec.Command(m.BinPath(), args...)
 	if len(m.Env) > 0 {
 		cmd.Env = m.Env

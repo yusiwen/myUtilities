@@ -216,7 +216,7 @@ func (w *injectWriter) Write(data []byte) (int, error) {
 	return w.buf.Write(data)
 }
 
-func (o *Options) configPath(name string) string {
+func (o *Options) configDir() string {
 	dir := o.ConfigDir
 	if strings.HasPrefix(dir, "~/") {
 		home, err := os.UserHomeDir()
@@ -224,7 +224,11 @@ func (o *Options) configPath(name string) string {
 			dir = filepath.Join(home, dir[2:])
 		}
 	}
-	return filepath.Join(dir, name)
+	return dir
+}
+
+func (o *Options) configPath(name string) string {
+	return filepath.Join(o.configDir(), name)
 }
 
 func (o *Options) Run() error {
@@ -360,6 +364,7 @@ func (o *Options) Run() error {
 
 	if o.MetricsManage {
 		metricsMgr = coremetrics.NewManagedServer(o.MetricsPort)
+		metricsMgr.ConfigDir = o.configDir()
 		metricsProxyTarget = fmt.Sprintf("http://localhost:%d", o.MetricsPort)
 		if o.MetricsAutoStart {
 			if err := metricsMgr.Start(); err != nil {

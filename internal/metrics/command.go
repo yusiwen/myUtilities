@@ -34,7 +34,7 @@ func resolveDebug(flagVal bool, cfg *coremetrics.Config) bool {
 }
 
 func (o *ServeOptions) Run() error {
-	cfg, err := coremetrics.LoadConfig("")
+	cfg, err := coremetrics.LoadConfigDir(o.ConfigDir)
 	if err != nil {
 		return err
 	}
@@ -48,20 +48,16 @@ func (o *ServeOptions) Run() error {
 	debugLog("Serve starting: port=%d, retention=%s, agent=%v, interval=%s, hostname=%s",
 		o.Port, retention, o.Agent, interval, hostname)
 
-	dataDir, err := coremetrics.DefaultDataDir()
+	dbPath, err := coremetrics.ResolveDBPath(o.ConfigDir, cfg.DataDir, o.DBPath)
 	if err != nil {
 		return err
 	}
-	if cfg.DataDir != "" {
-		dataDir = cfg.DataDir
-	}
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
-	debugLog("Data dir: %s", dataDir)
+	debugLog("DB path: %s", dbPath)
 
-	dbPath := filepath.Join(dataDir, "metrics.db")
 	tsdb, err := coremetrics.Open(dbPath)
 	if err != nil {
 		return fmt.Errorf("open tsdb: %w", err)

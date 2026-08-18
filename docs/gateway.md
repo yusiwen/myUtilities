@@ -59,7 +59,9 @@ mu gateway --metrics-manage=false           # pure proxy to --metrics-server
 ```
 
 - The subprocess is spawned as `mu metrics serve --port <p> --agent` (same
-  binary as the gateway) and follows the gateway's lifecycle: on SIGTERM/SIGINT
+  binary as the gateway) with the gateway's `--config-dir` passed through, so
+  the metrics config and its BoltDB (`<config-dir>/metrics.db`) live alongside
+  the gateway's configs. It follows the gateway's lifecycle: on SIGTERM/SIGINT
   the gateway stops it first; on a hard SIGKILL the child dies with the parent
   (Linux `PDEATHSIG`).
 - **Port probing:** if the port is already served by a `mu metrics` server the
