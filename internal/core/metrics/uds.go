@@ -29,10 +29,13 @@ func ServeUDS(path string, payload func() []byte) *UDSServer {
 		return nil
 	}
 	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, 0711); err != nil {
 			log.Printf("metrics: uds mkdir %s: %v", dir, err)
 			return nil
 		}
+		// Keep an existing directory (e.g. previously created with 0700)
+		// traverseable by other local users so they can reach the socket.
+		os.Chmod(dir, 0711)
 	}
 
 	// If another live process owns the socket, leave it alone.
@@ -51,7 +54,9 @@ func ServeUDS(path string, payload func() []byte) *UDSServer {
 		log.Printf("metrics: uds listen %s: %v", path, err)
 		return nil
 	}
-	os.Chmod(path, 0600)
+	// World-readable so any local user can query the status socket; the
+	// payload is the same public info already served over HTTP.
+	os.Chmod(path, 0666)
 
 	u := &UDSServer{ln: ln, path: path, done: make(chan struct{}), payload: payload}
 	go u.acceptLoop()

@@ -128,9 +128,12 @@ mu metrics serve --agent --interval 30s   # then open http://localhost:8096
 
 `mu metrics status` reports the running metrics processes and their state. Both
 `mu metrics serve` and `mu metrics agent` create a Unix domain socket under the
-fixed `/run/mu` directory (`/run/mu/metrics.sock` and `/run/mu/agent.sock`,
-permissions 0600) that answer a JSON status payload; `serve` also exposes the
-same data over HTTP at `GET /api/metrics/info`.
+fixed `/run/mu` directory (`/run/mu/metrics.sock` and `/run/mu/agent.sock`)
+that answer a JSON status payload; `serve` also exposes the
+same data over HTTP at `GET /api/metrics/info`. The socket directory is
+traverseable by all local users (`0711`) and the socket itself world-connectable
+(`0666`), so `mu metrics status` works for any user — the payload is the same
+public status info already served over HTTP.
 
 ```bash
 mu metrics status                    # read /run/mu/*.sock, HTTP fallback on :8096
@@ -140,8 +143,9 @@ mu metrics status --server http://host:8096   # remote server over HTTP
 Discovery order: the `/run/mu` sockets first, then an HTTP fallback on the
 port (covers older binaries without a socket, or processes running without
 permission to create the socket directory). If nothing is running the command
-prints `no running metrics server found on <url>` and exits 1. A running server
-or agent exits 0.
+prints `no running metrics server or agent found` and exits 1; when a socket
+file exists but is not accessible (e.g. wrong permissions) the message explains
+so. A running server or agent exits 0.
 
 The reported **mode** identifies how each process runs:
 

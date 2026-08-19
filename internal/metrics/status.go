@@ -23,7 +23,7 @@ func (o *StatusOptions) Run() error {
 	}
 
 	// Unix sockets are authoritative for local process state.
-	serverInfo, agentInfo := readLocalSockets()
+	serverInfo, agentInfo, inaccessible := readLocalSockets()
 
 	// HTTP fallback covers older binaries without a socket.
 	if serverInfo == nil {
@@ -38,8 +38,10 @@ func (o *StatusOptions) Run() error {
 	case agentInfo != nil:
 		printAgent(agentInfo)
 		return nil
+	case inaccessible != "":
+		return &runStatusError{fmt.Sprintf("no running metrics server or agent found: %s", inaccessible)}
 	default:
-		return &runStatusError{fmt.Sprintf("no running metrics server found on http://localhost:%d", o.Port)}
+		return &runStatusError{fmt.Sprintf("no running metrics server or agent found on http://localhost:%d", o.Port)}
 	}
 }
 
@@ -54,9 +56,11 @@ func (o *StatusOptions) reportRemote() error {
 }
 
 // readLocalSockets dials the per-process Unix sockets under udsDir and decodes
-// the payloads.
-func readLocalSockets() (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
+// the payloads. The third return value is a diagnostic when a socket file
+// exists but could not be dialed (e.g. permission denied).
+func readLocalSockets() (*coremetrics.ServerInfo, *coremetrics.ServerInfo, string) {
 	var serverInfo, agentInfo *coremetrics.ServerInfo
+	var inaccessible string
 	for _, entry := range []struct {
 		name string
 		out  **coremetrics.ServerInfo
@@ -64,8 +68,13 @@ func readLocalSockets() (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
 		{"metrics.sock", &serverInfo},
 		{"agent.sock", &agentInfo},
 	} {
-		data, err := dialUDS(filepath.Join(udsDir, entry.name))
+		path := filepath.Join(udsDir, entry.name)
+		data, err := dialUDS(path)
 		if err != nil {
+			if _, statErr := os.Stat(path); statErr == nil {
+				inaccessible = fmt.Sprintf("%s exists but is not accessible (%v); run as the socket owner (root) or check %s permissions",
+					path, err, udsDir)
+			}
 			continue
 		}
 		var info coremetrics.ServerInfo
@@ -74,7 +83,7 @@ func readLocalSockets() (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
 		}
 		*entry.out = &info
 	}
-	return serverInfo, agentInfo
+	return serverInfo, agentInfo, inaccessible
 }
 
 func dialUDS(path string) ([]byte, error) {
