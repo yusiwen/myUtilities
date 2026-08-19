@@ -19,6 +19,9 @@ import (
 	"github.com/yusiwen/myUtilities/internal/core/version"
 )
 
+// udsDir is the fixed location for the per-process Unix status sockets.
+const udsDir = "/run/mu"
+
 var debugEnabled bool
 
 func debugLog(format string, args ...interface{}) {
@@ -138,7 +141,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/api/", apiHandler)
 	mux.Handle("/", FrontendHandler())
 
-	uds := coremetrics.ServeUDS(filepath.Join(configDir, "metrics.sock"), func() []byte {
+	uds := coremetrics.ServeUDS(filepath.Join(udsDir, "metrics.sock"), func() []byte {
 		b, _ := coremetrics.ServeStatusPayload(info, tsdb)
 		return b
 	})
@@ -242,7 +245,7 @@ func (o *AgentOptions) Run() error {
 	} else {
 		agentInfo.DBPath = agentDBPath
 	}
-	uds := coremetrics.ServeUDS(filepath.Join(configDir, "agent.sock"), func() []byte {
+	uds := coremetrics.ServeUDS(filepath.Join(udsDir, "agent.sock"), func() []byte {
 		b, _ := coremetrics.ServeStatusPayload(agentInfo, tsdb)
 		return b
 	})

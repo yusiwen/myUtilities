@@ -30,9 +30,8 @@ type AgentOptions struct {
 }
 
 type StatusOptions struct {
-	ConfigDir string `name:"config-dir" help:"Directory to look for the metrics Unix sockets. Default: ~/.config/mu."`
-	Port      int    `help:"Metrics server port to check (HTTP fallback)." default:"8096"`
-	Server    string `help:"Remote metrics server URL to check over HTTP instead of local sockets."`
+	Port   int    `help:"Metrics server port to check (HTTP fallback)." default:"8096"`
+	Server string `help:"Remote metrics server URL to check over HTTP instead of local sockets."`
 }
 
 type CompactOptions struct {

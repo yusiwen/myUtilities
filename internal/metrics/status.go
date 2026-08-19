@@ -22,10 +22,8 @@ func (o *StatusOptions) Run() error {
 		return o.reportRemote()
 	}
 
-	configDir := coremetrics.ResolveConfigDir(o.ConfigDir)
-
 	// Unix sockets are authoritative for local process state.
-	serverInfo, agentInfo := readLocalSockets(configDir)
+	serverInfo, agentInfo := readLocalSockets()
 
 	// HTTP fallback covers older binaries without a socket.
 	if serverInfo == nil {
@@ -55,8 +53,9 @@ func (o *StatusOptions) reportRemote() error {
 	return nil
 }
 
-// readLocalSockets dials the per-process Unix sockets and decodes the payloads.
-func readLocalSockets(configDir string) (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
+// readLocalSockets dials the per-process Unix sockets under udsDir and decodes
+// the payloads.
+func readLocalSockets() (*coremetrics.ServerInfo, *coremetrics.ServerInfo) {
 	var serverInfo, agentInfo *coremetrics.ServerInfo
 	for _, entry := range []struct {
 		name string
@@ -65,7 +64,7 @@ func readLocalSockets(configDir string) (*coremetrics.ServerInfo, *coremetrics.S
 		{"metrics.sock", &serverInfo},
 		{"agent.sock", &agentInfo},
 	} {
-		data, err := dialUDS(filepath.Join(configDir, entry.name))
+		data, err := dialUDS(filepath.Join(udsDir, entry.name))
 		if err != nil {
 			continue
 		}
