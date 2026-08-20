@@ -106,3 +106,37 @@ func TestServeStatusPayload(t *testing.T) {
 		t.Fatalf("payload counts wrong: %+v", got)
 	}
 }
+
+func TestInfoDBFileFields(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "metrics.db")
+	db, err := Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	db.Write("load.1m", nil, time.Now(), 0.5)
+
+	info := ServerInfo{Mode: ModeServer, DBPath: dbPath, Port: 8096}
+	srv := httptest.NewServer(NewServer(db, info))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/metrics/info")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status %d", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	var got ServerInfo
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.DBSize <= 0 {
+		t.Fatalf("db_size not populated: %d", got.DBSize)
+	}
+	if got.DBModified == "" {
+		t.Fatalf("db_modified not populated")
+	}
+}

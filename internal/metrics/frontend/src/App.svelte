@@ -14,6 +14,12 @@
   let rangeFrom = $state(0)
   let rangeTo = $state(Date.now())
   let admin = $state(null)
+  let statusText = $state('')
+  let statusLoading = $state(false)
+  let statusErr = $state('')
+  let statusDialog = $state(null)
+  let logDialog = $state(null)
+  let logText = $state('')
 
   const inGateway = typeof window !== 'undefined' && window.__MU_GATEWAY__
 
@@ -183,6 +189,109 @@
     return h > 0 ? `${h}h ${m}m` : `${m}m ${s % 60}s`
   }
 
+  async function showStatus() {
+    statusLoading = true
+    statusErr = ''
+    statusText = ''
+    try {
+      const [infoRes, namesRes, hostsRes] = await Promise.all([
+        fetch('/api/metrics/info'),
+        fetch('/api/metrics'),
+        fetch('/api/metrics/hosts')
+      ])
+      if (!infoRes.ok || !namesRes.ok || !hostsRes.ok) {
+        throw new Error(`HTTP ${infoRes.status || namesRes.status || hostsRes.status}`)
+      }
+      const info = await infoRes.json()
+      const names = await namesRes.json()
+      const hosts = await hostsRes.json()
+      statusText = buildStatusText(info, names, hosts)
+      statusDialog?.showModal()
+    } catch (e) {
+      statusErr = e.message
+      statusDialog?.showModal()
+    } finally {
+      statusLoading = false
+    }
+  }
+
+  function closeStatus() {
+    statusDialog?.close()
+  }
+
+  function showLog() {
+    logText = admin.log ? admin.log.join('\n') : ''
+    logDialog?.showModal()
+  }
+
+  function closeLog() {
+    logDialog?.close()
+  }
+
+  function buildStatusText(info, names, hosts) {
+    const lines = []
+    const dash = (v, d = '-') => (v === undefined || v === null || v === '' ? d : String(v))
+    const retention = info.retention === '' || info.retention === '0' ? '0 (forever)' : dash(info.retention)
+
+    lines.push('Config:')
+    lines.push(`  mode             ${dash(info.mode)}`)
+    if (info.pid) lines.push(`  pid              ${info.pid}`)
+    if (info.started_at) lines.push(`  started_at       ${info.started_at}`)
+    if (info.version) lines.push(`  version          ${info.version}`)
+    lines.push(`  config-dir       ${dash(info.config_dir, '(default ~/.config/mu)')}`)
+    lines.push(`  config file      ${dash(info.config_file)}`)
+    lines.push(`  retention        ${retention}`)
+    lines.push(`  compact_interval ${dash(info.compact_interval, '1d')}`)
+    lines.push(`  collect_interval ${dash(info.collect_interval, '30s')}`)
+    lines.push(`  hostname         ${dash(info.hostname)}`)
+    lines.push(`  db-path          ${dash(info.db_path)}`)
+    lines.push(`  debug            ${info.debug}`)
+    if (info.agent) lines.push(`  agent            running (pid ${dash(info.pid)}, ${dash(info.mode)})`)
+    lines.push('')
+
+    lines.push('Running:')
+    lines.push(`  server           ${info.port ? `http://localhost:${info.port}` : '-'}`)
+    lines.push(`  state            running (${names.length} metrics)`)
+    lines.push('')
+
+    lines.push('DB:')
+    if (info.db_path) {
+      lines.push(`  file             ${info.db_path}`)
+      if (info.db_size) lines.push(`  size             ${fmtSize(info.db_size)}`)
+      if (info.db_modified) lines.push(`  modified         ${new Date(info.db_modified).toLocaleString()}`)
+    }
+    if (info.series > 0 || info.points > 0) {
+      lines.push(`  series           ${info.series || 0}`)
+      lines.push(`  points           ${info.points || 0}`)
+    }
+    if (Array.isArray(hosts)) lines.push(`  hosts            ${listPreview(hosts)}`)
+    if (Array.isArray(names)) lines.push(`  metrics          ${listPreview(names)} (${names.length} total)`)
+    return lines.join('\n')
+  }
+
+  function listPreview(items) {
+    if (!items || items.length === 0) return '-'
+    const max = 8
+    const parts = items.slice(0, max)
+    let s = parts.join(', ')
+    if (items.length > max) s += ', ...'
+    return s
+  }
+
+  function fmtSize(b) {
+    if (b === null || b === undefined) return '-'
+    const n = Number(b)
+    if (n < 1024) return `${n} B`
+    const units = ['K', 'M', 'G', 'T', 'P', 'E']
+    let div = 1024
+    let exp = 0
+    for (let x = n / 1024; x >= 1024 && exp < units.length - 1; x /= 1024) {
+      div *= 1024
+      exp++
+    }
+    return `${(n / div).toFixed(1)} ${units[exp]}B`
+  }
+
   function fmt(v) {
     if (v === null || v === undefined) return '-'
     return Number(v).toFixed(2)
@@ -237,14 +346,33 @@
           {admin.state === 'external' ? 'External' : 'Start'}
         </button>
       {/if}
+      <button class="btn xs" onclick={showStatus} disabled={statusLoading}>
+        {statusLoading ? 'Loading...' : 'Status'}
+      </button>
       {#if admin.log && admin.log.length}
-        <details class="admin-log">
-          <summary>log</summary>
-          <pre>{admin.log.slice(-8).join('\n')}</pre>
-        </details>
+        <button class="btn xs" onclick={showLog}>Log</button>
       {/if}
     </div>
   {/if}
+
+  <dialog bind:this={statusDialog} class="status-dialog" onclose={() => { statusErr = ''; statusText = '' }}>
+    <div class="dialog-head">
+      <h3>Server Status</h3>
+      <button class="btn xs" onclick={closeStatus} title="Close">✕</button>
+    </div>
+    {#if statusErr}
+      <div class="admin-error">{statusErr}</div>
+    {/if}
+    <pre>{statusText}</pre>
+  </dialog>
+
+  <dialog bind:this={logDialog} class="status-dialog" onclose={() => { logText = '' }}>
+    <div class="dialog-head">
+      <h3>Server Log</h3>
+      <button class="btn xs" onclick={closeLog} title="Close">✕</button>
+    </div>
+    <pre>{logText}</pre>
+  </dialog>
 
   {#if error}
     <div class="msg error">{error}</div>
@@ -396,24 +524,53 @@
     color: var(--text2);
   }
 
-  .admin-log summary {
-    cursor: pointer;
-    color: var(--text2);
-    user-select: none;
+  .status-dialog {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    padding: 16px 20px;
+    max-width: min(720px, 90vw);
+    width: 100%;
+    margin: auto;
   }
 
-  .admin-log pre {
-    margin: 8px 0 0;
-    max-width: 640px;
-    max-height: 180px;
+  .status-dialog[open] {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .status-dialog::backdrop {
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  .dialog-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .dialog-head h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--text);
+  }
+
+  .status-dialog pre {
+    margin: 0;
+    max-width: 100%;
+    max-height: 60vh;
     overflow: auto;
-    padding: 8px 10px;
+    padding: 10px 12px;
     border-radius: 6px;
     background: var(--surface2);
     color: var(--text2);
     font-size: 12px;
     line-height: 1.5;
     white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .loading {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -37,6 +38,8 @@ type ServerInfo struct {
 	Debug           bool   `json:"debug"`
 	Series          int64  `json:"series,omitempty"`
 	Points          int64  `json:"points,omitempty"`
+	DBSize          int64  `json:"db_size,omitempty"`
+	DBModified      string `json:"db_modified,omitempty"`
 }
 
 // Server exposes the metrics TSDB over HTTP.
@@ -76,7 +79,21 @@ func ServeStatusPayload(info ServerInfo, tsdb *DB) ([]byte, error) {
 			info.Points = stats.Points
 		}
 	}
+	fillDBFile(&info)
 	return json.Marshal(info)
+}
+
+// fillDBFile stats the DB file (when a path is known) so the JSON payload can
+// carry the current size and modification time for remote/browser consumers
+// that cannot access the filesystem themselves.
+func fillDBFile(info *ServerInfo) {
+	if info.DBPath == "" {
+		return
+	}
+	if st, err := os.Stat(info.DBPath); err == nil {
+		info.DBSize = st.Size()
+		info.DBModified = st.ModTime().Format(time.RFC3339)
+	}
 }
 
 func (s *Server) debugLog(format string, args ...interface{}) {
@@ -91,6 +108,7 @@ func (s *Server) handleInfo(w http.ResponseWriter, r *http.Request) {
 		info.Series = stats.Series
 		info.Points = stats.Points
 	}
+	fillDBFile(&info)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(info)
 }
