@@ -16,12 +16,13 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// 注意：嵌入路径是相对于当前文件的路径
+// embeddedFiles embeds the HTML templates and CSS static files.
+// Embed paths are relative to this file's directory.
 //
 //go:embed templates/*.html static/*.css
 var embeddedFiles embed.FS
 
-// 客户端信息
+// Client represents an OAuth2 registered client application.
 type Client struct {
 	ID           string
 	Name         string
@@ -29,7 +30,7 @@ type Client struct {
 	RedirectURIs []string
 }
 
-// 授权码
+// AuthorizationCode represents an OAuth2 authorization code.
 type AuthorizationCode struct {
 	Code        string
 	ClientID    string
@@ -39,7 +40,7 @@ type AuthorizationCode struct {
 	UserID      string
 }
 
-// 访问令牌
+// AccessToken represents an OAuth2 access token.
 type AccessToken struct {
 	Token     string
 	Type      string
@@ -49,7 +50,7 @@ type AccessToken struct {
 	ClientID  string
 }
 
-// JWT 声明结构
+// JwtCustomClaims extends jwt.RegisteredClaims with custom JWT payload fields.
 type JwtCustomClaims struct {
 	UserID   string `json:"user_id"`
 	ClientID string `json:"client_id"`
@@ -57,14 +58,14 @@ type JwtCustomClaims struct {
 	jwt.RegisteredClaims
 }
 
-// 用户信息
+// User represents an authenticated user.
 type User struct {
 	ID       string
 	Username string
 	Password string
 }
 
-// 授权请求会话
+// AuthRequest represents a pending OAuth2 authorization request.
 type AuthRequest struct {
 	ID           string
 	ClientID     string
@@ -76,7 +77,7 @@ type AuthRequest struct {
 	ExpiresAt    time.Time
 }
 
-// AuthServer 结构体，包含所有服务器状态
+// AuthServer holds all state for the OAuth2 mock server.
 type AuthServer struct {
 	clients      map[string]*Client
 	users        map[string]*User
@@ -86,10 +87,10 @@ type AuthServer struct {
 	sessions     map[string]string
 	templates    *template.Template
 	staticFS     http.FileSystem
-	jwtSecret    []byte // 用于签名JWT的密钥
+	jwtSecret    []byte // Secret key used to sign JWTs
 }
 
-// NewAuthServer 创建并初始化一个新的认证服务器实例
+// NewAuthServer creates and initializes a new AuthServer instance.
 func NewAuthServer() *AuthServer {
 	server := &AuthServer{
 		clients:      make(map[string]*Client),
@@ -98,10 +99,10 @@ func NewAuthServer() *AuthServer {
 		accessTokens: make(map[string]*AccessToken),
 		authRequests: make(map[string]*AuthRequest),
 		sessions:     make(map[string]string),
-		jwtSecret:    []byte("your-256-bit-secret"), // 请使用更安全的密钥
+		jwtSecret:    []byte("your-256-bit-secret"), // Use a more secure secret in production
 	}
 
-	// 初始化示例数据
+	// Seed demo data
 	server.clients["client1"] = &Client{
 		ID:           "client1",
 		Name:         "示例应用",
@@ -115,14 +116,14 @@ func NewAuthServer() *AuthServer {
 		Password: "password123",
 	}
 
-	// 解析模板
+	// Parse templates
 	templates, err := parseTemplates()
 	if err != nil {
 		log.Fatal("Failed to parse templates:", err)
 	}
 	server.templates = templates
 
-	// 创建静态文件系统
+	// Create static file filesystem
 	staticFS, err := fs.Sub(embeddedFiles, "static")
 	if err != nil {
 		log.Fatal("Failed to create static filesystem:", err)
@@ -132,11 +133,11 @@ func NewAuthServer() *AuthServer {
 	return server
 }
 
-// parseTemplates 从嵌入的文件系统中解析模板
+// parseTemplates parses HTML templates from the embedded filesystem.
 func parseTemplates() (*template.Template, error) {
 	tmpl := template.New("")
 
-	// 遍历嵌入的模板文件
+	// Iterate over embedded template files
 	templateDir, err := embeddedFiles.ReadDir("templates")
 	if err != nil {
 		return nil, fmt.Errorf("failed to read templates directory: %w", err)
@@ -147,14 +148,14 @@ func parseTemplates() (*template.Template, error) {
 			continue
 		}
 
-		// 读取模板文件内容
+		// Read template file content
 		filePath := "templates/" + file.Name()
 		content, err := embeddedFiles.ReadFile(filePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read template file %s: %w", filePath, err)
 		}
 
-		// 解析模板
+		// Parse the template
 		tmpl, err = tmpl.New(file.Name()).Parse(string(content))
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse template %s: %w", file.Name(), err)
@@ -164,7 +165,7 @@ func parseTemplates() (*template.Template, error) {
 	return tmpl, nil
 }
 
-// SetupRoutes 设置HTTP路由处理
+// SetupRoutes registers HTTP route handlers on the given mux.
 func (s *AuthServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/", s.homeHandler)
 	mux.HandleFunc("/clients", s.clientsHandler)
@@ -175,11 +176,11 @@ func (s *AuthServer) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/userinfo", s.userInfoHandler)
 	mux.HandleFunc("/verify", s.verifyTokenHandler)
 
-	// 静态文件服务
+	// Serve static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(s.staticFS)))
 }
 
-// 首页处理器
+// homeHandler serves the landing page.
 func (s *AuthServer) homeHandler(w http.ResponseWriter, r *http.Request) {
 	data := map[string]interface{}{
 		"Clients": s.clients,
@@ -236,10 +237,10 @@ func (s *AuthServer) addClients(w http.ResponseWriter, r *http.Request) {
 	s.clients[client.ID] = client
 }
 
-// 登录页面处理器
+// loginHandler serves the login page and processes login submissions.
 func (s *AuthServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "GET" {
-		// 显示登录页面
+		// Render login page
 		authRequestID := r.URL.Query().Get("request_id")
 		clientID := r.URL.Query().Get("client_id")
 
@@ -255,14 +256,14 @@ func (s *AuthServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 处理登录表单提交
+	// Process login form submission
 	r.ParseForm()
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	authRequestID := r.FormValue("request_id")
 	//clientID := r.FormValue("client_id")
 
-	// 验证用户凭据
+	// Validate user credentials
 	var user *User
 	for _, u := range s.users {
 		if u.Username == username && u.Password == password {
@@ -276,11 +277,11 @@ func (s *AuthServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 创建会话
+	// Create session
 	sessionID, _ := generateRandomString(32)
 	s.sessions[sessionID] = user.ID
 
-	// 设置会话cookie
+	// Set session cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_session",
 		Value:    sessionID,
@@ -289,7 +290,7 @@ func (s *AuthServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	// 如果存在授权请求，重定向到授权页面
+	// Redirect to authorization page if there's a pending auth request
 	if authRequestID != "" {
 		authRequest, exists := s.authRequests[authRequestID]
 		if exists {
@@ -299,13 +300,13 @@ func (s *AuthServer) loginHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 如果没有特定授权请求，重定向到首页
+	// Redirect to home if no specific auth request
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
-// 授权页面处理器
+// authHandler serves the authorization page and processes authorization decisions.
 func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
-	// 检查会话
+	// Check session
 	sessionID, err := r.Cookie("oauth_session")
 	if err != nil {
 		http.Redirect(w, r, "/login", http.StatusFound)
@@ -326,7 +327,7 @@ func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "GET" {
-		// 显示授权页面
+		// Render authorization page
 		data := map[string]interface{}{
 			"AuthRequest": authRequest,
 			"Client":      s.clients[authRequest.ClientID],
@@ -339,12 +340,12 @@ func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 处理授权决定
+	// Process authorization decision
 	r.ParseForm()
 	decision := r.FormValue("decision")
 
 	if decision != "allow" {
-		// 用户拒绝授权
+		// User denied authorization
 		redirectURL, _ := url.Parse(authRequest.RedirectURI)
 		params := redirectURL.Query()
 		params.Add("error", "access_denied")
@@ -356,14 +357,14 @@ func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 用户同意授权，生成授权码
+	// User authorized: generate authorization code
 	code, err := generateRandomString(32)
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	// 存储授权码
+	// Store authorization code
 	authCode := &AuthorizationCode{
 		Code:        code,
 		ClientID:    authRequest.ClientID,
@@ -374,7 +375,7 @@ func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	s.authCodes[code] = authCode
 
-	// 构建重定向URL
+	// Build redirect URL
 	redirectURL, _ := url.Parse(authRequest.RedirectURI)
 	params := redirectURL.Query()
 	params.Add("code", code)
@@ -383,16 +384,16 @@ func (s *AuthServer) authHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	redirectURL.RawQuery = params.Encode()
 
-	// 清理授权请求
+	// Clean up the auth request
 	delete(s.authRequests, authRequestID)
 
-	// 重定向到客户端
+	// Redirect to the client
 	http.Redirect(w, r, redirectURL.String(), http.StatusFound)
 }
 
-// 授权端点处理器
+// authorizeHandler handles the OAuth2 authorization endpoint.
 func (s *AuthServer) authorizeHandler(w http.ResponseWriter, r *http.Request) {
-	// 解析查询参数
+	// Parse query parameters
 	query := r.URL.Query()
 	clientID := query.Get("client_id")
 	redirectURI := query.Get("redirect_uri")
@@ -400,20 +401,20 @@ func (s *AuthServer) authorizeHandler(w http.ResponseWriter, r *http.Request) {
 	state := query.Get("state")
 	scope := query.Get("scope")
 
-	// 验证必要参数
+	// Validate required parameters
 	if clientID == "" || redirectURI == "" || responseType != "code" {
 		http.Error(w, "Invalid request parameters", http.StatusBadRequest)
 		return
 	}
 
-	// 验证客户端是否存在
+	// Verify the client exists
 	client, exists := s.clients[clientID]
 	if !exists {
 		http.Error(w, "Client not found", http.StatusBadRequest)
 		return
 	}
 
-	// 验证重定向URI是否已注册
+	// Verify the redirect URI is registered
 	validRedirectURI := false
 	for _, uri := range client.RedirectURIs {
 		if uri == redirectURI {
@@ -427,7 +428,7 @@ func (s *AuthServer) authorizeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 创建授权请求
+	// Create authorization request
 	authRequestID, _ := generateRandomString(32)
 	s.authRequests[authRequestID] = &AuthRequest{
 		ID:           authRequestID,
@@ -439,35 +440,35 @@ func (s *AuthServer) authorizeHandler(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:    time.Now().Add(10 * time.Minute),
 	}
 
-	// 检查用户是否已登录
+	// Check if user is logged in
 	sessionID, err := r.Cookie("oauth_session")
 	if err != nil {
-		// 未登录，重定向到登录页面
+		// Not logged in, redirect to login page
 		http.Redirect(w, r, fmt.Sprintf("/login?request_id=%s&client_id=%s", authRequestID, clientID), http.StatusFound)
 		return
 	}
 
 	userID, exists := s.sessions[sessionID.Value]
 	if !exists {
-		// 会话无效，重定向到登录页面
+		// Session invalid, redirect to login page
 		http.Redirect(w, r, fmt.Sprintf("/login?request_id=%s&client_id=%s", authRequestID, clientID), http.StatusFound)
 		return
 	}
 
-	// 用户已登录，设置用户ID并重定向到授权页面
+	// User is logged in, set user ID and redirect to auth page
 	s.authRequests[authRequestID].UserID = userID
 	http.Redirect(w, r, fmt.Sprintf("/auth?request_id=%s", authRequestID), http.StatusFound)
 }
 
-// 令牌端点处理器
+// tokenHandler handles the OAuth2 token endpoint.
 func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
-	// 只接受POST请求
+	// Only accept POST requests
 	if r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 解析请求体
+	// Parse form body
 	err := r.ParseForm()
 	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -480,40 +481,40 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	clientID := r.FormValue("client_id")
 	clientSecret := r.FormValue("client_secret")
 
-	// 验证授权类型
+	// Validate grant type
 	if grantType != "authorization_code" {
 		http.Error(w, "Unsupported grant type", http.StatusBadRequest)
 		return
 	}
 
-	// 验证客户端凭据
+	// Validate client credentials
 	client, exists := s.clients[clientID]
 	if !exists || client.Secret != clientSecret {
 		http.Error(w, "Invalid client credentials", http.StatusUnauthorized)
 		return
 	}
 
-	// 查找授权码
+	// Look up the authorization code
 	authCode, exists := s.authCodes[code]
 	if !exists {
 		http.Error(w, "Invalid authorization code", http.StatusBadRequest)
 		return
 	}
 
-	// 检查授权码是否过期
+	// Check if authorization code has expired
 	if time.Now().After(authCode.ExpiresAt) {
-		delete(s.authCodes, code) // 清理过期代码
+		delete(s.authCodes, code) // Clean up expired code
 		http.Error(w, "Authorization code expired", http.StatusBadRequest)
 		return
 	}
 
-	// 验证重定向URI
+	// Validate redirect URI
 	if authCode.RedirectURI != redirectURI {
 		http.Error(w, "Redirect URI mismatch", http.StatusBadRequest)
 		return
 	}
 
-	// 验证客户端ID
+	// Validate client ID
 	if authCode.ClientID != clientID {
 		http.Error(w, "Client ID mismatch", http.StatusBadRequest)
 		return
@@ -533,30 +534,30 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// 生成访问令牌
+	// Generate access token
 	accessToken, err := token.SignedString(s.jwtSecret)
 	if err != nil {
 		http.Error(w, "Token generation error", http.StatusInternalServerError)
 		return
 	}
 
-	// 存储访问令牌
+	// Cache access token
 	cachedToken := &AccessToken{
 		Token:     accessToken,
 		Type:      "Bearer",
-		ExpiresIn: 3600, // 1小时有效期
+		ExpiresIn: 3600, // 1-hour validity
 		Scope:     authCode.Scope,
 		UserID:    authCode.UserID,
 		ClientID:  clientID,
 	}
 	s.accessTokens[accessToken] = cachedToken
 
-	// 清理已使用的授权码
+	// Clean up used authorization code
 	delete(s.authCodes, code)
 
 	log.Printf("Generated token for user %s: %s", authCode.UserID, accessToken)
 
-	// 返回令牌响应
+	// Return token response
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"access_token": accessToken,
@@ -566,7 +567,7 @@ func (s *AuthServer) tokenHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// 用户信息端点处理器
+// userInfoHandler handles the OAuth2 user info endpoint.
 func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != "GET" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -575,7 +576,7 @@ func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 	accessToken := r.URL.Query().Get("access_token")
 	if accessToken == "" {
-		// 从Authorization头获取访问令牌
+		// Get access token from Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if len(authHeader) < 8 || authHeader[:7] != "Bearer " {
 			http.Error(w, "Invalid authorization header", http.StatusUnauthorized)
@@ -592,14 +593,14 @@ func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 检查令牌是否过期（简化处理，实际应该检查时间）
+	// Check token expiration (simplified; in production, check actual timestamp)
 	user, exists := s.users[token.UserID]
 	if !exists {
 		http.Error(w, "User not found", http.StatusInternalServerError)
 		return
 	}
 
-	// 返回用户信息
+	// Return user info
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"sub":  user.ID,
@@ -607,25 +608,25 @@ func (s *AuthServer) userInfoHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// verifyHandler 验证JWT Token的接口
+// verifyTokenHandler handles JWT token verification.
 func (s *AuthServer) verifyTokenHandler(w http.ResponseWriter, r *http.Request) {
-	// 支持GET和POST请求
+	// Accept GET and POST requests
 	if r.Method != "GET" && r.Method != "POST" {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// 从查询参数或请求头中获取token
+	// Get token from query param or body
 	var tokenString string
 	if r.Method == "GET" {
 		tokenString = r.URL.Query().Get("token")
 	} else {
-		// 从POST请求体中获取
+		// Get from POST request body
 		r.ParseForm()
 		tokenString = r.FormValue("token")
 	}
 
-	// 如果查询参数中没有，尝试从Authorization头获取
+	// If not in query params, try Authorization header
 	if tokenString == "" {
 		authHeader := r.Header.Get("Authorization")
 		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
@@ -638,17 +639,17 @@ func (s *AuthServer) verifyTokenHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// 解析和验证Token
+	// Parse and validate the token
 	claims := &JwtCustomClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		// 验证签名方法
+		// Verify signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return s.jwtSecret, nil
 	})
 
-	// 处理验证结果
+	// Handle verification result
 	response := map[string]interface{}{}
 	if err != nil {
 		response["valid"] = false
@@ -666,12 +667,12 @@ func (s *AuthServer) verifyTokenHandler(w http.ResponseWriter, r *http.Request) 
 		response["expires_at"] = claims.ExpiresAt.Time.Unix()
 	}
 
-	// 返回验证结果
+	// Return verification result
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
-// 生成随机字符串
+// generateRandomString generates a cryptographically secure random string of the given length.
 func generateRandomString(length int) (string, error) {
 	b := make([]byte, length)
 	_, err := rand.Read(b)

@@ -11,15 +11,15 @@ type Proxy interface {
 	Close()
 }
 
-// 后端数据库配置
+// BackendConfig holds configuration for a backend database.
 type BackendConfig struct {
-	Name     string // 后端名称（用于日志）
+	Name     string // Backend name (used for logging)
 	Host     string
 	Port     int
-	Priority int // 优先级 (数字越小优先级越高)
+	Priority int // Priority (lower number = higher priority)
 }
 
-// 后端数据库状态
+// BackendStatus tracks the runtime status of a backend database.
 type BackendStatus struct {
 	IsAvailable bool
 	LastCheck   time.Time

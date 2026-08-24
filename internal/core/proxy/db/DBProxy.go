@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// TCP 代理服务器
+// OracleBackendConfig holds Oracle database backend configuration.
 type OracleBackendConfig struct {
 	proxy.BackendConfig
 	Username    string
@@ -32,12 +32,12 @@ type OracleProxy struct {
 	Backends []*OracleBackendStatus
 }
 
-// 启动代理服务器
+// Start starts the proxy server and health checks.
 func (p *OracleProxy) Start() error {
-	// 启动健康检查
+	// Start health checks
 	p.StartHealthChecks()
 
-	// 启动代理服务器
+	// Start proxy listener
 	log.Printf("Starting Oracle proxy on %s", p.ListenAddr)
 	listener, err := net.Listen("tcp", p.ListenAddr)
 	if err != nil {
@@ -58,10 +58,10 @@ func (p *OracleProxy) Start() error {
 }
 
 func (p *OracleProxy) Close() {
-	// 停止健康检查
+	// Stop health checks
 	p.StopHealthChecks()
 
-	// 关闭所有后端连接
+	// Close all backend connections
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 	for _, backend := range p.Backends {
@@ -72,14 +72,14 @@ func (p *OracleProxy) Close() {
 	log.Println("Oracle proxy closed")
 }
 
-// 处理客户端连接
+// handleClient handles a single client connection, routing it to an available backend.
 func (p *OracleProxy) handleClient(clientConn net.Conn) {
 	defer clientConn.Close()
 
 	for {
 		var rst = func() bool {
 			log.Printf("Routing connection for %s", clientConn.RemoteAddr())
-			// 获取活动后端
+			// Get an active backend
 			backend, err := p.getActiveBackend()
 			if err != nil {
 				log.Printf("Failed to route: %v", err)
@@ -88,7 +88,7 @@ func (p *OracleProxy) handleClient(clientConn net.Conn) {
 
 			log.Printf("Routing connection to %s (%s)", backend.Config.Name, backend.Config.Host)
 
-			// 连接到后端数据库
+			// Connect to the backend database
 			backendConn, err := net.DialTimeout("tcp",
 				fmt.Sprintf("%s:%d", backend.Config.Host, backend.Config.Port), 3*time.Second)
 			if err != nil {
@@ -98,11 +98,11 @@ func (p *OracleProxy) handleClient(clientConn net.Conn) {
 			var once sync.Once
 			defer once.Do(func() { backendConn.Close() })
 
-			// 启动双向数据转发
+			// Start bidirectional data forwarding
 			var wg sync.WaitGroup
 			wg.Add(2)
 
-			// 客户端 -> 后端
+			// Client -> Backend
 			go func() {
 				defer wg.Done()
 				_, err := io.Copy(backendConn, clientConn)
@@ -112,7 +112,7 @@ func (p *OracleProxy) handleClient(clientConn net.Conn) {
 				log.Printf("Exit Client->Backend forwarding for %s", clientConn.RemoteAddr())
 			}()
 
-			// 后端 -> 客户端
+			// Backend -> Client
 			go func() {
 				defer wg.Done()
 				_, err := io.Copy(clientConn, backendConn)
@@ -148,19 +148,19 @@ func (p *OracleProxy) handleClient(clientConn net.Conn) {
 	log.Printf("Goroutine for %s exited", clientConn.RemoteAddr())
 }
 
-// 获取活动后端
+// getActiveBackend returns the first available backend by priority.
 func (p *OracleProxy) getActiveBackend() (*OracleBackendStatus, error) {
 	p.Mutex.Lock()
 	defer p.Mutex.Unlock()
 
-	// 查找第一个可用的后端（按优先级）
+	// Find the first available backend (by priority)
 	for i, backend := range p.Backends {
 		if backend.IsAvailable {
 			if backend.Context == nil || backend.Context.Err() != nil {
 				backend.Context, backend.Cancel = context.WithCancel(context.Background())
 			}
 
-			// 更新当前选中的后端
+			// Update the currently selected backend
 			p.CurrentIdx = i
 
 			log.Printf("Using new route by priority: %s", backend.Config.Name)
@@ -171,30 +171,30 @@ func (p *OracleProxy) getActiveBackend() (*OracleBackendStatus, error) {
 	return nil, errors.New("no available route found")
 }
 
-// 启动健康检查
+// StartHealthChecks starts background health check goroutines for all backends.
 func (p *OracleProxy) StartHealthChecks() {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.HealthCheck.CancelFunc = cancel
 
-	// 对所有后端启动独立健康检查
+	// Start independent health checks for all backends
 	for _, backend := range p.Backends {
 		go p.runHealthCheck(ctx, backend)
 	}
 }
 
-// 停止健康检查
+// StopHealthChecks stops all background health check goroutines.
 func (p *OracleProxy) StopHealthChecks() {
 	if p.HealthCheck.CancelFunc != nil {
 		p.HealthCheck.CancelFunc()
 	}
 }
 
-// 运行健康检查循环
+// runHealthCheck runs the periodic health check loop for a single backend.
 func (p *OracleProxy) runHealthCheck(ctx context.Context, backend *OracleBackendStatus) {
 	ticker := time.NewTicker(p.HealthCheck.Interval)
 	defer ticker.Stop()
 
-	// 立即执行首次检查
+	// Run initial check immediately
 	p.performHealthCheck(backend)
 
 	for {
@@ -208,9 +208,9 @@ func (p *OracleProxy) runHealthCheck(ctx context.Context, backend *OracleBackend
 	}
 }
 
-// 执行健康检查
+// performHealthCheck runs TCP and SQL health checks on a backend.
 func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
-	// 1. TCP 连接检查
+	// 1. TCP connection check
 	if err := p.checkTCPConnection(backend); err != nil {
 		backend.Mutex.Lock()
 		backend.IsAvailable = false
@@ -224,7 +224,7 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 		return
 	}
 
-	// 2. SQL 健康检查
+	// 2. SQL health check
 	if err := p.checkSQLHealth(backend); err != nil {
 		backend.Mutex.Lock()
 		backend.IsAvailable = false
@@ -238,7 +238,7 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 		return
 	}
 
-	// 标记为健康
+	// Mark as healthy
 	backend.Mutex.Lock()
 	backend.IsAvailable = true
 	backend.LastError = nil
@@ -251,7 +251,7 @@ func (p *OracleProxy) performHealthCheck(backend *OracleBackendStatus) {
 	log.Printf("Backend %s is healthy", backend.Config.Name)
 }
 
-// 检查 TCP 连接
+// checkTCPConnection verifies TCP reachability of the backend.
 func (p *OracleProxy) checkTCPConnection(backend *OracleBackendStatus) error {
 	conn, err := net.DialTimeout("tcp",
 		fmt.Sprintf("%s:%d", backend.Config.Host, backend.Config.Port), 3*time.Second)
@@ -262,13 +262,13 @@ func (p *OracleProxy) checkTCPConnection(backend *OracleBackendStatus) error {
 	return nil
 }
 
-// 检查 SQL 健康
+// checkSQLHealth verifies the backend responds to SQL queries.
 func (p *OracleProxy) checkSQLHealth(backend *OracleBackendStatus) error {
-	// 创建带超时的上下文
+	// Create context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), p.HealthCheck.Timeout)
 	defer cancel()
 
-	// 连接到数据库
+	// Connect to the database
 	connStr := go_ora.BuildUrl(backend.Config.Host, backend.Config.Port, backend.Config.ServiceName,
 		backend.Config.Username, backend.Config.Password, nil)
 	db, err := sql.Open("oracle", connStr)
@@ -277,14 +277,14 @@ func (p *OracleProxy) checkSQLHealth(backend *OracleBackendStatus) error {
 	}
 	defer db.Close()
 
-	// 执行健康检查查询
+	// Execute the health check query
 	var result string
 	err = db.QueryRowContext(ctx, p.HealthCheck.Query).Scan(&result)
 	if err != nil {
 		return fmt.Errorf("query execution failed: %w", err)
 	}
 
-	// 验证结果
+	// Verify the result matches expected value
 	if result != p.HealthCheck.Expected {
 		return fmt.Errorf("unexpected result: %s", result)
 	}
@@ -292,7 +292,7 @@ func (p *OracleProxy) checkSQLHealth(backend *OracleBackendStatus) error {
 	return nil
 }
 
-// 获取后端状态报告
+// GetStatusReport returns a formatted status report for all backends.
 func (p *OracleProxy) GetStatusReport() string {
 	p.Mutex.RLock()
 	defer p.Mutex.RUnlock()

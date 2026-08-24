@@ -11,18 +11,18 @@ import (
 	"time"
 )
 
-// FileWatcher 监控本地文件变化
+// FileWatcher monitors local file system changes.
 type FileWatcher struct {
 	path      string
 	interval  time.Duration
 	stopChan  chan struct{}
-	lastState map[string]FileState // 文件路径 -> 状态
+	lastState map[string]FileState // file path -> state
 }
 
 type FileState struct {
 	Size     int64
 	ModTime  time.Time
-	Checksum string // 简化的校验和
+	Checksum string // Simplified checksum (MD5 of first 8KB)
 }
 
 func NewFileWatcher(path string, interval time.Duration) *FileWatcher {
@@ -36,7 +36,7 @@ func NewFileWatcher(path string, interval time.Duration) *FileWatcher {
 func (w *FileWatcher) Watch(ctx context.Context) (<-chan Event, error) {
 	eventCh := make(chan Event, 10)
 
-	// 初始化状态
+	// Initialize initial state
 	if err := w.scanFiles(); err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (w *FileWatcher) List() ([]interface{}, error) {
 	return result, nil
 }
 
-// getFileState 获取单个文件的状态
+// getFileState retrieves the state of a single file.
 func getFileState(filePath string, fileInfo os.FileInfo) (FileState, error) {
 	checksum, err := calculateChecksum(filePath)
 	if err != nil {
@@ -91,17 +91,17 @@ func getFileState(filePath string, fileInfo os.FileInfo) (FileState, error) {
 	}, nil
 }
 
-// scanPath 扫描路径（文件或目录）并返回文件状态映射
+// scanPath scans a path (file or directory) and returns a map of file states.
 func scanPath(path string) (map[string]FileState, error) {
 	stateMap := make(map[string]FileState)
 
-	// 检查路径是否存在
+	// Check if the path exists
 	fileInfo, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access path %s: %w", path, err)
 	}
 
-	// 如果是单个文件，直接处理
+	// Handle single file directly
 	if !fileInfo.IsDir() {
 		state, err := getFileState(path, fileInfo)
 		if err != nil {
@@ -111,13 +111,13 @@ func scanPath(path string) (map[string]FileState, error) {
 		return stateMap, nil
 	}
 
-	// 遍历目录
+	// Walk the directory tree
 	err = filepath.Walk(path, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		// 跳过目录
+		// Skip directories
 		if info.IsDir() {
 			return nil
 		}
@@ -138,11 +138,11 @@ func scanPath(path string) (map[string]FileState, error) {
 	return stateMap, nil
 }
 
-// handleError 处理错误，可选择发送到事件通道
+// handleError processes an error, optionally sending it to the event channel.
 func handleError(err error, message string, eventCh chan<- Event) error {
 	formattedErr := fmt.Errorf("%s: %w", message, err)
 
-	// 如果提供了事件通道，发送错误事件
+	// Send error event if channel provided
 	if eventCh != nil {
 		eventCh <- Event{
 			Type:      Error,
@@ -152,7 +152,7 @@ func handleError(err error, message string, eventCh chan<- Event) error {
 		return nil
 	}
 
-	// 否则返回错误
+	// Otherwise return the error
 	return formattedErr
 }
 
@@ -166,9 +166,9 @@ func (w *FileWatcher) scanFiles() error {
 	return nil
 }
 
-// calculateChecksum 计算文件的MD5校验和
-// 为了效率，只读取文件的前8KB来计算校验和，这在大多数情况下足够检测文件变化
-// 返回十六进制编码的MD5哈希值字符串
+// calculateChecksum computes the MD5 checksum of a file.
+// For efficiency, only the first 8KB are read, which is sufficient to detect most file changes.
+// Returns the hex-encoded MD5 hash string.
 func calculateChecksum(filePath string) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -176,7 +176,7 @@ func calculateChecksum(filePath string) (string, error) {
 	}
 	defer file.Close()
 
-	// 只读取前8KB来计算校验和
+	// Read only the first 8KB for the checksum
 	buffer := make([]byte, 8*1024)
 	n, err := file.Read(buffer)
 	if err != nil && err != io.EOF {
@@ -187,13 +187,13 @@ func calculateChecksum(filePath string) (string, error) {
 	return hex.EncodeToString(hash[:]), nil
 }
 
-// compareStates 比较两个状态映射并发送相应的事件
+// compareStates compares current and previous file states, emitting change events.
 func compareStates(currentState, lastState map[string]FileState, eventCh chan<- Event) {
-	// 检测新增和修改的文件
+	// Detect new and modified files
 	for path, state := range currentState {
 		oldState, exists := lastState[path]
 		if !exists {
-			// 新增文件
+			// New file
 			eventCh <- Event{
 				Type:      Added,
 				Object:    path,
@@ -202,7 +202,7 @@ func compareStates(currentState, lastState map[string]FileState, eventCh chan<- 
 		} else if oldState.Size != state.Size ||
 			oldState.ModTime != state.ModTime ||
 			oldState.Checksum != state.Checksum {
-			// 修改文件 - 明确比较各个字段
+			// Modified file — compare individual fields
 			eventCh <- Event{
 				Type:      Modified,
 				Object:    path,
@@ -211,10 +211,10 @@ func compareStates(currentState, lastState map[string]FileState, eventCh chan<- 
 		}
 	}
 
-	// 检测删除的文件
+	// Detect deleted files
 	for path := range lastState {
 		if _, exists := currentState[path]; !exists {
-			// 删除文件
+			// Deleted file
 			eventCh <- Event{
 				Type:      Deleted,
 				Object:    path,
@@ -224,18 +224,18 @@ func compareStates(currentState, lastState map[string]FileState, eventCh chan<- 
 	}
 }
 
-// detectChanges 扫描文件系统并检测变化，将变化事件发送到eventCh
+// detectChanges scans the file system for changes and sends change events to eventCh.
 func (w *FileWatcher) detectChanges(eventCh chan<- Event) {
-	// 扫描文件系统，获取当前状态
+	// Scan file system and get current state
 	currentState, err := scanPath(w.path)
 	if err != nil {
 		handleError(err, fmt.Sprintf("Failed to scan path %s", w.path), eventCh)
 		return
 	}
 
-	// 比较状态并发送事件
+	// Compare states and emit events
 	compareStates(currentState, w.lastState, eventCh)
 
-	// 更新状态
+	// Update tracked state
 	w.lastState = currentState
 }
