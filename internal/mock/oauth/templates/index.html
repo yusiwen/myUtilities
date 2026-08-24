@@ -1,25 +1,25 @@
 <!DOCTYPE html>
-<html lang="utf-8">
+<html lang="en">
 <head>
-    <title>OAuth 2.0 授权服务器</title>
+    <title>OAuth 2.0 Authorization Server</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <div class="container">
-    <h1>OAuth 2.0 授权服务器</h1>
-    <p>这是一个简单的 OAuth 2.0 授权服务器演示。</p>
+    <h1>OAuth 2.0 Authorization Server</h1>
+    <p>A demo for a simple OAuth 2.0 authorization server.</p>
 
     <button class="register-btn" id="registerBtn">Register New Client</button>
 
-    <h2>已注册的客户端</h2>
+    <h2>Registered Clients</h2>
     <ul>
         {{range .Clients}}
         <li><strong>{{.Name}}</strong> (ID: {{.ID}})</li>
         {{end}}
     </ul>
 
-    <h2>测试授权流程</h2>
-    <p>要测试授权流程，请访问以下 URL：</p>
+    <h2>Test Authorization Flow</h2>
+    <p>To test the authorization flow, visit the following URLs:</p>
     <ul>
         {{range .Clients}}
         <li><a href="/authorize?response_type=code&client_id={{ .ID }}&redirect_uri={{ index .RedirectURIs 0 }}"><strong>{{.Name}}</strong></a></li>

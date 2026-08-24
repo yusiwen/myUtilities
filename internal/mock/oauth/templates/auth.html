@@ -1,27 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>授权请求</title>
+    <title>Authorization Request</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 <div class="container">
-    <h1>授权请求</h1>
-    <p>您好, <strong>{{.User.Username}}</strong>!</p>
-    <p>应用程序 <strong>{{.Client.Name}}</strong> 希望访问您的账户。</p>
+    <h1>Authorization Request</h1>
+    <p>Hello, <strong>{{.User.Username}}</strong>!</p>
+    <p>The application <strong>{{.Client.Name}}</strong> requests access to your account.</p>
 
     <div class="permissions">
-        <h3>请求的权限:</h3>
+        <h3>Permissions Requested:</h3>
         <ul>
-            <li>读取您的基本信息</li>
-            <li>访问您的电子邮件地址</li>
+            <li>Read your basic information</li>
+            <li>Access your email address</li>
         </ul>
     </div>
 
     <form method="POST">
         <div class="actions">
-            <button type="submit" name="decision" value="allow" class="btn-allow">允许</button>
-            <button type="submit" name="decision" value="deny" class="btn-deny">拒绝</button>
+            <button type="submit" name="decision" value="allow" class="btn-allow">Allow</button>
+            <button type="submit" name="decision" value="deny" class="btn-deny">Deny</button>
         </div>
     </form>
 </div>
