@@ -1,31 +1,31 @@
 # Codebase Restructure Plan
 
-本文档记录了 myUtilities 项目代码组织与结构优化（对应 `tasks.md` 第 6-11 项）的详细计划。
+This document records the detailed plan for code organization and structural optimization of the myUtilities project (corresponding to tasks 6-11 in `tasks.md`).
 
-## 现状问题清单
+## Current Issues List
 
-| # | 问题 | 严重程度 | 说明 |
-|---|------|---------|------|
-| A | 包名冲突 | 🔴 高 | `core/crypto` vs `crypto/`、`core/git` vs `git/`、`core/runner` vs `runner/`、`core/proxy` vs `proxy/`，4 组同名包，必须用 import alias |
-| B | 版本在 main 包 | 🟡 中 | `Version` / `CommitSHA` / `BuildTime` 在 `package main`，其他包无法直接引用 |
-| C | PascalCase 文件名 | 🟡 中 | `core/proxy/Proxy.go` 等 6 个文件违反 Go 文件名惯例 |
-| D | 项目根目录杂乱 | 🟡 中 | `main.go` `myutilities.go` `version.go` 3 个入口文件在根目录，未按标准布局组织 |
-| E | CLI 命令名 ≠ 包名 | 🟢 低 | `name:"install"` → `package installer`，`name:"run"` → `package runner`，`name:"jar"` → `package jarinfo` |
-| F | core/net 文件分裂 | 🟢 低 | `interface.go` vs `interfaces.go`，内容边界模糊 |
-| G | 仅有 2 处 TODO | 🟢 低 | `installer/command.go` 中 deb/rpm 和 powershell 两个 TODO |
-| H | 0 处注释掉的代码 | 🟢 低 | 实际已经较干净，无需专门清理 |
+| # | Issue | Severity | Description |
+|---|-------|----------|-------------|
+| A | Package name conflicts | 🔴 High | `core/crypto` vs `crypto/`, `core/git` vs `git/`, `core/runner` vs `runner/`, `core/proxy` vs `proxy/` — 4 groups of same-name packages, must use import aliases |
+| B | Version in main package | 🟡 Medium | `Version` / `CommitSHA` / `BuildTime` in `package main`, other packages cannot reference directly |
+| C | PascalCase filenames | 🟡 Medium | `core/proxy/Proxy.go` etc. 6 files violate Go filename conventions |
+| D | Messy project root | 🟡 Medium | `main.go` `myutilities.go` `version.go` 3 entry files at root, not organized per standard layout |
+| E | CLI command name ≠ package name | 🟢 Low | `name:"install"` → `package installer`, `name:"run"` → `package runner`, `name:"jar"` → `package jarinfo` |
+| F | core/net files split | 🟢 Low | `interface.go` vs `interfaces.go`, unclear content boundaries |
+| G | Only 2 TODOs | 🟢 Low | Two TODOs in `installer/command.go` for deb/rpm and powershell |
+| H | 0 commented-out code lines | 🟢 Low | Already clean, no special cleanup needed |
 
 ## Phase 1 — Quick Wins
 
-预计总工时：**~45分钟**。三项相互独立，可并行执行。风险低。
+Estimated total effort: **~45 minutes**. Three tasks are independent and can be executed in parallel. Low risk.
 
-### 1-① 版本信息抽到独立包
+### 1-① Extract version info to independent package
 
-**目标：** 解决 B，让所有包都能直接引用版本信息。
+**Goal:** Solve B, allowing all packages to reference version info directly.
 
-**操作步骤：**
+**Steps:**
 
-1. 新建 `internal/core/version/version.go`:
+1. Create `internal/core/version/version.go`:
    ```go
    package version
 
@@ -36,32 +36,32 @@
    )
    ```
 
-2. 删除根目录 `version.go`（原 `package main`）
+2. Delete root `version.go` (original `package main`)
 
-3. 修改 `main.go`:
-   - 添加 import `v "github.com/yusiwen/myUtilities/internal/core/version"`
-   - 所有 `Version` / `CommitSHA` / `BuildTime` 改为 `v.Version` / `v.CommitSHA` / `v.BuildTime`
+3. Modify `main.go`:
+   - Add import `v "github.com/yusiwen/myUtilities/internal/core/version"`
+   - Change all `Version` / `CommitSHA` / `BuildTime` to `v.Version` / `v.CommitSHA` / `v.BuildTime`
 
-4. 修改 `Makefile`:
+4. Modify `Makefile`:
    - `main.Version` → `github.com/yusiwen/myUtilities/internal/core/version.Version`
    - `main.CommitSHA` → `github.com/yusiwen/myUtilities/internal/core/version.CommitSHA`
    - `main.BuildTime` → `github.com/yusiwen/myUtilities/internal/core/version.BuildTime`
 
-5. 验证：`make build && ./bin/mu --version`
+5. Verify: `make build && ./bin/mu --version`
 
-**涉及文件：** `internal/core/version/version.go`（新建）、`main.go`（修改）、`Makefile`（修改）
+**Files involved:** `internal/core/version/version.go` (new), `main.go` (modify), `Makefile` (modify)
 
 ---
 
-### 1-② 修复 PascalCase 文件名
+### 1-② Fix PascalCase filenames
 
-**目标：** 解决 C，将 6 个文件名改为 Go 惯例的 snake_case。
+**Goal:** Solve C, rename 6 files to Go convention snake_case.
 
-**操作步骤：**
+**Steps:**
 
-纯 `git mv`，不需要改文件内 `package` 声明（Go 按目录名分组）。
+Pure `git mv`, no need to change `package` declarations in files (Go groups by directory name).
 
-| 当前路径 | 改为 |
+| Current path | Change to |
 |----------|------|
 | `core/proxy/Proxy.go` | `core/proxy/proxy.go` |
 | `core/proxy/db/DBProxy.go` | `core/proxy/db/dbproxy.go` |
@@ -70,188 +70,188 @@
 | `core/runner/CommandRunner.go` | `core/runner/commandrunner.go` |
 | `mock/oauth/AuthServer.go` | `mock/oauth/authserver.go` |
 
-**需检查：** 其他文件是否 import 了这些包（Go 按包名 import，不依赖文件名，所以一般不需要改 import）。但需要确认没有文件用 `import "./..."` 相对路径。
+**Check needed:** Whether other files import these packages (Go imports by package name, not filename, so imports generally don't need changes). But confirm no files use `import "./..."` relative paths.
 
-**涉及文件：** 6 个文件重命名
+**Files involved:** 6 files renamed
 
 ---
 
-### 1-③ 清理 TODO
+### 1-③ Clean up TODOs
 
-**目标：** 解决 G，处理 `installer/command.go` 中的 2 个 TODO。
+**Goal:** Solve G, handle the 2 TODOs in `installer/command.go`.
 
-**操作步骤：**
+**Steps:**
 
-1. 在 GitHub 上为每个功能创建 issue（如果还没有）
-2. 将 TODO 替换为指向 issue 的标准注释:
+1. Create issues on GitHub for each feature (if not already)
+2. Replace TODOs with standard comments pointing to issues:
    ```go
    // TODO(#123): deb,rpm etc
    // TODO(#124): powershell
    ```
 
-或者如果决定短期内不做，直接删除 TODO 行。
+Or if deciding not to do them in the short term, simply delete the TODO lines.
 
-**涉及文件：** `installer/command.go`（修改）
+**Files involved:** `installer/command.go` (modify)
 
 ---
 
-## Phase 2 — 包名冲突
+## Phase 2 — Package Name Conflicts
 
-预计总工时：**~2小时**。风险中等，需要逐个验证编译通过。
+Estimated total effort: **~2 hours**. Medium risk, needs verification build pass by pass.
 
-### 2-④ 解决 4 组包名冲突
+### 2-④ Resolve 4 groups of package name conflicts
 
-**目标：** 解决 A，消除所有 import alias 需求。
+**Goal:** Solve A, eliminate all import alias requirements.
 
-**背景：** 4 组同名包：
+**Background:** 4 groups of same-name packages:
 
-| 包名 | 命令路径 | core 路径 | 当前 alias 方式 |
+| Package name | Command path | Core path | Current alias approach |
 |------|---------|-----------|----------------|
 | `git` | `git/` | `core/git/` | `coregit "..."` |
 | `runner` | `runner/` | `core/runner/` | `corerunner "..."` |
-| `proxy` | `proxy/` | `core/proxy/` | (无显式 alias，通过调用链间接使用) |
+| `proxy` | `proxy/` | `core/proxy/` | (no explicit alias, indirectly used via call chain) |
 | `crypto` | `crypto/` | `core/crypto/` | `corecrypto "..."` |
 
-#### 选项 A（推荐）：核心包重命名
+#### Option A (Recommended): Rename core packages
 
-在 `core/` 侧改名，不影响 CLI 用户接口：
+Rename on the `core/` side, without affecting CLI user interface:
 
-| 当前 | 改为 |
+| Current | Change to |
 |------|------|
-| `core/git` → `package gitcore` | 目录 `core/git/` → `core/gitcore/` |
-| `core/runner` → `package cmdexec` | 目录 `core/runner/` → `core/cmdexec/` |
-| `core/proxy` → `package proxycore` | 目录 `core/proxy/` → `core/proxycore/` |
-| `core/crypto` → 保持 `package crypto` | 目录不变（由上层用 alias 区分） |
+| `core/git` → `package gitcore` | directory `core/git/` → `core/gitcore/` |
+| `core/runner` → `package cmdexec` | directory `core/runner/` → `core/cmdexec/` |
+| `core/proxy` → `package proxycore` | directory `core/proxy/` → `core/proxycore/` |
+| `core/crypto` → keep `package crypto` | directory unchanged (distinguished by upper-level alias) |
 
-受影响的 import 更新：
+Affected import updates:
 
-| 旧 import | 新 import | 涉及文件 |
+| Old import | New import | Files involved |
 |-----------|----------|---------|
-| `core/git` | `core/gitcore` | `git/commit.go`、`git/ignore.go` |
-| `core/runner` | `core/cmdexec` | `runner/runner.go`、`runner/options.go` |
-| `core/proxy` | `core/proxycore` | `proxy/dbproxy.go`、`core/proxy/db/DBProxy.go`（`core/proxy` 本身需改名） |
+| `core/git` | `core/gitcore` | `git/commit.go`, `git/ignore.go` |
+| `core/runner` | `core/cmdexec` | `runner/runner.go`, `runner/options.go` |
+| `core/proxy` | `core/proxycore` | `proxy/dbproxy.go`, `core/proxy/db/DBProxy.go` (`core/proxy` itself needs renaming) |
 
-选型理由：
-- ✅ 不改变 CLI 命令名（用户接口不变）
-- ✅ 不改变文档中的命令示例
-- ✅ 不改变 Makefile 构建目标
-- ✅ 不改变前端 embed 路径
-- ❌ 需要更新 6 个文件的 import
+Selection rationale:
+- ✅ Does not change CLI command names (user interface unchanged)
+- ✅ Does not change command examples in documentation
+- ✅ Does not change Makefile build targets
+- ✅ Does not change frontend embed paths
+- ❌ Needs to update imports in 6 files
 
-#### 选项 B（备选）：命令包重命名
+#### Option B (Alternative): Rename command packages
 
-| 当前 | 改为 | CLI 命令名 |
+| Current | Change to | CLI command name |
 |------|------|-----------|
-| `package git` in `git/` | `package gittool` in `gittool/` | `name:"git"` 不变 |
-| `package runner` in `runner/` | `package runcmd` in `runcmd/` | `name:"run"` 不变 |
-| `package proxy` in `proxy/` | `package proxysrv` in `proxysrv/` | `name:"proxy"` 不变 |
-| `package crypto` in `crypto/` | `package cryptotool` in `cryptotool/` | `name:"crypto"` 不变 |
+| `package git` in `git/` | `package gittool` in `gittool/` | `name:"git"` unchanged |
+| `package runner` in `runner/` | `package runcmd` in `runcmd/` | `name:"run"` unchanged |
+| `package proxy` in `proxy/` | `package proxysrv` in `proxysrv/` | `name:"proxy"` unchanged |
+| `package crypto` in `crypto/` | `package cryptotool` in `cryptotool/` | `name:"crypto"` unchanged |
 
-选型理由：
-- ✅ core 保持纯洁，不改名
-- ❌ Makefile 路径要变（`go build ./crypto/` → `./cryptotool/`）
-- ❌ 前端 embed 相对路径要变（`crypto/frontend/dist` → `cryptotool/frontend/dist`）
-- ❌ 目录名与 CLI 命令名不一致，增加困惑
+Selection rationale:
+- ✅ Core stays clean, no renaming
+- ❌ Makefile paths must change (`go build ./crypto/` → `./cryptotool/`)
+- ❌ Frontend embed relative paths must change (`crypto/frontend/dist` → `cryptotool/frontend/dist`)
+- ❌ Directory names inconsistent with CLI command names, increasing confusion
 
-**结论：推荐选项 A。**
+**Conclusion: Option A recommended.**
 
 ---
 
-## Phase 3 — 标准项目布局
+## Phase 3 — Standard Project Layout
 
-预计总工时：**~1天**。风险高，需要谨慎评估。
+Estimated total effort: **~1 day**. High risk, needs careful evaluation.
 
-### 3-⑤ 迁移到 cmd/ + internal/
+### 3-⑤ Migrate to cmd/ + internal/
 
-> ✅ **已完成**（2026-08-03）。关键决策：
+> ✅ **Completed** (2026-08-03). Key decisions:
 >
-> | 决策点 | 结论 |
-> |--------|------|
-> | core/ 业务逻辑包位置 | `internal/core/`（纯 CLI 工具，所有包对外不可导入） |
-> | 是否顺带解决包名冲突 | 仅做目录迁移，4 组同名包 alias（`corecrypto`/`coregit`/`corerunner` 等）保留 |
-> | shared/frontend/ 位置 | 移到 `web/shared/frontend/` |
-> | commit 拆分 | 3 个 commit：①移动+import ②构建系统 ③文档 |
-> | Makefile `default:` 无版本注入 | 保持现状（只把 `.` 改为 `./cmd/mu`），不顺手改成复用 GOBUILD |
->
-> 实际规模修正：~180 个 .go 文件、23 个命令包、23 个 core 子包、12 个前端模块、42 个文件 / 103 处 import 改写。
+> | Decision point | Conclusion |
+> > |--------|------|
+> > | Location for core business logic packages | `internal/core/` (pure CLI tool, all packages externally non-importable) |
+> > | Resolve package name conflicts simultaneously | Only directory migration, keep 4 groups of same-name package aliases (`corecrypto`/`coregit`/`corerunner` etc.) |
+> > | `shared/frontend/` location | Move to `web/shared/frontend/` |
+> > | Commit split | 3 commits: ① Move + imports ② Build system ③ Documentation |
+> > | Makefile `default:` no version injection | Keep as is (just change `.` to `./cmd/mu`), don't attempt to reuse GOBUILD |
+> >
+> > Actual scale correction: ~180 .go files, 23 command packages, 23 core sub-packages, 12 frontend modules, 42 files / 103 import rewrites.
 
-**目标：** 解决 D，将项目调整为标准 Go 项目布局。
+**Goal:** Solve D, adjust the project to standard Go project layout.
 
-**实际落地布局：**
+**Actual implemented layout:**
 
 ```
 myUtilities/                     (go.mod)
 ├── cmd/
 │   └── mu/
-│       ├── main.go              (package main, 仅入口+ kong.Parse)
-│       └── myutilities.go       (package main, CLI 结构体)
-├── internal/                    (外部不可导入)
+│       ├── main.go              (package main, entry point only + kong.Parse)
+│       └── myutilities.go       (package main, CLI struct)
+├── internal/                    (externally non-importable)
 │   ├── gateway/  wol/  es/  ...
 │   ├── crypto/  diff/  k8s/  ...
 │   └── core/                    (internal/core/)
 │       ├── crypto/  git/  runner/  proxy/  ...
 │       └── net/  openai/  store/  watcher/
-├── web/                          (前端资源)
+├── web/                          (frontend resources)
 │   └── shared/frontend/
 ├── Makefile
 └── README.md
 ```
 
-**影响评估（实际）：**
+**Impact assessment (actual):**
 
-| 方面 | 影响 |
+| Aspect | Impact |
 |------|------|
-| 文件移动 | ~180 个 Go 文件，12 个 frontend 目录（含 dist，`git mv` OS rename 一并移动），web/shared |
-| import 路径 | 全部 `github.com/yusiwen/myUtilities/X` → `.../internal/X`，103 处（含 core 深层路径与测试文件） |
-| `//go:embed` | 不改变（路径相对于文件自身，文件跟着目录走；含 `mock/oauth` 的 templates+static） |
-| Makefile | `go build -o bin/mu .` → `./cmd/mu/`（GOBUILD + default 两处） |
-| ldflags | 不改变（`-X main.*`，main 包仍在 cmd/mu） |
-| `install.sh` | 不改变（只引用二进制） |
-| CLI 命令 | 不改变 |
-| Web UI 路由 | 不改变 |
-| 用户可见行为 | 无变化 |
+| File moves | ~180 Go files, 12 frontend directories (including dist, `git mv` OS rename moves together), web/shared |
+| Import paths | All `github.com/yusiwen/myUtilities/X` → `.../internal/X`, 103 locations (including deep core paths and test files) |
+| `//go:embed` | Unchanged (paths relative to file itself, files follow directories; includes `mock/oauth` templates + static) |
+| Makefile | `go build -o bin/mu .` → `./cmd/mu/` (GOBUILD + default two locations) |
+| ldflags | Unchanged (`-X main.*`, main package still in cmd/mu) |
+| `install.sh` | Unchanged (only references binaries) |
+| CLI commands | Unchanged |
+| Web UI routes | Unchanged |
+| User-visible behavior | No changes |
 
-**决策分析：** 此项目是 CLI 工具 + Web UI，不会作为库被外部导入。`internal/` 的保护价值有限。`cmd/mu/` 的好处是入口清晰，但代价是约 180 个文件的 import 路径变更和回归测试成本。
+**Decision analysis:** This project is a CLI tool + Web UI, not designed to be imported by external users. The protection value of `internal/` is limited. The benefit of `cmd/mu/` is clear entry point, but the cost is ~180 files of import path changes and regression testing.
 
-**建议：** 等 Phase 1 + 2 完成后评估是否仍需要做 Phase 3。如果 Phase 2（解决包名冲突）已经大幅改善代码结构，Phase 3 可酌情降级或跳过。
-
----
-
-## Phase 4 — 命名收尾
-
-预计总工时：**~1小时**。风险低。
-
-### 4-⑥ 统一命名规范
-
-**目标：** 解决 E + F + H，补完剩余的命名和注释问题。
-
-**操作步骤：**
-
-1. **修复 CLI 命令名 vs 包名不一致**
-   这些是 Kong 的 `name:` tag 决定的，包名可以保持内部命名，不需要对齐 CLI 名。但可以考虑加注释说明。
-
-2. **合并或重划分 `core/net/`**
-   `interface.go` 和 `interfaces.go` 可以合并，或者重命名为 `netiface.go` + `wol.go` 等更明确的名称。
-
-3. **统一注释语言为英文**
-   清理 `core/proxy/Proxy.go`、`core/proxy/db/DBProxy.go`、`core/watcher/FileWatcher.go`、`mock/oauth/AuthServer.go` 中的中文注释，改为英文。
+**Recommendation:** Evaluate whether Phase 3 is still needed after Phase 1 + 2. If Phase 2 (resolving package name conflicts) significantly improves code structure, Phase 3 can be downgraded or skipped.
 
 ---
 
-## 工作量汇总
+## Phase 4 — Naming Cleanup
 
-| Phase | 内容 | 涉及文件数 | 预计工时 | 风险 |
-|-------|------|-----------|---------|------|
-| 1-① | 版本独立包 | 3-4 | ~30min | 🟢 低 |
-| 1-② | 修复文件名 | 6 | ~10min | 🟢 低 |
-| 1-③ | 清理 TODO | 1 | ~5min | 🟢 低 |
-| 2-④ | 包名冲突 | 6-8 | ~2h | 🟡 中 |
-| 3-⑤ | 标准布局 | ~180 | ~1d | 🔴 高 |
-| 4-⑥ | 命名收尾 | 5-10 | ~1h | 🟢 低 |
+Estimated total effort: **~1 hour**. Low risk.
 
-## 建议执行顺序
+### 4-⑥ Unify naming conventions
 
-1. **Phase 1** — Quick Wins，立即可做，风险低
-2. **Phase 2** — 包名冲突，解决最大痛点
-3. **Phase 3** — 标准布局 ✅ 已完成
-4. **Phase 4** — 命名收尾，最后补完
+**Goal:** Solve E + F + H, complete remaining naming and comment issues.
+
+**Steps:**
+
+1. **Fix CLI command name vs package name inconsistency**
+   These are determined by Kong's `name:` tag, package names can keep internal naming without aligning to CLI names. But consider adding explanatory comments.
+
+2. **Merge or re-divide `core/net/`**
+   `interface.go` and `interfaces.go` can be merged, or renamed to `netiface.go` + `wol.go` etc. for more explicit names.
+
+3. **Unify comment language to English**
+   Clean up Chinese comments in `core/proxy/Proxy.go`, `core/proxy/db/DBProxy.go`, `core/watcher/FileWatcher.go`, `mock/oauth/AuthServer.go`, change to English.
+
+---
+
+## Work Summary
+
+| Phase | Content | Files involved | Estimated effort | Risk |
+|-------|---------|---------------|-----------------|------|
+| 1-① | Independent version package | 3-4 | ~30min | 🟢 Low |
+| 1-② | Fix filenames | 6 | ~10min | 🟢 Low |
+| 1-③ | Clean TODOs | 1 | ~5min | 🟢 Low |
+| 2-④ | Package name conflicts | 6-8 | ~2h | 🟡 Medium |
+| 3-⑤ | Standard layout | ~180 | ~1d | 🔴 High |
+| 4-⑥ | Naming cleanup | 5-10 | ~1h | 🟢 Low |
+
+## Recommended Execution Order
+
+1. **Phase 1** — Quick Wins, do immediately, low risk
+2. **Phase 2** — Package name conflicts, resolve the biggest pain point
+3. **Phase 3** — Standard layout ✅ Completed
+4. **Phase 4** — Naming cleanup, finish last

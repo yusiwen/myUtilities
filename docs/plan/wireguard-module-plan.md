@@ -1,140 +1,139 @@
-# WireGuard 配置管理模块计划 (`mu wg`)
+# WireGuard Configuration Management Module Plan (`mu wg`)
 
-> **状态：📋 已计划，待实施。** 设计已与用户确认，可按本计划实施。
+> **Status: 📋 Planned, pending implementation.** Design has been confirmed with the user, can be implemented per this plan.
 
-## 背景
+## Background
 
-需要一个管理 WireGuard 配置文件的小模块：
+Need a small module to manage WireGuard configuration files:
 
-1. 读取当前配置文件，默认 `/etc/wireguard/wg0.conf`，可用参数指定。
-2. 列出当前所有对端（peer）信息。
-3. 维护「对端 ↔ 名字/备注」的对应关系。这个名字/备注是官方配置文件里不支持的，需要额外管理。
+1. Read the current configuration file, default `/etc/wireguard/wg0.conf`, can be specified via parameter.
+2. List all current peers information.
+3. Maintain the mapping of "peer ↔ name/note". This name/note is not supported in the official configuration file, so it needs to be managed separately.
 
-### 核心难点
+### Core Challenge
 
-WireGuard 官方配置（wg-quick 格式）只有 `PublicKey`、`Endpoint`、`AllowedIPs`、
-`PersistentKeepalive`、`PresharedKey` 等字段，**没有稳定的「名字」字段**。
-因此对端元数据必须外置存储，且**以 `PublicKey` 作为唯一键**（IP 会变，key 不会变）。
-另外官方工具（`wg setconf` / `wg syncconf`）重新序列化配置时会剥掉注释，
-所以「把名字写进 conf 注释」的方案不可靠。
+WireGuard's official configuration (wg-quick format) only has `PublicKey`, `Endpoint`, `AllowedIPs`,
+`PersistentKeepalive`, `PresharedKey` and other fields, **no stable "name" field**.
+Therefore, peer metadata must be stored externally, and **use `PublicKey` as the unique key** (IP changes, key doesn't).
+Additionally, official tools (`wg setconf` / `wg syncconf`) strip comments when re-serializing the configuration,
+so the "write name into conf comment" approach is unreliable.
 
-### 已确认的取舍（用户拍板）
+### Confirmed Trade-offs (User decided)
 
-| 决策点 | 选择 |
+| Decision point | Choice |
 |--------|------|
-| 元数据存储位置 | 旁车 JSON（`<conf>.meta.json` 放在 conf 旁边） |
-| 功能范围 | 只做「元数据管理 + 列表」，不读写 conf 文件本身 |
-| Web UI | 纯 CLI，无 serve/前端 |
-| 实时状态 | 可选 `--live`（调 `wg show`，需 root） |
+| Metadata storage location | Sidecar JSON (`<conf>.meta.json` placed next to conf) |
+| Feature scope | Only "metadata management + list", does not read/write conf files themselves |
+| Web UI | Pure CLI, no serve/frontend |
+| Real-time status | Optional `--live` (calls `wg show`, requires root) |
 
-## 存储模型
+## Storage Model
 
-### 旁车元数据文件
+### Sidecar Metadata File
 
-路径：`<conf 路径>.meta.json`，例如 `/etc/wireguard/wg0.conf.meta.json`。
+Path: `<conf path>.meta.json`, e.g. `/etc/wireguard/wg0.conf.meta.json`.
 
 ```json
 {
   "version": 1,
   "peers": {
-    "BASE64PUBLICKEY1=": { "name": "home-nas", "note": "家庭 NAS，通过 NAT 出口" },
+    "BASE64PUBLICKEY1=": { "name": "home-nas", "note": "Home NAS, via NAT exit" },
     "BASE64PUBLICKEY2=": { "name": "phone",   "note": "" }
   }
 }
 ```
 
-- 键为 peer 的 `PublicKey`（44 位 base64，唯一且稳定）。
-- 文件权限 `0600`。
-- 优点：元数据跟着配置走，备份/迁移天然一致；无全局命名冲突；写权限要求与改 conf
-  相同（都是 root），无权限落差。
+- Key is the peer's `PublicKey` (44-character base64, unique and stable).
+- File permission `0600`.
+- Advantages: metadata follows configuration, backup/migration naturally consistent; no global naming conflicts; write permission requirements same as changing conf (both require root), no permission gap.
 
-### conf 解析
+### conf parsing
 
-手写轻量 INI 解析器，**只读、绝不回写** conf 文件。特性：
+Write a lightweight INI parser, **read-only, never write back** the conf file. Features:
 
-- key 大小写不敏感（WireGuard 解析器不区分大小写）。
-- `#` 注释整行跳过；值按第一个 `=` 分割。
-- 按 `[Interface]` / `[Peer]` 分段，保留段落顺序。
-- `AllowedIPs` 为逗号分隔的多个地址。
+- Keys are case-insensitive (WireGuard parser is case-insensitive).
+- `#` comments skip entire lines; values split at first `=`.
+- Parse by `[Interface]` / `[Peer]` sections, preserve section order.
+- `AllowedIPs` is comma-separated multiple addresses.
 
-## 目录结构
+## Directory Structure
 
 ```
-internal/wg/            # CLI 封装（kong 子命令）
-  ├── options.go        # Options: list / rename / note / prune 子命令 flag
-  ├── command.go        # list 实现 + resolveConfPath()（--config/--interface/env/默认）
-  └── meta.go           # rename / note / prune 实现 + peer 查找（名字精确 / pubkey 前缀）
+internal/wg/            # CLI wrapper (kong subcommands)
+  ├── options.go        # Options: list / rename / note / prune subcommand flags
+  ├── command.go        # list implementation + resolveConfPath() (--config/--interface/env/default)
+  └── meta.go           # rename / note / prune implementation + peer lookup (name exact / pubkey prefix)
 
-internal/core/wg/       # 业务逻辑，可独立测试
+internal/core/wg/       # Business logic, independently testable
   ├── conf.go           # Parse(data) → *Config{Interface, []Peer}
-  ├── meta.go           # MetaStore: LoadMeta / SaveMeta（0600）
-  ├── join.go           # ListPeers(conf, meta) → []PeerRow（join + 标记未命名/orphan）
-  └── live.go           # ShowLive(iface) → 解析 `wg show <iface> dump`，按 pubkey 合并
+  ├── meta.go           # MetaStore: LoadMeta / SaveMeta (0600)
+  ├── join.go           # ListPeers(conf, meta) → []PeerRow (join + mark unnamed/orphan)
+  └── live.go           # ShowLive(iface) → parse `wg show <iface> dump`, merge by pubkey
 ```
 
-注册：`cmd/mu/myutilities.go` 加 `Wg wg.Options cmd:"" name:"wg" help:"WireGuard config management."`
+Register: `cmd/mu/myutilities.go` add `Wg wg.Options cmd:"" name:"wg" help:"WireGuard config management."`
 
-## CLI 接口
+## CLI Interface
 
 ```
 mu wg list    [--config PATH] [--interface wg0] [--live] [--json]
-mu wg rename  [--config PATH] <peer> <新名字>
-mu wg note    [--config PATH] <peer> <备注>
-mu wg prune   [--config PATH]        # 清理 meta 中已从 conf 消失的 pubkey
+mu wg rename  [--config PATH] <peer> <new-name>
+mu wg note    [--config PATH] <peer> <note>
+mu wg prune   [--config PATH]        # clean up pubkeys in meta that have disappeared from conf
 ```
 
-### conf 路径解析优先级
+### conf path resolution priority
 
-`--config <path>` > `--interface <name>`（推导 `/etc/wireguard/<name>.conf`）>
-env `MU_WG_CONFIG` > 默认 `/etc/wireguard/wg0.conf`。
+`--config <path>` > `--interface <name>` (derive `/etc/wireguard/<name>.conf`) >
+env `MU_WG_CONFIG` > default `/etc/wireguard/wg0.conf`.
 
-### `<peer>` 查找规则
+### `<peer>` lookup rules
 
-1. 名字精确匹配（meta 中的 `name`）→ 直接命中。
-2. 否则按 pubkey 前缀匹配（≥6 位），唯一命中才采用。
-3. 无法唯一确定时列出候选（相近名字/前缀），而非报错。
+1. Name exact match (meta's `name`) → direct hit.
+2. Otherwise, match by pubkey prefix (≥6 characters), only if uniquely matched.
+3. If cannot determine uniquely, list candidates (similar names/prefixes) instead of erroring.
 
-### list 输出
+### list output
 
-tabwriter 列：`NAME | PUBLIC KEY(短) | ENDPOINT | ALLOWED IPS | KEEPALIVE | NOTE`。
-`--live` 追加 `HANDSHAKE | RX | TX`。`--json` 输出结构化数据供脚本使用。
+tabwriter columns: `NAME | PUBLIC KEY (short) | ENDPOINT | ALLOWED IPS | KEEPALIVE | NOTE`.
+`--live` appends `HANDSHAKE | RX | TX`. `--json` outputs structured data for scripting.
 
-## 边界处理
+## Edge Cases
 
-- 未命名的 peer 显示 pubkey 前 8 位。
-- meta 中有、conf 中已消失的 pubkey（orphan）→ list 时警告，`prune` 清理。
-- peer 找不到时列出候选。
-- `--live` 失败（未安装 `wg` / 非 root / 接口不存在）→ 非致命警告，降级为纯 conf 输出。
-- 不写回 conf 文件本身（v1 范围确认）。
+- Unnamed peers display pubkey first 8 characters.
+- Pubkeys in meta but disappeared from conf (orphan) → warn on list, clean up with `prune`.
+- Peer not found → list candidates.
+- `--live` fails (`wg` not installed / not root / interface not found) → non-fatal warning, fall back to pure conf output.
+- Do not write back to the conf file itself (v1 scope confirmed).
 
-## 测试
+## Testing
 
-- `internal/core/wg/conf_test.go` — 解析：多 peer、大小写、注释、空值、AllowedIPs 逗号分隔。
-- `internal/core/wg/meta_test.go` — Load/Save round-trip、损坏文件容错。
-- `internal/core/wg/live_test.go` — `wg show <iface> dump` 输出解析。
-- `internal/core/wg/join_test.go` — 未命名 / orphan / 正常 join。
+- `internal/core/wg/conf_test.go` — Parse: multiple peers, case-insensitive, comments, empty values, AllowedIPs comma-separated.
+- `internal/core/wg/meta_test.go` — Load/Save round-trip, corrupted file fault tolerance.
+- `internal/core/wg/live_test.go` — `wg show <iface> dump` output parsing.
+- `internal/core/wg/join_test.go` — Unnamed / orphan / normal join.
 
-## 实施步骤
+## Implementation Steps
 
-| 步骤 | 内容 |
+| Step | Content |
 |------|------|
 | 1 | `internal/core/wg/conf.go` + `conf_test.go` |
 | 2 | `internal/core/wg/meta.go` + `meta_test.go` |
 | 3 | `internal/core/wg/join.go` + `join_test.go` |
 | 4 | `internal/core/wg/live.go` + `live_test.go` |
-| 5 | `internal/wg/options.go` / `command.go` / `meta.go`（CLI） |
-| 6 | 注册 `cmd/mu/myutilities.go`，README.md 命令清单、docs/wg.md、CODEBASE.md |
-| 7 | 全项目 build / vet / fmt / test 验证 |
+| 5 | `internal/wg/options.go` / `command.go` / `meta.go` (CLI) |
+| 6 | Register `cmd/mu/myutilities.go`, README.md command list, docs/wg.md, CODEBASE.md |
+| 7 | Full project build / vet / fmt / test verification |
 
-## 待决策项（后续可选）
+## Pending Decisions (Future Optional)
 
-### D1. 是否并入 `mu set wg`
+### D1. Whether to merge into `mu set wg`
 
-- **方案 A（推荐）— 不并入：** conf 路径用 flag + env 足够，保持模块最小。
-- **方案 B — 并入：** `config.Register(&wgSetter{})` 提供 `mu set wg --default-config`，
-  持久化默认 conf 路径。符合项目 `<module>-config.json` 惯例，但 v1 用不到。
+- **Option A (Recommended) — Do not merge:** conf path via flag + env is sufficient, keep the module minimal.
+- **Option B — Merge:** `config.Register(&wgSetter{})` provides `mu set wg --default-config`,
+  persist default conf path. Consistent with project `<module>-config.json` conventions, but not needed for v1.
 
-### D2. 是否支持 conf 增删改
+### D2. Whether to support conf add/delete/modify
 
-- **方案 A（推荐）— 不做：** 只读 conf，避免安全重写（保留注释/格式）的复杂度和风险。
-- **方案 B — 增加 add/remove/set：** 需要安全重写器，风险高，留待后续版本。
+- **Option A (Recommended) — Do not do:** Read-only conf, avoid security rewrite (preserve comments/format) complexity and risk.
+- **Option B — Add add/remove/set:** Needs secure rewriter, high risk, leave for future versions.

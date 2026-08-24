@@ -1,61 +1,58 @@
 # Aliyun Subscription API Discovery (QoderCN credits)
 
-## 背景
+## Background
 
-`mu budget balance -p aliyun` 只能查到**账户余额**和**资源包**，但查不到
-"我的订阅"里的订阅（如 QoderCN 个人版）的 credits 用量信息。
+`mu budget balance -p aliyun` can only check **account balance** and **resource packages**, but cannot query subscription credits usage info from "My Subscriptions" (such as QoderCN Personal edition).
 
-## 当前使用的 API
+## Currently Used APIs
 
-`core/budget/providers/aliyun.go` 调用 BSS（费用中心）OpenAPI：
+`core/budget/providers/aliyun.go` calls the BSS (Billing Support System) OpenAPI:
 
-| Action | 端点 | Version | 返回内容 |
+| Action | Endpoint | Version | Return Content |
 |---|---|---|---|
-| `QueryAccountBalance` | `https://business.aliyuncs.com/` | 2017-12-14 | 账户可用余额/现金/信控 |
-| `QueryResourcePackageInstances` | `https://business.aliyuncs.com/` | 2017-12-14 | **资源包**实例剩余量 |
+| `QueryAccountBalance` | `https://business.aliyuncs.com/` | 2017-12-14 | Account available balance / cash / credit control |
+| `QueryResourcePackageInstances` | `https://business.aliyuncs.com/` | 2017-12-14 | **Resource package** instance remaining quantity |
 
-签名方式：HMAC-SHA1 + GET query 签名（`aliyun_sign.go` 的 `signAliyun` + `buildAliyunURL`）。
+Signature method: HMAC-SHA1 + GET query signature (`signAliyun` + `buildAliyunURL` in `aliyun_sign.go`).
 
-## 问题根因
+## Root Cause
 
-- 资源包（`QueryResourcePackageInstances` 返回的）与订阅（"我的订阅"页）是
-  **两个不同的计费模型、两个不同的数据源**。
-- `QueryResourcePackageInstances` 只返回资源包实例，天然不含订阅的 credits/用量。
+- Resource packages (returned by `QueryResourcePackageInstances`) and subscriptions ("My Subscriptions" page) are
+  **two different billing models, two different data sources**.
+- `QueryResourcePackageInstances` only returns resource package instances, inherently does not contain subscription credits/usage.
 
-## 关键发现
+## Key Finding
 
-"我的订阅"页（`billing-cost.console.aliyun.com/subscription/overview/list`）
-对应的 BSS OpenAPI 是 **`QueryAvailableInstances`**（BssOpenApi 2017-12-14）。
+The BSS OpenAPI corresponding to the "My Subscriptions" page (`billing-cost.console.aliyun.com/subscription/overview/list`) is **`QueryAvailableInstances`** (BssOpenApi 2017-12-14).
 
-与现有 Action 完全同源：
-- 端点 `https://business.aliyuncs.com/`
-- `Version: 2017-12-14`、HMAC-SHA1、GET + query 签名
-- 可完全复用 `signAliyun` + `buildAliyunURL`，零新依赖
+Fully same-source with existing Action:
+- Endpoint `https://business.aliyuncs.com/`
+- `Version: 2017-12-14`, HMAC-SHA1, GET + query signature
+- Can fully reuse `signAliyun` + `buildAliyunURL`, zero new dependencies
 
-返回的是**订阅实例**的元数据，典型字段：
+Returns **subscription instance** metadata, typical fields:
 
-| 字段 | 含义 |
+| Field | Meaning |
 |---|---|
-| `InstanceId` | 实例 ID |
-| `ProductCode` / `ProductType` | 产品 |
-| `SubscriptionType` | `Subscription`（订阅）/ `PayAsYouGo`（按量）|
-| `InstanceStatus` | 状态（正常/欠费/已过期等）|
-| `CreateTime` / `EndTime` / `ExpectedReleaseTime` | 订购/到期时间 |
-| `RenewStatus` | 续费状态 |
+| `InstanceId` | Instance ID |
+| `ProductCode` / `ProductType` | Product |
+| `SubscriptionType` | `Subscription` (subscription) / `PayAsYouGo` (pay-as-you-go) |
+| `InstanceStatus` | Status (normal / arrears / expired, etc.) |
+| `CreateTime` / `EndTime` / `ExpectedReleaseTime` | Order / expiry time |
+| `RenewStatus` | Renewal status |
 
-## 风险点 / 未确认事项
+## Risks / Unconfirmed Items
 
-1. `QueryAvailableInstances` 返回的是订阅实例的**订购状态元数据**，通常**不包含
-   credits 剩余量/用量**。
-2. QoderCN 是一个独立订阅（个人版），其 credits 用量很可能需要在
-   **QoderCN 自己的产品后台/API** 查询，阿里云 BSS 拿不到。
-3. 实际响应字段需用真实 AccessKey 实测确认。
+1. `QueryAvailableInstances` returns subscription instance **ordering status metadata**, typically **does not contain** credits remaining quantity / usage.
+2. QoderCN is an independent subscription (Personal edition), its credits usage likely needs to be queried via
+    **QoderCN's own product backend / API**, Aliyun BSS cannot provide it.
+3. Actual response fields need real AccessKey testing to confirm.
 
-## 建议实现路径
+## Suggested Implementation Path
 
-### 第一步：加 `GetSubscriptions()`
+### Step 1: Add `GetSubscriptions()`
 
-在 `core/budget/providers/aliyun.go` 增加：
+Add to `core/budget/providers/aliyun.go`:
 
 ```go
 func (p *aliyunProvider) GetSubscriptions(ctx context.Context) ([]SubscriptionInstance, error) {
@@ -63,26 +60,26 @@ func (p *aliyunProvider) GetSubscriptions(ctx context.Context) ([]SubscriptionIn
         "Action":           "QueryAvailableInstances",
         "AccessKeyId":      p.accessKeyID,
         "PageSize":         "100",
-        "SubscriptionType": "Subscription", // 只看订阅
+        "SubscriptionType": "Subscription", // subscriptions only
     }
     signAliyun(params, p.accessKeySecret)
-    // 解析 Data.InstanceList.Instance[]
+    // Parse Data.InstanceList.Instance[]
 }
 ```
 
-### 第二步：接入 budget 输出
+### Step 2: Integrate into budget output
 
-在 aliyun 的 `printBalance` 区块（`budget/command.go`）增加"订阅"小节，
-类似现有资源包展示：产品、实例 ID、状态、到期时间。
+Add a "Subscriptions" section in the aliyun `printBalance` block (`budget/command.go`),
+similar to existing resource package display: product, instance ID, status, expiry time.
 
-### 第三步：实测验证
+### Step 3: Real testing and verification
 
-用 AccessKey 跑 `mu budget balance -p aliyun`：
-- 若响应含 credits/用量字段 → 直接展示
-- 若不含 → 订阅列表可展示，QoderCN credits 需另找 QoderCN 自己的 API
+Run `mu budget balance -p aliyun` with AccessKey:
+- If response contains credits/usage fields → display directly
+- If not → subscription list can be displayed, QoderCN credits need to find QoderCN's own API
 
-## 待确认
+## To Confirm
 
-1. 目标是"订阅列表"（`QueryAvailableInstances` 可满足）还是
-   "QoderCN credits 剩余量"（需 QoderCN 自有 API）。
-2. QoderCN 是否有开放 API / token / credits 查询接口。
+1. Is the goal "subscription list" (`QueryAvailableInstances` can satisfy) or
+    "QoderCN credits remaining quantity" (needs QoderCN's own API).
+2. Whether QoderCN has an open API / token / credits query interface.
