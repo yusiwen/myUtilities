@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -104,6 +105,29 @@ func NewClient(baseURL, apiKey, model string) *Client {
 		c.DisableThinking = true
 	}
 	return c
+}
+
+// NewClientWithFastDial creates an OpenAI client with a short dial timeout
+// for fast-fail on fallback. The connection phase uses [dialTimeout] — if a
+// TCP+TLS handshake doesn't complete within that window, the request fails
+// immediately and the next provider is tried. Once connected, the client
+// still waits up to 60s for the response body.
+func NewClientWithFastDial(baseURL, apiKey, model string, dialTimeout time.Duration) *Client {
+	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout: dialTimeout,
+		}).DialContext,
+		TLSHandshakeTimeout: dialTimeout,
+	}
+	return &Client{
+		BaseURL:    baseURL,
+		APIKey:     apiKey,
+		Model:      model,
+		HTTPClient: &http.Client{
+			Timeout:   60 * time.Second,
+			Transport: transport,
+		},
+	}
 }
 
 func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, error) {

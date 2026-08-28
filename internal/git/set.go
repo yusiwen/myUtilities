@@ -9,6 +9,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/yusiwen/myUtilities/internal/core/config"
 	coregit "github.com/yusiwen/myUtilities/internal/core/git"
+	"github.com/yusiwen/myUtilities/internal/core/llm"
 )
 
 type gitSetter struct{}
@@ -100,7 +101,7 @@ func (o *ProviderRmCmd) Run() error {
 	}
 
 	for name, mc := range map[string]coregit.ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
-		if mc.Provider == o.Name {
+		if mc.Provider.Contains(o.Name) {
 			return fmt.Errorf("cannot remove provider %q: module %q is using it", o.Name, name)
 		}
 	}
@@ -132,8 +133,9 @@ func (o *ProviderListCmd) Run() error {
 
 	fmt.Fprintln(os.Stderr, "\nModule references:")
 	for name, mc := range map[string]coregit.ModuleConfig{"commit": gc.Commit, "review": gc.Review} {
-		if mc.Provider != "" {
-			fmt.Fprintf(os.Stderr, "  %s → %s (lang: %s)\n", name, mc.Provider, mc.Lang)
+		names := mc.Provider.Names()
+		if len(names) > 0 {
+			fmt.Fprintf(os.Stderr, "  %s → %s (lang: %s)\n", name, strings.Join(names, ", "), mc.Lang)
 		}
 	}
 	return nil
@@ -142,7 +144,7 @@ func (o *ProviderListCmd) Run() error {
 /* ─── Module Config Subcommands ─── */
 
 type CommitModuleCmd struct {
-	Provider string `help:"Provider name to use."`
+	Provider string `help:"Provider name(s) to use, comma-separated for fallback (e.g. 'fast,advanced')."`
 	Lang     string `help:"Output language (en, cn)."`
 }
 
@@ -156,10 +158,16 @@ func (o *CommitModuleCmd) Run() error {
 		return err
 	}
 	if o.Provider != "" {
-		if _, err := coregit.ResolveProvider(gc, o.Provider); err != nil {
+		names, err := llm.ParseProviderList(o.Provider)
+		if err != nil {
 			return err
 		}
-		gc.Commit.Provider = o.Provider
+		for _, name := range names {
+			if _, err := coregit.ResolveProvider(gc, name); err != nil {
+				return err
+			}
+		}
+		gc.Commit.Provider = names
 	}
 	if o.Lang != "" {
 		if !validLang(o.Lang) {
@@ -171,7 +179,7 @@ func (o *CommitModuleCmd) Run() error {
 }
 
 type ReviewModuleCmd struct {
-	Provider      string `help:"Provider name to use."`
+	Provider      string `help:"Provider name(s) to use, comma-separated for fallback." name:"provider"`
 	Lang          string `help:"Output language (en, cn)."`
 	ReviewsDir    string `help:"Directory to store review reports." name:"reviews-dir"`
 	ScipVersion   string `help:"Set SCIP indexer version override as lang=tag (e.g. go=v0.3.0)." name:"scip-version"`
@@ -184,10 +192,16 @@ func (o *ReviewModuleCmd) Run() error {
 		return err
 	}
 	if o.Provider != "" {
-		if _, err := coregit.ResolveProvider(gc, o.Provider); err != nil {
+		names, err := llm.ParseProviderList(o.Provider)
+		if err != nil {
 			return err
 		}
-		gc.Review.Provider = o.Provider
+		for _, name := range names {
+			if _, err := coregit.ResolveProvider(gc, name); err != nil {
+				return err
+			}
+		}
+		gc.Review.Provider = names
 	}
 	if o.Lang != "" {
 		if !validLang(o.Lang) {

@@ -54,6 +54,7 @@ func bright(s string) string {
 }
 
 type Options struct {
+	Provider     string `help:"Provider name to use (overrides config)."`
 	Model        string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
 	APIKey       string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
 	BaseURL      string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
@@ -62,50 +63,6 @@ type Options struct {
 	SearchAPIKey string `help:"Brave Search API key." env:"BRAVE_SEARCH_API_KEY"`
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	Question     string `arg:"" name:"question" help:"Question to ask." optional:""`
-}
-
-type SetOptions struct {
-	BaseURL   string `help:"Base URL of the AI service."`
-	Model     string `help:"Model name."`
-	APIKey    string `help:"API key for the AI service."`
-	SearchKey string `help:"Brave Search API key."`
-	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
-}
-
-func (o *SetOptions) Run() error {
-	cfg, err := llm.LoadConfig("ask")
-	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
-	}
-
-	if o.BaseURL == "" && o.Model == "" && o.APIKey == "" && o.SearchKey == "" {
-		return fmt.Errorf("at least one of --base-url, --model, --api-key, --search-key is required")
-	}
-
-	if o.BaseURL != "" {
-		cfg.BaseURL = o.BaseURL
-	}
-	if o.Model != "" {
-		cfg.Model = o.Model
-	}
-	if o.APIKey != "" {
-		cfg.APIKey = o.APIKey
-	}
-	if o.SearchKey != "" {
-		cfg.SearchAPIKey = o.SearchKey
-	}
-
-	path := o.Path
-	if path == "" {
-		path = "~/.config/mu/ask-config.json"
-	}
-
-	if err := llm.SaveConfigToPath(path, cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
-	}
-
-	fmt.Printf("Config saved to %s\n", path)
-	return nil
 }
 
 func buildSystemPrompt(lang string, withSearch bool) string {
@@ -133,30 +90,82 @@ func formatSearchResults(results []search.Result) string {
 	return b.String()
 }
 
+// resolveProviderList determines the provider list to use.
+// When --provider flag is set, it resolves a single provider by name.
+// Otherwise, it uses the provider list from config.
+func resolveProviderList(cfg *llm.Config, override string) (llm.MultiProvider, error) {
+	if override != "" {
+		p, err := llm.ResolveProvider(cfg, override)
+		if err != nil {
+			return nil, err
+		}
+		return llm.MultiProvider{p.Name}, nil
+	}
+	return cfg.Provider, nil
+}
+
+// askWithProvider calls the LLM API for a single provider.
+// If fallback is available and the provider is not the last one,
+// a short dial timeout is used so that an unresponsive provider
+// is abandoned quickly (fast-fail).
+func askWithProvider(cfg *llm.Config, p *llm.Provider, sysPrompt, userPrompt string, o *Options, isLast bool) (*openai.ChatResult, error) {
+	baseURL, apiKey, model := llm.EffectiveClientConfig(cfg, p, o.BaseURL, o.APIKey, o.Model)
+
+	if apiKey == "" {
+		return nil, fmt.Errorf("API key is required. Set it via:\n" +
+			"  - OPENAI_API_KEY environment variable\n" +
+			"  - --api-key flag\n" +
+			"  - ~/.config/mu/ask-config.json config file")
+	}
+
+	fmt.Fprintf(os.Stderr, "%s%s%s\n",
+		faint("Calling provider "),
+		bright(p.Name),
+		faint("..."))
+
+	// When a fallback is available, use a short dial timeout so that an
+	// unresponsive provider is abandoned within seconds instead of
+	// waiting for the full 60s request timeout.
+	var client *openai.Client
+	if !isLast {
+		client = openai.NewClientWithFastDial(baseURL, apiKey, model, 2*time.Second)
+	} else {
+		client = openai.NewClient(baseURL, apiKey, model)
+	}
+
+	if o.Verbose {
+		client.DebugWriter = os.Stderr
+		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
+		fmt.Fprintln(os.Stderr, sysPrompt)
+		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
+		fmt.Fprintln(os.Stderr, userPrompt)
+	}
+
+	start := time.Now()
+	result, err := client.ChatCompletion(sysPrompt, userPrompt)
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	elapsed := time.Since(start)
+
+	if o.Verbose {
+		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
+		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
+	}
+
+	return result, nil
+}
+
 func (o *Options) Run() error {
 	cfg, err := llm.LoadConfig("ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if o.Model != "" {
-		cfg.Model = o.Model
-	}
-	if o.APIKey != "" {
-		cfg.APIKey = o.APIKey
-	}
-	if o.BaseURL != "" {
-		cfg.BaseURL = o.BaseURL
-	}
+	// The --search-api-key flag / BRAVE_SEARCH_API_KEY env override the
+	// config-file value, matching the other per-invocation flags.
 	if o.SearchAPIKey != "" {
 		cfg.SearchAPIKey = o.SearchAPIKey
-	}
-
-	if cfg.APIKey == "" {
-		return fmt.Errorf("API key is required. Set it via:\n" +
-			"  - OPENAI_API_KEY environment variable\n" +
-			"  - --api-key flag\n" +
-			"  - ~/.config/mu/ask-config.json config file")
 	}
 
 	question := o.Question
@@ -171,10 +180,9 @@ func (o *Options) Run() error {
 		return fmt.Errorf("no question provided. Usage: mu ask <question> or pipe input")
 	}
 
-	ctx := context.Background()
-	userPrompt := question
+	// Web search (if enabled, must run before the LLM call).
+	var userPrompt string
 	withSearch := o.Search
-
 	if withSearch {
 		if cfg.SearchAPIKey == "" {
 			return fmt.Errorf("Brave Search API key is required for --search. Set it via:\n" +
@@ -185,6 +193,7 @@ func (o *Options) Run() error {
 
 		fmt.Fprintf(os.Stderr, "%s\n", faint("Searching web..."))
 		searcher := search.NewBraveSearch(cfg.SearchAPIKey)
+		ctx := context.Background()
 		results, err := searcher.Search(ctx, question, 5)
 		if err != nil {
 			return fmt.Errorf("web search failed: %w", err)
@@ -203,37 +212,51 @@ func (o *Options) Run() error {
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "%s\n", faint("Asking..."))
-
-	client := openai.NewClient(cfg.BaseURL, cfg.APIKey, cfg.Model)
-
 	sysPrompt := buildSystemPrompt(o.Lang, withSearch)
-
-	if o.Verbose {
-		client.DebugWriter = os.Stderr
-		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
-		fmt.Fprintln(os.Stderr, sysPrompt)
-		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
-		fmt.Fprintln(os.Stderr, userPrompt)
+	if userPrompt == "" {
+		userPrompt = question
 	}
 
-	start := time.Now()
-	result, err := client.ChatCompletion(sysPrompt, userPrompt)
-	elapsed := time.Since(start)
+	// Resolve provider list (from flag or config).
+	providerList, err := resolveProviderList(cfg, o.Provider)
 	if err != nil {
 		return err
 	}
+	if len(providerList) == 0 {
+		return fmt.Errorf("no provider configured. Set one with 'mu set ask provider set <name>' or 'mu set ask module --provider <name>'")
+	}
 
-	if o.Verbose {
-		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
-		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
+	// Iterate providers: try each until one succeeds.
+	names := providerList.Names()
+	var result *openai.ChatResult
+	var lastErr error
+
+	for i, name := range names {
+		p, err := llm.ResolveProvider(cfg, name)
+		if err != nil {
+			lastErr = fmt.Errorf("provider %q not found: %w", name, err)
+			continue
+		}
+
+		isLast := i == len(names)-1
+		result, lastErr = askWithProvider(cfg, p, sysPrompt, userPrompt, o, isLast)
+		if lastErr == nil {
+			break // success
+		}
+		if isLast {
+			break // last provider failed
+		}
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("all provider(s) failed: %w", lastErr)
 	}
 
 	fmt.Fprintln(os.Stderr, faint("Answer:"))
 	fmt.Println(result.Content)
 
-	fmt.Fprintln(os.Stderr, faint(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total (%s)",
-		result.PromptTokens, result.CompletionTokens, result.TotalTokens, elapsed)))
+	fmt.Fprintln(os.Stderr, faint(fmt.Sprintf("Tokens: %d prompt + %d completion = %d total",
+		result.PromptTokens, result.CompletionTokens, result.TotalTokens)))
 
 	return nil
 }

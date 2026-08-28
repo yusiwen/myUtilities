@@ -6,27 +6,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/yusiwen/myUtilities/internal/core/llm"
 )
 
-type Provider struct {
-	Name    string `json:"name"`
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
-}
+// Type aliases for shared types defined in core/llm/config.go.
+type Provider = llm.Provider
+type MultiProvider = llm.MultiProvider
 
-type ScipConfig struct {
-	Enabled     *bool             `json:"enabled,omitempty"`      // nil → enabled by default
-	AutoInstall *bool             `json:"auto_install,omitempty"` // nil → true
-	CacheDir    string            `json:"cache_dir,omitempty"`    // empty → ~/.cache/mu/scip
-	Versions    map[string]string `json:"versions,omitempty"`     // lang → release tag override
-}
-
+// ModuleConfig holds the per-module (commit or review) configuration.
 type ModuleConfig struct {
-	Provider   string     `json:"provider"`
-	Lang       string     `json:"lang,omitempty"`
-	ReviewsDir string     `json:"reviews_dir,omitempty"`
-	Scip       ScipConfig `json:"scip,omitempty"`
+	Provider   MultiProvider `json:"provider"`
+	Lang       string        `json:"lang,omitempty"`
+	ReviewsDir string        `json:"reviews_dir,omitempty"`
+	Scip       ScipConfig    `json:"scip,omitempty"`
 }
 
 func (m *ModuleConfig) ReviewsDirPath() string {
@@ -41,6 +34,13 @@ func (m *ModuleConfig) ReviewsDirPath() string {
 		}
 	}
 	return dir
+}
+
+type ScipConfig struct {
+	Enabled     *bool             `json:"enabled,omitempty"`      // nil → enabled by default
+	AutoInstall *bool             `json:"auto_install,omitempty"` // nil → true
+	CacheDir    string            `json:"cache_dir,omitempty"`    // empty → ~/.cache/mu/scip
+	Versions    map[string]string `json:"versions,omitempty"`     // lang → release tag override
 }
 
 type GitConfig struct {
@@ -149,11 +149,11 @@ func migrateFromOldConfig() (*GitConfig, error) {
 			},
 		},
 		Commit: ModuleConfig{
-			Provider: "default",
+			Provider: MultiProvider{"default"},
 			Lang:     "en",
 		},
 		Review: ModuleConfig{
-			Provider: "default",
+			Provider: MultiProvider{"default"},
 			Lang:     "en",
 		},
 	}
@@ -185,6 +185,7 @@ func SaveGitConfig(gc *GitConfig) error {
 	return nil
 }
 
+// ResolveProvider finds a named provider in the git config.
 func ResolveProvider(gc *GitConfig, name string) (*Provider, error) {
 	for i := range gc.Providers {
 		if gc.Providers[i].Name == name {
@@ -203,4 +204,40 @@ func GetModuleConfig(gc *GitConfig, module string) (*ModuleConfig, error) {
 	default:
 		return nil, fmt.Errorf("unknown module: %q", module)
 	}
+}
+
+// ForEachProvider iterates through provider names and calls fn for each.
+// fn receives the resolved *Provider. If a provider is not found in the
+// config, the next provider is tried; an error is returned only when every
+// provider in the chain has been exhausted without success.
+func ForEachProvider(gc *GitConfig, providerNames MultiProvider, fn func(*Provider) error) error {
+	names := providerNames.Names()
+	if len(names) == 0 {
+		return fmt.Errorf("no provider configured for this module (set one with 'mu set git <module> --provider <name>')")
+	}
+
+	// lastErr tracks errors across the fallback chain. Not-found errors are
+	// all accumulated (useful when a provider name is misspelled midway). fn
+	// errors are tracked for the final wrap.
+	var lastErr error
+	for i, name := range names {
+		p, err := ResolveProvider(gc, name)
+		if err != nil {
+			lastErr = fmt.Errorf("provider %q not found in git-config.json: %w", name, err)
+			continue
+		}
+		if err := fn(p); err != nil {
+			// If there are more providers to try, record the error and continue.
+			if i < len(names)-1 {
+				lastErr = fmt.Errorf("provider %q failed: %w", name, err)
+				continue
+			}
+			// This was the last provider — wrap consistently so the outer
+			// "all provider(s) failed" message always carries detail.
+			return fmt.Errorf("provider %q failed: %w", name, err)
+		}
+		// Success — stop immediately.
+		return nil
+	}
+	return lastErr
 }

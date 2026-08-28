@@ -36,6 +36,7 @@ func buildSystemPrompt(lang string) string {
 }
 
 type CommitOptions struct {
+	Provider     string `help:"Provider name to use (overrides config)."`
 	Model        string `help:"Model name to use." short:"m" env:"OPENAI_MODEL"`
 	APIKey       string `help:"API key for the AI service." short:"k" env:"OPENAI_API_KEY"`
 	BaseURL      string `help:"Base URL of the AI service." short:"u" env:"OPENAI_BASE_URL"`
@@ -57,29 +58,16 @@ func (o *CommitOptions) Run() error {
 		return err
 	}
 
-	provider, err := coregit.ResolveProvider(gc, moduleCfg.Provider)
-	if err != nil {
-		return err
-	}
-
-	baseURL := provider.BaseURL
-	apiKey := provider.APIKey
-	model := provider.Model
-	if o.BaseURL != "" {
-		baseURL = o.BaseURL
-	}
-	if o.APIKey != "" {
-		apiKey = o.APIKey
-	}
-	if o.Model != "" {
-		model = o.Model
-	}
-
-	if apiKey == "" {
-		return fmt.Errorf("API key is required. Set it via:\n" +
-			"  - OPENAI_API_KEY environment variable\n" +
-			"  - --api-key flag\n" +
-			"  - 'mu set git provider add --name <name> --api-key <key> ...'")
+	// When --provider is explicitly provided, use only that single provider.
+	var providerList coregit.MultiProvider
+	if o.Provider != "" {
+		p, err := coregit.ResolveProvider(gc, o.Provider)
+		if err != nil {
+			return err
+		}
+		providerList = coregit.MultiProvider{p.Name}
+	} else {
+		providerList = moduleCfg.Provider
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {
@@ -111,29 +99,66 @@ func (o *CommitOptions) Run() error {
 		term.Bright(fmt.Sprintf("%d", diff.RawLen)),
 		term.Faint(fmt.Sprintf(" chars, strategy: %s)...", strategy)))
 
-	client := openai.NewClient(baseURL, apiKey, model)
-
 	sysPrompt := buildSystemPrompt(lang)
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
 
 	if o.Verbose {
-		client.DebugWriter = os.Stderr
 		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
 		fmt.Fprintln(os.Stderr, sysPrompt)
 		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
 		fmt.Fprintln(os.Stderr, userPrompt)
 	}
 
-	start := time.Now()
-	result, err := client.ChatCompletion(sysPrompt, userPrompt)
-	elapsed := time.Since(start)
-	if err != nil {
-		return err
-	}
+	var result *openai.ChatResult
 
-	if o.Verbose {
-		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
-		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
+	err = coregit.ForEachProvider(gc, providerList, func(p *coregit.Provider) error {
+		baseURL := p.BaseURL
+		apiKey := p.APIKey
+		model := p.Model
+		if o.BaseURL != "" {
+			baseURL = o.BaseURL
+		}
+		if o.APIKey != "" {
+			apiKey = o.APIKey
+		}
+		if o.Model != "" {
+			model = o.Model
+		}
+
+		if apiKey == "" {
+			return fmt.Errorf("API key is required. Set it via:\n" +
+				"  - OPENAI_API_KEY environment variable\n" +
+				"  - --api-key flag\n" +
+				"  - 'mu set git provider add --name <name> --api-key <key> ...'")
+		}
+
+		fmt.Fprintf(os.Stderr, "%s%s%s\n",
+			term.Faint("Calling provider "),
+			term.Bright(p.Name),
+			term.Faint("..."))
+
+		start := time.Now()
+		oneShot := openai.NewClient(baseURL, apiKey, model)
+		if o.Verbose {
+			oneShot.DebugWriter = os.Stderr
+		}
+
+		var callErr error
+		result, callErr = oneShot.ChatCompletion(sysPrompt, userPrompt)
+		elapsed := time.Since(start)
+		if callErr != nil {
+			return fmt.Errorf("request failed: %w", callErr)
+		}
+
+		if o.Verbose {
+			fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
+			fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("all provider(s) failed: %w", err)
 	}
 
 	sep := strings.Repeat("─", 50)

@@ -62,29 +62,16 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
-	provider, err := coregit.ResolveProvider(gc, moduleCfg.Provider)
-	if err != nil {
-		return err
-	}
-
-	baseURL := provider.BaseURL
-	apiKey := provider.APIKey
-	model := provider.Model
-	if o.BaseURL != "" {
-		baseURL = o.BaseURL
-	}
-	if o.APIKey != "" {
-		apiKey = o.APIKey
-	}
-	if o.Model != "" {
-		model = o.Model
-	}
-
-	if apiKey == "" {
-		return fmt.Errorf("API key is required. Set it via:\n" +
-			"  - OPENAI_API_KEY environment variable\n" +
-			"  - --api-key flag\n" +
-			"  - 'mu set git provider add --name <name> --api-key <key> ...'")
+	// When --provider is explicitly provided, use only that single provider.
+	var providerList coregit.MultiProvider
+	if o.Provider != "" {
+		p, err := coregit.ResolveProvider(gc, o.Provider)
+		if err != nil {
+			return err
+		}
+		providerList = coregit.MultiProvider{p.Name}
+	} else {
+		providerList = moduleCfg.Provider
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {
@@ -190,29 +177,64 @@ func (o *ReviewOptions) Run() error {
 		fmt.Fprintln(os.Stderr, "git diff", strings.Join(diffArgs, " "))
 	}
 
-	client := openai.NewClient(baseURL, apiKey, model)
+	var agentResult *coregit.AgentResult
 
-	if o.Verbose {
-		client.DebugWriter = os.Stderr
-		fmt.Fprintln(os.Stderr, sysPrompt)
-	}
+	runErr := coregit.ForEachProvider(gc, providerList, func(p *coregit.Provider) error {
+		baseURL := p.BaseURL
+		apiKey := p.APIKey
+		model := p.Model
+		if o.BaseURL != "" {
+			baseURL = o.BaseURL
+		}
+		if o.APIKey != "" {
+			apiKey = o.APIKey
+		}
+		if o.Model != "" {
+			model = o.Model
+		}
 
-	maxTurns := o.MaxTurns
-	start := time.Now()
-	agent, err := coregit.NewReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose, indexSet)
-	if err != nil {
-		return err
-	}
+		if apiKey == "" {
+			return fmt.Errorf("API key is required. Set it via:\n" +
+				"  - OPENAI_API_KEY environment variable\n" +
+				"  - --api-key flag\n" +
+				"  - 'mu set git provider add --name <name> --api-key <key> ...'")
+		}
 
-	agentResult, err := agent.Run()
-	elapsed := time.Since(start)
+		fmt.Fprintf(os.Stderr, "%s%s%s\n",
+			term.Faint("Calling provider "),
+			term.Bright(p.Name),
+			term.Faint("..."))
 
-	if err != nil {
-		return err
-	}
+		oneShot := openai.NewClient(baseURL, apiKey, model)
+		if o.Verbose {
+			oneShot.DebugWriter = os.Stderr
+			fmt.Fprintln(os.Stderr, sysPrompt)
+		}
 
-	if o.Verbose {
-		fmt.Fprintf(os.Stderr, "─── Agent completed in %s ───\n", elapsed)
+		maxTurns := o.MaxTurns
+		start := time.Now()
+		agent, err := coregit.NewReviewAgent(oneShot, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose, indexSet)
+		if err != nil {
+			return err
+		}
+
+		result, err := agent.Run()
+		elapsed := time.Since(start)
+
+		if err != nil {
+			return fmt.Errorf("agent failed: %w", err)
+		}
+
+		if o.Verbose {
+			fmt.Fprintf(os.Stderr, "─── Agent completed in %s ───\n", elapsed)
+		}
+
+		agentResult = result
+		return nil
+	})
+
+	if runErr != nil {
+		return fmt.Errorf("all provider(s) failed: %w", runErr)
 	}
 
 	timestamp := time.Now()
