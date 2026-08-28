@@ -17,6 +17,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [fleet](docs/fleet.md) | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
 | [gateway](docs/gateway.md) | Ops | Unified portal serving all web-enabled modules | ✓ |
 | [git](docs/git.md) | Dev | AI commit messages, multi-turn code review, .gitignore templates | – |
+| [http](docs/http.md) | Net | Lightweight HTTP client with pretty JSON output | – |
 | [install](docs/install.md) | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
 | [jar](docs/jar.md) | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
 | [k8s](docs/k8s.md) | Cloud | Kubernetes Secret YAML generator + resource browser | ✓ |

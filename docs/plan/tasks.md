@@ -4,19 +4,19 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 
 ## Code Organization and Structure
 
-> 详细执行方案见 [Codebase Restructure Plan](./codebase-restructure-plan.md)（Phases 1-4）
+> Detailed execution plan: [Codebase Restructure Plan](./codebase-restructure-plan.md) (Phases 1–4)
 
 1. [x] Refactor the project to follow standard Go project layout (cmd/, pkg/, internal/, etc.)
     → See [Phase 3 — Standard Layout](./codebase-restructure-plan.md#phase-3--标准项目布局)
 2. [x] Move version information to a dedicated package for better maintainability
     → See [Phase 1-①](./codebase-restructure-plan.md#1-①-版本信息抽到独立包)
-    → Done: `internal/core/version`（`cmd/mu/version.go` 已删除，Makefile ldflags 已更新）
+    → Done: moved to `internal/core/version` (`cmd/mu/version.go` removed, Makefile ldflags updated)
 3. [x] Create separate packages for common utilities instead of embedding them in specific packages
     → See [Phase 2-④](./codebase-restructure-plan.md#2-④-解决-4-组包名冲突)
-    → Done: 包名冲突已随 cmd/ + internal/ 重构解决
+    → Done: package name conflicts resolved during `cmd/` + `internal/` restructuring
 4. [x] Standardize naming conventions across the codebase
     → See [Phase 1-②](./codebase-restructure-plan.md#1-②-修复-pascalcase-文件名) + [Phase 4-⑥](./codebase-restructure-plan.md#4-⑥-统一命名规范)
-    → Done: PascalCase 文件名已随重构修复（proxy/watcher/runner 等）
+    → Done: PascalCase filenames fixed during restructuring (proxy, watcher, runner, etc.)
 5. [ ] Remove commented-out code and TODOs, replacing them with actual implementations or GitHub issues
     → See [Phase 1-③](./codebase-restructure-plan.md#1-③-清理-todo)
 
@@ -67,41 +67,62 @@ This document contains a list of actionable improvement tasks for the myUtilitie
 33. [ ] Add progress reporting during installations
 34. [ ] Implement a configuration file for persistent settings
 35. [x] Add more mock services beyond the file server (dynamic-server with admin UI)
+36. [ ] **git extensions** — Add `mu git undo` (undo last commit / merge / rebase with safe defaults), `mu git clean --dry-run` (preview untracked file removal), `mu git branches --merged` (list prunable merged branches)
+37. [ ] **misc extension: format conversion** — Add `mu misc convert` subcommand: JSON ↔ YAML, CSV ↔ JSON, unit conversion (bytes ↔ human-readable), base64 ↔ hex
+38. [ ] **network extension: connectivity** — Add `mu network ping <host>` (ICMP/TCP ping with loss stats) and `mu network trace <host>` (traceroute with per-hop latency) to complement existing `dns`/`dig`/`whois`
 
 ## Build and Deployment
 
-36. [ ] Update the Makefile to support all target platforms
-37. [x] Implement semantic versioning
-38. [ ] Automate the release process completely
-39. [ ] Add containerization support (Docker)
-40. [ ] Create installation packages for different package managers (apt, brew, etc.)
+39. [ ] Update the Makefile to support all target platforms
+40. [x] Implement semantic versioning
+41. [ ] Automate the release process completely
+42. [ ] Add containerization support (Docker)
+43. [ ] Create installation packages for different package managers (apt, brew, etc.)
 
 ## User Experience
 
-41. [x] Improve command-line help messages and documentation
-42. [ ] Add color and formatting to terminal output
-43. [ ] Implement interactive mode for complex operations
-44. [x] Add command completion for shells
-45. [x] Create a web UI for the mock services
+44. [x] Improve command-line help messages and documentation
+45. [ ] Add color and formatting to terminal output
+46. [ ] Implement interactive mode for complex operations
+47. [x] Add command completion for shells
+48. [x] Create a web UI for the mock services
 
 ## Web UI Candidates (New Feature Ideas)
 
 Simple tools that would benefit from a web UI and gateway integration:
 
-| Priority | Module | Description | Backend Effort | Frontend Effort |
-|---|---|---|---|---|
-| 🥇 | **JSON Tool** | Format, validate, compress, and query JSON (reuse CodeMirror) | ⭐ ~10 lines | ⭐ ~100 lines |
-| 🥇 | **UUID** | Generate UUID v1/v4/v7, single or batch | ⭐ ~20 lines | ⭐ ~50 lines |
-| 🥈 | **Timestamp** | Unix timestamp ↔ human date/time, auto-detect format | ⭐ ~30 lines | ⭐ ~60 lines |
-| 🥈 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines |
-| 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines |
-| 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines |
-| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines |
-| — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (internal/core/watcher ready) | ⭐⭐⭐ ~200 lines |
-| — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (internal/core/git + openai ready) | ⭐⭐⭐ ~200 lines |
+| Priority | Module | Description | Backend | Frontend | Status |
+|---|---|---|---|---|---|
+| 🥇 | **JSON Tool** | Format, validate, compress, and query JSON (reuse CodeMirror) | ⭐ ~10 lines | ⭐ ~100 lines | ✅ Done (`mu misc json`) |
+| 🥇 | **UUID** | Generate UUID v1/v4/v7, single or batch | ⭐ ~20 lines | ⭐ ~50 lines | ✅ Done (`mu misc uuid`) |
+| 🥈 | **Timestamp** | Unix timestamp ↔ human date/time, auto-detect format | ⭐ ~30 lines | ⭐ ~60 lines | ✅ Done (`mu misc timestamp`) |
+| 🥈 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines | ✅ Done (`mu misc hash`) |
+| 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines | ✅ Done (`mu network dns/dig`) |
+| 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines | ☐ |
+| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines | ☐ |
+| — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (internal/core/watcher ready) | ⭐⭐⭐ ~200 lines | ☐ |
+| — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (internal/core/git + openai ready) | ⭐⭐⭐ ~200 lines | ☐ |
+
+## Proposed New Modules
+
+Modules not yet covered by the Web UI candidates above. Each follows the standard pattern: `internal/<name>/` CLI + `internal/core/<name>/` core logic + optional web UI + gateway registration.
+
+| Priority | Module | Description | Effort |
+|---|---|---|---|
+| 🥇 | **HTTP Client** (`mu http`) ✅ | CLI curl replacement: `mu http <url>` with `-X` method, `-H` headers, `-d`/stdin body, `-A` bearer auth, `-t` timeout, `-j` pretty JSON, `-b` body-only, `-o` file output; status line color-coded, one-line summary to stderr. See [docs/http.md](./http.md) | ⭐⭐ ~100 lines |
+| 🥇 | **Log Tailer** (`mu log`) | Tail and filter log files: `mu log -f app.log --level error --since 5m --grep "timeout"`. Multi-file tail, JSON-line auto-detection, colorized level highlighting. Core reuses `internal/core/watcher` for file watching; CLI-only (no web UI needed — terminal is the natural interface). | ⭐⭐ ~120 lines |
+| 🥈 | **Port Manager** (`mu port`) | `mu port 3306` — show what's listening on a port (PID, process name, command). `mu port kill 3306` — kill it. `mu port list` — table of all listening ports. `mu port check host:port` — remote TCP probe. Complements existing `network` module. | ⭐⭐ ~80 lines |
+| 🥈 | **System Diagnostics** (`mu sys`) | `mu sys check` — one-shot health snapshot: disk usage, memory, load, top-10 processes, network interfaces, DNS resolution. `mu sys env` — dump environment snapshot (Go version, OS, key env vars) for bug reports. Pairs with `fleet` for remote host diagnostics. | ⭐⭐ ~100 lines |
+| 🥈 | **Env Manager** (`mu env`) | `mu env list [--filter K]` — list env vars, filtered. `mu env diff prod staging` — diff two env files. `mu env scan` — scan current Go/JS/Python codebase for `os.Getenv`/`process.env`/`os.environ` references and generate a `.env.example` template. | ⭐⭐ ~80 lines |
+| 🥉 | **Cron Manager** (`mu cron`) | `mu cron list` — human-readable crontab. `mu cron add "0 9 * * 1" "backup.sh"`. `mu cron next "*/15 * * * *"` — show next 5 fire times. `mu cron history` — recent run history from system logs. Thin wrapper around system crontab with validation and preview. | ⭐ ~60 lines |
+| 🥉 | **DB Query** (`mu db`) | Ad-hoc database queries without a GUI: `mu db mysql -h host -u user -p "SELECT * FROM users LIMIT 10"`, `mu db psql ...`, `mu db sqlite ./app.db ".schema"`. Schema inspection (`mu db schema mysql -h host users`), CSV/JSON export. Complements `proxy` (which is a long-running proxy server, not ad-hoc queries). | ⭐⭐⭐ ~200 lines |
+| 🥉 | **SSH Utilities** (`mu ssh`) | `mu ssh hosts` — parse `~/.ssh/config` and list hosts with connection details. `mu ssh tunnel --local 8080 --remote 127.0.0.1:3000 --host prod`. `mu ssh known-hosts check github.com` — verify/refresh known_hosts entries. `mu ssh config gen` — generate SSH config blocks. | ⭐⭐ ~100 lines |
+| — | **Health Check** (`mu health`) | `mu health check https://api.example.com/health --retries 3 --timeout 5s`. `mu health check-file targets.yaml` — batch check. Output in table or Prometheus exposition format. Notification hooks (webhook/email on failure). Pairs with `fleet` for checking remote service health. | ⭐⭐ ~80 lines |
+| — | **Secret Manager** (`mu secret`) | Lightweight encrypted secrets: `mu secret set API_KEY`, `mu secret get API_KEY`, `mu secret list`, `mu secret rotate TOKEN`. Local encrypted storage (AES-256-GCM with key from `keyring`). Bridges to the keyring plan in [keyring-module-plan.md](./keyring-module-plan.md). | ⭐⭐ ~100 lines |
 
 ## Recently Completed
 
+- **HTTP Client** — `mu http`: curl-like CLI HTTP client (`internal/httpclient/`). Supports all methods (`-X`), repeatable request headers (`-H`), body via `-d` or stdin, Bearer auth (`-A`), timeout (`-t`), TLS skip (`-k`), no-redirect (`-N`), forced JSON pretty-print (`-j`), body-only mode (`-b`), and file output (`-o`). Auto-detects JSON responses, color-codes the status line (green 2xx / red 4xx+), and writes a one-line summary to stderr so the body pipes cleanly. See [docs/http.md](./http.md)
 - **Rust SCIP indexer** — rust-analyzer (`scip` subcommand) registered in `internal/core/scip`: bare `.gz` single-binary extraction fallback (`extractRawGzip`, tried after tar parse), `Cargo.toml`/`*.rs` detection, data-driven invocation `rust-analyzer scip --output <path> .`; enables `find_references`/`find_definition`/`symbol_info`/`read_function` for Rust repos via `git review`
 - **Frontend Favicons** — Added emoji favicons to all 11 frontends matching gateway landing page card icons
 - **Mock Dynamic Server Fix** — Fixed gateway integration default route fallback to DynamicRouter for mock endpoints
