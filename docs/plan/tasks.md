@@ -99,7 +99,7 @@ Simple tools that would benefit from a web UI and gateway integration:
 | 🥈 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines | ✅ Done (`mu misc hash`) |
 | 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines | ✅ Done (`mu network dns/dig`) |
 | 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines | ☐ |
-| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines | ☐ |
+| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines | ✅ Done (`mu http`) |
 | — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (internal/core/watcher ready) | ⭐⭐⭐ ~200 lines | ☐ |
 | — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (internal/core/git + openai ready) | ⭐⭐⭐ ~200 lines | ☐ |
 
@@ -110,7 +110,7 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 | Priority | Module | Description | Effort |
 |---|---|---|---|
 | 🥇 | **HTTP Client** (`mu http`) ✅ | CLI curl replacement: `mu http <url>` with `-X` method, `-H` headers, `-d`/stdin body, `-A` bearer auth, `-t` timeout, `-j` pretty JSON, `-b` body-only, `-o` file output; status line color-coded, one-line summary to stderr. See [docs/http.md](./http.md) | ⭐⭐ ~100 lines |
-| 🥇 | **Log Tailer** (`mu log`) | Tail and filter log files: `mu log -f app.log --level error --since 5m --grep "timeout"`. Multi-file tail, JSON-line auto-detection, colorized level highlighting. Core reuses `internal/core/watcher` for file watching; CLI-only (no web UI needed — terminal is the natural interface). | ⭐⭐ ~120 lines |
+| 🥇 | **Log Tailer** (`mu log`) ✅ | Tail and filter log files: `mu log -f app.log --level error --since 5m --grep "timeout"`. Multi-file tail, JSON-line auto-detection, colorized level highlighting. Core in `internal/core/logtail`; CLI-only (no web UI needed — terminal is the natural interface). See [docs/log.md](./log.md) | ⭐⭐ ~120 lines |
 | 🥈 | **Port Manager** (`mu port`) | `mu port 3306` — show what's listening on a port (PID, process name, command). `mu port kill 3306` — kill it. `mu port list` — table of all listening ports. `mu port check host:port` — remote TCP probe. Complements existing `network` module. | ⭐⭐ ~80 lines |
 | 🥈 | **System Diagnostics** (`mu sys`) | `mu sys check` — one-shot health snapshot: disk usage, memory, load, top-10 processes, network interfaces, DNS resolution. `mu sys env` — dump environment snapshot (Go version, OS, key env vars) for bug reports. Pairs with `fleet` for remote host diagnostics. | ⭐⭐ ~100 lines |
 | 🥈 | **Env Manager** (`mu env`) | `mu env list [--filter K]` — list env vars, filtered. `mu env diff prod staging` — diff two env files. `mu env scan` — scan current Go/JS/Python codebase for `os.Getenv`/`process.env`/`os.environ` references and generate a `.env.example` template. | ⭐⭐ ~80 lines |
@@ -122,6 +122,7 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 
 ## Recently Completed
 
+- **Log Tailer** — `mu log`: tail and filter log files (`internal/log/` + `internal/core/logtail/`). Supports multi-file tail, follow mode (`-f`), minimum level filter (`-l`), time window (`--since`), regex filter (`--grep`), line limit (`-n`), and auto-detection of JSON-line vs plain-text formats with colorized level highlighting (DEBUG=faint, INFO=green, WARN=yellow, ERROR=red, FATAL=red+bold). Follow mode polls every 500 ms and handles file truncation/rotation. See [docs/log.md](./log.md)
 - **HTTP Client** — `mu http`: curl-like CLI HTTP client (`internal/httpclient/`). Supports all methods (`-X`), repeatable request headers (`-H`), body via `-d` or stdin, Bearer auth (`-A`), timeout (`-t`), TLS skip (`-k`), no-redirect (`-N`), forced JSON pretty-print (`-j`), body-only mode (`-b`), and file output (`-o`). Auto-detects JSON responses, color-codes the status line (green 2xx / red 4xx+), and writes a one-line summary to stderr so the body pipes cleanly. See [docs/http.md](./http.md)
 - **Rust SCIP indexer** — rust-analyzer (`scip` subcommand) registered in `internal/core/scip`: bare `.gz` single-binary extraction fallback (`extractRawGzip`, tried after tar parse), `Cargo.toml`/`*.rs` detection, data-driven invocation `rust-analyzer scip --output <path> .`; enables `find_references`/`find_definition`/`symbol_info`/`read_function` for Rust repos via `git review`
 - **Frontend Favicons** — Added emoji favicons to all 11 frontends matching gateway landing page card icons

@@ -11,6 +11,7 @@ import (
 	"github.com/yusiwen/myUtilities/internal/fleet"
 	"github.com/yusiwen/myUtilities/internal/gateway"
 	"github.com/yusiwen/myUtilities/internal/httpclient"
+	"github.com/yusiwen/myUtilities/internal/log"
 	"github.com/yusiwen/myUtilities/internal/git"
 	"github.com/yusiwen/myUtilities/internal/installer"
 	"github.com/yusiwen/myUtilities/internal/jarinfo"
@@ -55,5 +56,6 @@ type MyUtilities struct {
 	Scip       scip.Options                `cmd:"" name:"scip" help:"SCIP semantic code intelligence."`
 	Fleet      fleet.Options               `cmd:"" name:"fleet" help:"Fleet management (remote execution/deploys)."`
 	Http       httpclient.Options          `cmd:"" name:"http" help:"HTTP client for sending requests."`
+	Log        log.Options                 `cmd:"" name:"log" help:"Tail and filter log files."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

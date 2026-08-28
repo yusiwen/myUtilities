@@ -21,7 +21,7 @@
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
 `git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network`, `misc`, `crypto`,
-`ask`, `budget`, `metrics`, `scip`, `completion`
+`ask`, `budget`, `metrics`, `scip`, `http`, `log`, `completion`
 
 ---
 
@@ -112,7 +112,9 @@
 │   │   ├── config.go          #  ESConfig, load/save JSON config, maskedPassword
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
-│   ├── k8s/  metrics/  misc/  network/  qrcode/  scip/  serve/  svcreg/  watch/
+│   ├── k8s/  log/  metrics/  misc/  network/  qrcode/  scip/  serve/  svcreg/  watch/
+│   ├── httpclient/            # mu http — CLI HTTP client (curl alternative)
+│   ├── log/                   # mu log — log tailer and filter
 │   └── (modules with a web UI also contain a `frontend/` dir, embedded via `//go:embed`)
 ├── web/
 │   └── shared/frontend/       # Shared theme/common partials injected into all frontends
