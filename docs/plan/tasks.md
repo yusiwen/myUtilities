@@ -99,7 +99,7 @@ Simple tools that would benefit from a web UI and gateway integration:
 | 🥈 | **Hash** | File upload or text input → SHA1/SHA256/SHA512/MD5 | ⭐⭐ ~40 lines | ⭐ ~80 lines | ✅ Done (`mu misc hash`) |
 | 🥉 | **DNS Lookup** | DNS record queries (A/AAAA/MX/NS/TXT) | ⭐ ~40 lines | ⭐ ~60 lines | ✅ Done (`mu network dns/dig`) |
 | 🥉 | **Port Scan** | TCP port scanning from server | ⭐⭐ ~60 lines | ⭐ ~80 lines | ☐ |
-| — | **HTTP Client** | Web-based curl: method, URL, headers, body → response | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines | ✅ Done (`mu http`) |
+| — | **HTTP Client** (`mu network http`) | Web-based curl: method, URL, headers, body → response. Now a subcommand of `mu network`. | ⭐⭐⭐ ~80 lines | ⭐⭐⭐ ~150 lines | ✅ Done (`mu network http`) |
 | — | **watch** dashboard | File/git watch events via SSE stream to browser | ⭐⭐ (internal/core/watcher ready) | ⭐⭐⭐ ~200 lines | ☐ |
 | — | **git commit** UI | Stage files, view diff, generate/edit commit message via LLM | ⭐⭐ (internal/core/git + openai ready) | ⭐⭐⭐ ~200 lines | ☐ |
 
@@ -123,7 +123,7 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 ## Recently Completed
 
 - **Log Tailer** — `mu log`: tail and filter log files (`internal/log/` + `internal/core/logtail/`). Supports multi-file tail, follow mode (`-f`), minimum level filter (`-l`), time window (`--since`), regex filter (`--grep`), line limit (`-n`), and auto-detection of JSON-line vs plain-text formats with colorized level highlighting (DEBUG=faint, INFO=green, WARN=yellow, ERROR=red, FATAL=red+bold). Follow mode polls every 500 ms and handles file truncation/rotation. See [docs/log.md](./log.md)
-- **HTTP Client** — merged into `mu network http` (curl-like subcommand). Core logic moved to `internal/core/httpclient/`, CLI in `internal/network/httpclient.go`. Supports all methods (`-X`), repeatable request headers (`-H`), body via `-d` or stdin, Bearer auth (`-A`), timeout (`-t`), TLS skip (`-k`), no-redirect (`-N`), forced JSON pretty-print (`-j`), body-only mode (`-b`), and file output (`-o`). Auto-detects JSON responses, color-codes the status line (green 2xx / red 4xx+), and writes a one-line summary to stderr so the body pipes cleanly. See [docs/http.md](./http.md)
+- **HTTP Client** — merged into `mu network http` (curl-like subcommand). Core logic moved to `internal/core/httpclient/`, CLI in `internal/network/httpclient.go`. Supports all methods (`-X`), repeatable request headers (`-H`), body via `-d` or stdin, Bearer auth (`-A`), timeout (`-t`), TLS skip (`-k`), no-redirect (`-N`), forced JSON pretty-print (`-j`), body-only mode (`-b`), and file output (`-o`). Auto-detects JSON responses, color-codes the status line (green 2xx / red 4xx+), and writes a one-line summary to stderr so the body pipes cleanly. See [docs/network.md](./network.md)
 - **Rust SCIP indexer** — rust-analyzer (`scip` subcommand) registered in `internal/core/scip`: bare `.gz` single-binary extraction fallback (`extractRawGzip`, tried after tar parse), `Cargo.toml`/`*.rs` detection, data-driven invocation `rust-analyzer scip --output <path> .`; enables `find_references`/`find_definition`/`symbol_info`/`read_function` for Rust repos via `git review`
 - **Frontend Favicons** — Added emoji favicons to all 11 frontends matching gateway landing page card icons
 - **Mock Dynamic Server Fix** — Fixed gateway integration default route fallback to DynamicRouter for mock endpoints
