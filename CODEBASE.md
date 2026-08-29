@@ -20,8 +20,8 @@
 
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
-`git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network`, `misc`, `crypto`,
-`ask`, `budget`, `metrics`, `scip`, `http`, `log`, `completion`
+`git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network` (dns/dig/whois/http/serve), `misc`, `crypto`,
+`ask`, `budget`, `metrics`, `scip`, `log`, `completion`
 
 ---
 
@@ -61,6 +61,8 @@
 │   │   │   ├── agent.go       #  Register → poll → download/extract files → run (core/runner) → stream → complete
 │   │   │   ├── client.go      #  Controller/agent HTTP client
 │   │   │   └── transfer.go    #  ArchiveExt / ExtractArchive (tar.gz/tar/zip) / ComputeSHA256
+│   │   ├── httpclient/        # HTTP client core (curl alternative)
+│   │   │   └── client.go      #  Do(Params) → *Result; Render(p, r); SummaryLine; ReadBodyFromStdin; PrettyJSON
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
@@ -112,9 +114,12 @@
 │   │   ├── config.go          #  ESConfig, load/save JSON config, maskedPassword
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
-│   ├── k8s/  log/  metrics/  misc/  network/  qrcode/  scip/  serve/  svcreg/  watch/
-│   ├── httpclient/            # mu http — CLI HTTP client (curl alternative)
-│   ├── log/                   # mu log — log tailer and filter
+│   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  watch/
+│   ├── network/               # mu network — DNS, DIG, WHOIS, HTTP client (curl alternative)
+│   │   ├── options.go         #  Subcommands: dns, dig, whois, http, serve
+│   │   ├── command.go         #  DNS/DIG/WHOIS/Cert commands + HTTPClientOptions (mu network http)
+│   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
+│   └── log/                   # mu log — log tailer and filter
 │   └── (modules with a web UI also contain a `frontend/` dir, embedded via `//go:embed`)
 ├── web/
 │   └── shared/frontend/       # Shared theme/common partials injected into all frontends

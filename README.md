@@ -17,7 +17,6 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [fleet](docs/fleet.md) | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
 | [gateway](docs/gateway.md) | Ops | Unified portal serving all web-enabled modules | ✓ |
 | [git](docs/git.md) | Dev | AI commit messages, multi-turn code review, .gitignore templates | – |
-| [http](docs/http.md) | Net | Lightweight HTTP client with pretty JSON output | – |
 | [install](docs/install.md) | DevOps | Install binaries from GitHub releases (asset search, tags, tokens) | – |
 | [log](docs/log.md) | Dev | Tail and filter log files: level/time/regex filters, JSON detection, color | – |
 | [jar](docs/jar.md) | Dev | Analyze JAR files (JDK version, manifest, Maven coords) | ✓ |
@@ -25,7 +24,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [metrics](docs/metrics.md) | Ops | Time-series host metrics collection and querying | ✓ |
 | [misc](docs/misc.md) | Utils | JSON format/validate, UUID, timestamp, hash, trackers | ✓ |
 | [mock](docs/mock.md) | Testing | Mock servers: mock-server, file-server, oauth-server, dynamic-server with admin UI | ✓ |
-| [network](docs/network.md) | Net | DNS, DIG, and WHOIS lookups | ✓ |
+| [network](docs/network.md) | Net | DNS, DIG, WHOIS lookups + curl-like HTTP client | ✓ |
 | [proxy](docs/proxy.md) | Ops | Database proxy with failover (Oracle) | – |
 | [qrcode](docs/qrcode.md) | Utils | Generate QR codes (terminal, PNG, web UI) | ✓ |
 | [run](docs/run.md) | DevOps | Command runner with live display + YAML recipe orchestration | – |

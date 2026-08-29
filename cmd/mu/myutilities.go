@@ -10,7 +10,6 @@ import (
 	"github.com/yusiwen/myUtilities/internal/es"
 	"github.com/yusiwen/myUtilities/internal/fleet"
 	"github.com/yusiwen/myUtilities/internal/gateway"
-	"github.com/yusiwen/myUtilities/internal/httpclient"
 	"github.com/yusiwen/myUtilities/internal/log"
 	"github.com/yusiwen/myUtilities/internal/git"
 	"github.com/yusiwen/myUtilities/internal/installer"
@@ -47,7 +46,7 @@ type MyUtilities struct {
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
 	Diff       diff.Options                `cmd:"" name:"diff" help:"Text diff tool."`
-	Network    network.Options             `cmd:"" name:"network" help:"Network tools (DNS, DIG)."`
+	Network    network.Options             `cmd:"" name:"network" help:"Network tools (DNS, DIG, HTTP client, server)."`
 	Misc       misc.Options                `cmd:"" name:"misc" help:"Miscellaneous tools (JSON, UUID, timestamp, hash)."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
 	Ask        ask.Options                 `cmd:"" name:"ask" help:"Ask LLM questions."`
@@ -55,7 +54,6 @@ type MyUtilities struct {
 	Metrics    metrics.Options             `cmd:"" name:"metrics" help:"Time-series metrics collection and querying."`
 	Scip       scip.Options                `cmd:"" name:"scip" help:"SCIP semantic code intelligence."`
 	Fleet      fleet.Options               `cmd:"" name:"fleet" help:"Fleet management (remote execution/deploys)."`
-	Http       httpclient.Options          `cmd:"" name:"http" help:"HTTP client for sending requests."`
 	Log        log.Options                 `cmd:"" name:"log" help:"Tail and filter log files."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

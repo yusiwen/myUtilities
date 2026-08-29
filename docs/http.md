@@ -1,13 +1,16 @@
 # http — HTTP client
 
-A lightweight curl-like HTTP client for sending requests and inspecting responses.
-Designed for quick API debugging: it auto-formats JSON, follows redirects by
-default, and prints a one-line summary (method, URL, status, latency) to stderr
-so the body can be cleanly piped or redirected.
+A lightweight curl-like HTTP client for sending requests and inspecting
+responses. Designed for quick API debugging: it auto-formats JSON, follows
+redirects by default, and prints a one-line summary (method, URL, status,
+latency) to stderr so the body can be cleanly piped or redirected.
+
+The command is available under both `mu http` and `mu network http`.
 
 ```bash
 # GET a URL
 mu http https://api.example.com/users
+mu network http https://api.example.com/users
 
 # POST a JSON body
 mu http -X POST -d '{"name":"demo"}' https://api.example.com/users

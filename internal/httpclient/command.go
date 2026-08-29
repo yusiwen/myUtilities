@@ -1,57 +1,21 @@
+// Package httpclient is a thin CLI wrapper that exposes the curl-like HTTP
+// client from internal/core/httpclient as the `mu network http` subcommand.
+//
+// The standalone `mu http` alias is kept by registering this package's
+// Options under `cmd:"" name:"http"` in cmd/mu/myutilities.go. Both entry
+// points ultimately call into corehttp.Do / corehttp.Render.
 package httpclient
 
 import (
-	"bytes"
-	"context"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
-	"strings"
 	"time"
 
-	"github.com/morikuni/aec"
+	corehttp "github.com/yusiwen/myUtilities/internal/core/httpclient"
 )
 
-var noColor bool
-
-func init() {
-	if os.Getenv("NO_COLOR") != "" {
-		noColor = true
-	}
-}
-
-func faint(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.Faint)
-}
-
-func bold(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.Bold)
-}
-
-func green(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.GreenF)
-}
-
-func red(s string) string {
-	if noColor {
-		return s
-	}
-	return aec.Apply(s, aec.RedF)
-}
-
-// Options holds the CLI flags for `mu http`.
+// Options matches the historical `mu http` flag set. Kept as a top-level
+// command so existing muscle memory and muscle-memory docs keep working.
 type Options struct {
 	URL      string   `arg:"" name:"url" help:"Target URL." required:""`
 	Method   string   `short:"X" name:"method" help:"HTTP method." default:"GET" enum:"GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS"`
@@ -66,151 +30,40 @@ type Options struct {
 	Output   string   `short:"o" name:"output" help:"Write response body to file instead of stdout."`
 }
 
-// Run executes the HTTP request and prints the result.
+// Run executes the request and writes the response to stdout/stderr.
 func (o *Options) Run() error {
 	timeout, err := time.ParseDuration(o.Timeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout %q: %w", o.Timeout, err)
 	}
 
-	// Read body from stdin if -d was not provided.
 	body := o.Data
 	if body == "" {
-		if fi, _ := os.Stdin.Stat(); fi != nil && (fi.Mode()&os.ModeCharDevice) == 0 {
-			data, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return fmt.Errorf("read stdin: %w", err)
-			}
-			body = string(data)
+		if body, err = corehttp.ReadBodyFromStdin(); err != nil {
+			return err
 		}
 	}
 
-	// Build request.
-	req, err := http.NewRequest(o.Method, o.URL, strings.NewReader(body))
+	p := corehttp.Params{
+		URL:      o.URL,
+		Method:   o.Method,
+		Headers:  o.Headers,
+		Body:     body,
+		Auth:     o.Auth,
+		Timeout:  timeout,
+		Insecure: o.Insecure,
+		NoFollow: o.NoFollow,
+		JSON:     o.JSON,
+		BodyOnly: o.BodyOnly,
+		Output:   o.Output,
+	}
+
+	res, err := corehttp.Do(p)
 	if err != nil {
-		return fmt.Errorf("invalid request: %w", err)
+		return err
 	}
 
-	// Set custom headers.
-	for _, h := range o.Headers {
-		idx := strings.IndexByte(h, ':')
-		if idx < 0 {
-			return fmt.Errorf("invalid header format %q: expected \"Key: Value\"", h)
-		}
-		key := strings.TrimSpace(h[:idx])
-		val := strings.TrimSpace(h[idx+1:])
-		req.Header.Set(key, val)
-	}
-
-	// Bearer auth.
-	if o.Auth != "" {
-		req.Header.Set("Authorization", "Bearer "+o.Auth)
-	}
-
-	// Set Content-Type only if not already set.
-	if body != "" && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	// Build client.
-	client := &http.Client{
-		Timeout: timeout,
-	}
-	if o.Insecure {
-		client.Transport = &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec
-		}
-	}
-	if o.NoFollow {
-		client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		}
-	}
-
-	// Execute.
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	start := time.Now()
-	resp, err := client.Do(req.WithContext(ctx))
-	if err != nil {
-		return fmt.Errorf("request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	elapsed := time.Since(start)
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("read response: %w", err)
-	}
-
-	// Write body to file if -o specified.
-	if o.Output != "" {
-		if err := os.WriteFile(o.Output, respBody, 0644); err != nil {
-			return fmt.Errorf("write output file: %w", err)
-		}
-		if o.BodyOnly {
-			return nil
-		}
-	}
-
-	// Determine if body is JSON.
-	isJSON := o.JSON || isJSONContent(resp.Header.Get("Content-Type"), respBody)
-
-	// Build output.
-	var out strings.Builder
-
-	if !o.BodyOnly {
-		statusLine := fmt.Sprintf("HTTP/1.1 %s", resp.Status)
-		switch {
-		case resp.StatusCode >= 400:
-			out.WriteString(red(bold(statusLine + "\n")))
-		case resp.StatusCode >= 300:
-			out.WriteString(bold(statusLine + "\n"))
-		default:
-			out.WriteString(green(bold(statusLine + "\n")))
-		}
-		for k, v := range resp.Header {
-			out.WriteString(faint(fmt.Sprintf("%s: %s\n", k, strings.Join(v, ", "))))
-		}
-		out.WriteString("\n")
-	}
-
-	if o.Output != "" && !o.BodyOnly {
-		out.WriteString(faint(fmt.Sprintf("[response saved to %s]\n", o.Output)))
-	} else {
-		if isJSON {
-			out.WriteString(prettyJSON(respBody))
-		} else {
-			out.Write(respBody)
-		}
-	}
-
-	// Summary to stderr.
-	fmt.Fprintln(os.Stderr, faint(
-		fmt.Sprintf("%s %s → %d (%s)", o.Method, o.URL, resp.StatusCode, elapsed.Round(time.Millisecond)),
-	))
-
-	fmt.Print(out.String())
+	fmt.Print(corehttp.Render(p, res))
+	fmt.Fprintln(os.Stderr, corehttp.SummaryLine(p, res))
 	return nil
-}
-
-func isJSONContent(contentType string, body []byte) bool {
-	if strings.Contains(contentType, "json") {
-		return true
-	}
-	trimmed := bytes.TrimSpace(body)
-	return len(trimmed) > 0 && (trimmed[0] == '{' || trimmed[0] == '[')
-}
-
-func prettyJSON(data []byte) string {
-	var v any
-	if err := json.Unmarshal(data, &v); err != nil {
-		return string(data)
-	}
-	out, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return string(data)
-	}
-	return string(out) + "\n"
 }
