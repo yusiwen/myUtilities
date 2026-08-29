@@ -25,9 +25,10 @@ type Options struct {
 	Serve  ServeOptions  `cmd:"" name:"serve" help:"Start the network-tools web server."`
 	DNS    DNSOptions    `cmd:"" name:"dns" help:"DNS lookup."`
 	DIG    DIGOptions    `cmd:"" name:"dig" help:"Detailed DNS query (dig-style)."`
-	Whois  WhoisOptions  `cmd:"" name:"whois" help:"WHOIS lookup for domain or IP."`
-	Cert   CertOptions   `cmd:"" name:"cert" help:"SSL/TLS certificate details."`
-	HTTP   HTTPClientOpt `cmd:"" name:"http" help:"HTTP client (curl-like)."`
+	Whois   WhoisOptions    `cmd:"" name:"whois" help:"WHOIS lookup for domain or IP."`
+	Cert    CertOptions     `cmd:"" name:"cert" help:"SSL/TLS certificate details."`
+	HTTP    HTTPClientOpt   `cmd:"" name:"http" help:"HTTP client (curl-like)."`
+	PortScan PortScanOptions `cmd:"" name:"port-scan" help:"Port scan: local listeners or remote TCP probe."`
 }
 
 // HTTPClientOpt is the CLI surface for `mu network http`.
@@ -54,7 +55,7 @@ func (o *Options) Run() error {
 	if o.Server {
 		return (&ServeOptions{Port: 8091}).Run()
 	}
-	return fmt.Errorf("no subcommand specified. Try: mu network http|serve|dns|dig|whois|cert — run 'mu network -h' for help")
+	return fmt.Errorf("no subcommand specified. Try: mu network http|serve|dns|dig|whois|cert|port-scan — run 'mu network -h' for help")
 }
 
 func (o *HTTPClientOpt) Run() error {

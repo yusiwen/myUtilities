@@ -1,7 +1,8 @@
 # network — Network tools
 
-Network diagnostics and HTTP client. DNS lookup, DIG, WHOIS lookup, and
-curl-like HTTP client. Supports both CLI and web UI.
+Network diagnostics, HTTP client, and port scanning. DNS lookup, DIG, WHOIS
+lookup, curl-like HTTP client, and port scan (local listener list + remote
+TCP probe). Supports both CLI and web UI.
 
 ```bash
 # DNS lookup
@@ -21,6 +22,13 @@ mu network whois example.com
 mu network http https://api.example.com/users
 mu network http -X POST -d '{"name":"demo"}' https://api.example.com/users
 mu network http -A "Bearer token123" -j https://api.example.com/me
+
+# Port scan
+mu network port-scan                      # List local TCP/UDP listeners
+mu network port-scan -p 8080              # Check if port 8080 is used locally
+mu network port-scan 10.0.0.5 -p 22,80    # Remote TCP probe
+mu network port-scan 10.0.0.5 -c         # Remote scan of common ports
+mu network port-scan -p 1-1024 -w 64     # Local: scan port range
 
 # Serve web UI (standalone)
 mu network serve --port 8091
