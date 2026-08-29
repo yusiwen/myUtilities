@@ -117,7 +117,7 @@ func parseHexIP6(hex string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// Each 32-bit word is stored little-endian on-disk; reverse the 4 bytes.
+		// Each 32-bit word is stored in network (big-endian) byte order.
 		b[i*4] = byte(v >> 24)
 		b[i*4+1] = byte(v >> 16)
 		b[i*4+2] = byte(v >> 8)
