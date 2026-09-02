@@ -10,11 +10,11 @@ import (
 	"github.com/yusiwen/myUtilities/internal/es"
 	"github.com/yusiwen/myUtilities/internal/fleet"
 	"github.com/yusiwen/myUtilities/internal/gateway"
-	"github.com/yusiwen/myUtilities/internal/log"
 	"github.com/yusiwen/myUtilities/internal/git"
 	"github.com/yusiwen/myUtilities/internal/installer"
 	"github.com/yusiwen/myUtilities/internal/jarinfo"
 	"github.com/yusiwen/myUtilities/internal/k8s"
+	"github.com/yusiwen/myUtilities/internal/log"
 	"github.com/yusiwen/myUtilities/internal/metrics"
 	"github.com/yusiwen/myUtilities/internal/misc"
 	"github.com/yusiwen/myUtilities/internal/mock"
@@ -25,6 +25,7 @@ import (
 	"github.com/yusiwen/myUtilities/internal/scip"
 	"github.com/yusiwen/myUtilities/internal/serve"
 	"github.com/yusiwen/myUtilities/internal/svcreg"
+	"github.com/yusiwen/myUtilities/internal/termshot"
 	"github.com/yusiwen/myUtilities/internal/watch"
 	"github.com/yusiwen/myUtilities/internal/wol"
 )
@@ -55,5 +56,6 @@ type MyUtilities struct {
 	Scip       scip.Options                `cmd:"" name:"scip" help:"SCIP semantic code intelligence."`
 	Fleet      fleet.Options               `cmd:"" name:"fleet" help:"Fleet management (remote execution/deploys)."`
 	Log        log.Options                 `cmd:"" name:"log" help:"Tail and filter log files."`
+	TermShot   termshot.Options            `cmd:"" name:"termshot" help:"Create a screenshot of terminal command output."`
 	Completion completion.Options          `cmd:"" name:"completion" help:"Generate shell completion script."`
 }

@@ -21,7 +21,7 @@
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
 `git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network` (dns/dig/whois/http/serve), `misc`, `crypto`,
-`ask`, `budget`, `metrics`, `scip`, `log`, `completion`
+`ask`, `budget`, `metrics`, `scip`, `log`, `completion`, `termshot`
 
 ---
 
@@ -76,6 +76,12 @@
 │   │       ├── event.go       #  Event types, EventStore
 │   │       ├── filewatcher.go #  Polls local files for changes (MD5 checksum)
 │   │       └── gitwatcher.go  #  Polls remote Git repo for new commits, pulls changes
+│   ├── termshot/              # Terminal screenshot renderer (ported from homeport/termshot)
+│   │   ├── scaffold.go        #  Scaffold: bunt ANSI parse → gg window render → WritePNG/WriteRaw; glyph-coverage fallback (hackFont.Index) → embedded Noto Emoji
+│   │   ├── ptexec.go          #  PseudoTerminal: run command in a creack/pty, capture ANSI stream
+│   │   ├── clipboard_darwin.go#  SaveToClipboard via osascript (macOS)
+│   │   ├── clipboard_other.go #  SaveToClipboard stub (non-darwin)
+│   │   └── fonts/             #  Embedded Hack-{Regular,Bold,Italic,BoldItalic}.ttf + monochrome NotoEmoji.ttf (Apache 2.0) + NotoEmoji-LICENSE.txt
 │   ├── installer/             # GitHub release installer
 │   │   ├── options.go         #  Flags: repo, output, token, os/arch override
 │   │   ├── command.go         #  Run() — fetches releases, generates shell install scripts
@@ -114,7 +120,7 @@
 │   │   ├── config.go          #  ESConfig, load/save JSON config, maskedPassword
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
-│   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  watch/
+│   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  termshot/  watch/
 │   ├── network/               # mu network — DNS, DIG, WHOIS, HTTP client (curl alternative)
 │   │   ├── options.go         #  Subcommands: dns, dig, whois, http, serve
 │   │   ├── command.go         #  DNS/DIG/WHOIS/Cert commands + HTTPClientOptions (mu network http)

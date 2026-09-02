@@ -8,11 +8,17 @@ require (
 	github.com/charmbracelet/glamour v1.0.0
 	github.com/creack/pty v1.1.24
 	github.com/elastic/go-elasticsearch/v8 v8.19.5
+	github.com/esimov/stackblur-go v1.1.1
+	github.com/fogleman/gg v1.3.0
 	github.com/go-git/go-git/v5 v5.16.2
 	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
+	github.com/gonvenience/bunt v1.4.3
+	github.com/gonvenience/term v1.0.5
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/likexian/whois v1.15.7
+	github.com/mattn/go-isatty v0.0.24
 	github.com/miekg/dns v1.1.72
 	github.com/morikuni/aec v1.0.0
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
@@ -26,6 +32,7 @@ require (
 	github.com/tjfoc/gmsm v1.4.1
 	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab
 	go.etcd.io/bbolt v1.3.11
+	golang.org/x/image v0.35.0
 	golang.org/x/term v0.45.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/yaml.v3 v3.0.1
@@ -76,10 +83,11 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/mattn/go-ciede2000 v0.0.0-20170301095244-782e8c62fec3 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.17 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
+	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
@@ -106,14 +114,14 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/crypto v0.47.0 // indirect
-	golang.org/x/mod v0.31.0 // indirect
+	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.40.0 // indirect
+	golang.org/x/tools v0.41.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

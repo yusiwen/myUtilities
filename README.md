@@ -32,6 +32,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [serve](docs/serve.md) | DevOps | Static file server with CORS and logging | – |
 | [set](docs/set.md) | Ops | Unified module configuration | – |
 | [svcreg](docs/svcreg.md) | Ops | Service registry server (ServiceCenter-compatible) + dashboard | ✓ |
+| [termshot](docs/termshot.md) | Utils | Render terminal command output as a terminal-window screenshot (PNG) | – |
 | [watch](docs/watch.md) | Ops | Watch filesystem / git remotes for changes | – |
 | [wol](docs/wol.md) | Ops | Wake-on-LAN server, boot/shutdown agent, interface discovery | ✓ |
 
