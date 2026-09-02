@@ -65,6 +65,12 @@ mu termshot -- "ls -la" --raw-write raw.txt
 mu termshot --edit -- "docker logs my-container"
 ```
 
+> **Command banner:** With `--show-cmd`, the command line is rendered with a
+> self-contained syntax highlight: green prompt + green command, then flags
+> (yellow), paths (cyan), `KEY=value` env assignments (magenta) and quoted
+> strings (yellow). The colors are approximate and do not depend on your shell's
+> highlighter (e.g. fast-syntax-highlighting).
+
 > **Fonts:** The primary font is the embedded Hack monospace font. Emoji and
 > emoji-like symbols (`😊`, `☺`, `❤`, `⚡`, `🚀`, `✅`, …) that Hack lacks are
 > rendered with an embedded monochrome Noto Emoji font (Apache License 2.0,

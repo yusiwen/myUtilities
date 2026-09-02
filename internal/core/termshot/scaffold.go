@@ -94,6 +94,10 @@ type Scaffold struct {
 // NewImageCreator returns a Scaffold pre-configured with default look settings
 // (Hack font, macOS-style window, shadow, margin) and a 2x scale factor.
 func NewImageCreator() Scaffold {
+	// The output is an image, not a terminal, so force bunt colors on to keep the
+	// rendering (and the --show-cmd banner) colored regardless of the ambient TTY.
+	bunt.SetColorSettings(bunt.ON, bunt.ON)
+
 	f := 2.0
 
 	fontFaceOptions := &truetype.Options{
@@ -217,12 +221,121 @@ func (s *Scaffold) GetFixedColumns() int {
 
 // AddCommand prepends the command line (with a prompt indicator) to the content.
 func (s *Scaffold) AddCommand(args ...string) error {
-	return s.AddContent(strings.NewReader(
-		bunt.Sprintf("Lime{%s} DimGray{%s}\n",
-			commandIndicator,
-			strings.Join(args, " "),
-		),
-	))
+	tokens := commandTokens(args)
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	// Render the command banner with a self-contained syntax highlight so that
+	// `--show-cmd` looks like the colored command line a shell would show:
+	// green prompt, green command, then flags/paths/args in distinct colors.
+	var b strings.Builder
+	b.WriteString(bunt.Sprintf("Lime{%s}", commandIndicator))
+	b.WriteByte(' ')
+	b.WriteString(bunt.Sprintf("Green{%s}", tokens[0]))
+	for _, arg := range tokens[1:] {
+		b.WriteByte(' ')
+		b.WriteString(colorCommandToken(arg))
+	}
+	b.WriteByte('\n')
+
+	return s.AddContent(strings.NewReader(b.String()))
+}
+
+// commandTokens returns the command tokens to colorize. When the command was
+// passed as a single shell-quoted string (e.g. `mu termshot --show-cmd 'ls -la'`),
+// args[0] contains spaces, so it is split into tokens so each is colored.
+func commandTokens(args []string) []string {
+	if len(args) == 1 && strings.ContainsAny(args[0], " \t") {
+		return splitShellLine(args[0])
+	}
+	return args
+}
+
+// splitShellLine splits a command line into tokens, keeping single- and
+// double-quoted segments (and their quotes) together.
+func splitShellLine(line string) []string {
+	var tokens []string
+	var cur strings.Builder
+	var quote rune
+	for _, r := range line {
+		switch {
+		case quote != 0:
+			cur.WriteRune(r)
+			if r == quote {
+				quote = 0
+			}
+		case r == '\'' || r == '"':
+			quote = r
+			cur.WriteRune(r)
+		case r == ' ' || r == '\t':
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			}
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens
+}
+
+// colorCommandToken wraps a command-line argument in a bunt color based on its
+// inferred type, mimicking shell syntax highlighting. Env assignments, flags,
+// paths and quoted strings each get a distinct color; everything else uses the
+// default text color.
+func colorCommandToken(arg string) string {
+	switch {
+	case arg == "":
+		return arg
+	case isEnvAssignment(arg):
+		return bunt.Sprintf("Magenta{%s}", arg)
+	case isFlag(arg):
+		return bunt.Sprintf("Yellow{%s}", arg)
+	case isPath(arg):
+		return bunt.Sprintf("Cyan{%s}", arg)
+	case isQuoted(arg):
+		return bunt.Sprintf("Yellow{%s}", arg)
+	default:
+		return bunt.Sprintf("LightGray{%s}", arg)
+	}
+}
+
+// isEnvAssignment reports whether arg looks like a KEY=VALUE env assignment.
+func isEnvAssignment(arg string) bool {
+	key, _, ok := strings.Cut(arg, "=")
+	if !ok || key == "" {
+		return false
+	}
+	for i, r := range key {
+		if r == '_' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || (i > 0 && r >= '0' && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func isFlag(arg string) bool {
+	return len(arg) > 1 && arg[0] == '-'
+}
+
+func isPath(arg string) bool {
+	return strings.HasPrefix(arg, "/") ||
+		strings.HasPrefix(arg, "./") ||
+		strings.HasPrefix(arg, "../") ||
+		strings.HasPrefix(arg, "~/") ||
+		strings.HasPrefix(arg, "$") ||
+		strings.HasPrefix(arg, `\`)
+}
+
+func isQuoted(arg string) bool {
+	return len(arg) >= 2 &&
+		((arg[0] == '"' && arg[len(arg)-1] == '"') ||
+			(arg[0] == '\'' && arg[len(arg)-1] == '\''))
 }
 
 // AddContent parses rich text (ANSI/bunt markup) from in and appends it to the
