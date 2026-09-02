@@ -226,13 +226,14 @@ func (s *Scaffold) AddCommand(args ...string) error {
 		return nil
 	}
 
-	// Render the command banner with a self-contained syntax highlight so that
-	// `--show-cmd` looks like the colored command line a shell would show:
-	// green prompt, green command, then flags/paths/args in distinct colors.
+	// Render the command banner with a self-contained syntax highlight that
+	// mirrors the default fast-syntax-highlighting theme: lime prompt, green
+	// command, then cyan options, magenta paths, yellow quoted strings/reserved
+	// words and light-green variables.
 	var b strings.Builder
 	b.WriteString(bunt.Sprintf("Lime{%s}", commandIndicator))
 	b.WriteByte(' ')
-	b.WriteString(bunt.Sprintf("Green{%s}", tokens[0]))
+	b.WriteString(commandColor(tokens[0]))
 	for _, arg := range tokens[1:] {
 		b.WriteByte(' ')
 		b.WriteString(colorCommandToken(arg))
@@ -283,25 +284,49 @@ func splitShellLine(line string) []string {
 	return tokens
 }
 
+// commandColor colors the token at command position, following the default
+// fast-syntax-highlighting theme: reserved words are yellow, commands green.
+func commandColor(arg string) string {
+	if isReservedWord(arg) {
+		return bunt.Sprintf("Yellow{%s}", arg)
+	}
+	return bunt.Sprintf("Green{%s}", arg)
+}
+
 // colorCommandToken wraps a command-line argument in a bunt color based on its
-// inferred type, mimicking shell syntax highlighting. Env assignments, flags,
-// paths and quoted strings each get a distinct color; everything else uses the
-// default text color.
+// inferred type, following the default fast-syntax-highlighting theme: cyan
+// options, magenta paths, yellow quoted strings/reserved words, light-green
+// KEY=VALUE variables. Everything else uses the default text color.
 func colorCommandToken(arg string) string {
 	switch {
 	case arg == "":
 		return arg
 	case isEnvAssignment(arg):
-		return bunt.Sprintf("Magenta{%s}", arg)
+		return bunt.Sprintf("LightGreen{%s}", arg)
 	case isFlag(arg):
-		return bunt.Sprintf("Yellow{%s}", arg)
-	case isPath(arg):
 		return bunt.Sprintf("Cyan{%s}", arg)
+	case isPath(arg):
+		return bunt.Sprintf("Magenta{%s}", arg)
 	case isQuoted(arg):
+		return bunt.Sprintf("Yellow{%s}", arg)
+	case isReservedWord(arg):
 		return bunt.Sprintf("Yellow{%s}", arg)
 	default:
 		return bunt.Sprintf("LightGray{%s}", arg)
 	}
+}
+
+// reservedWords is the set of shell reserved words colored yellow, matching the
+// default fast-syntax-highlighting `reserved-word` style.
+var reservedWords = map[string]bool{
+	"if": true, "then": true, "else": true, "elif": true, "fi": true,
+	"for": true, "while": true, "until": true, "do": true, "done": true,
+	"case": true, "esac": true, "function": true, "in": true, "select": true,
+	"time": true, "coproc": true, "!": true,
+}
+
+func isReservedWord(arg string) bool {
+	return reservedWords[arg]
 }
 
 // isEnvAssignment reports whether arg looks like a KEY=VALUE env assignment.

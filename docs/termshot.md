@@ -66,10 +66,11 @@ mu termshot --edit -- "docker logs my-container"
 ```
 
 > **Command banner:** With `--show-cmd`, the command line is rendered with a
-> self-contained syntax highlight: green prompt + green command, then flags
-> (yellow), paths (cyan), `KEY=value` env assignments (magenta) and quoted
-> strings (yellow). The colors are approximate and do not depend on your shell's
-> highlighter (e.g. fast-syntax-highlighting).
+> self-contained syntax highlight modeled on the **fast-syntax-highlighting
+> default theme**: lime prompt, green command, cyan options/flags, magenta
+> paths, yellow quoted strings and reserved words, light-green `KEY=value`
+> variables. The colors are approximate and do not depend on your shell's
+> highlighter or terminal palette.
 
 > **Fonts:** The primary font is the embedded Hack monospace font. Emoji and
 > emoji-like symbols (`😊`, `☺`, `❤`, `⚡`, `🚀`, `✅`, …) that Hack lacks are
