@@ -416,6 +416,7 @@
 <footer>
   <p>Created by Siwen Yu (yusiwen@gmail.com)</p>
   <p><a href="https://github.com/yusiwen/myUtilities">https://github.com/yusiwen/myUtilities</a></p>
+  <p class="footer-version">{appVersion}</p>
 </footer>
 
 <style>
@@ -428,6 +429,14 @@
     color: var(--text3);
     padding: 20px;
     font-size: 0.85em;
+  }
+
+  /* Version shown in the footer on mobile only (hidden on desktop where it
+     already appears in the header). */
+  .footer-version {
+    display: none;
+    margin-top: 6px;
+    color: var(--text3);
   }
 
   footer a {
@@ -836,6 +845,7 @@
     h1 { flex-wrap: nowrap; gap: 8px; align-items: center; }
     h1 > span { white-space: nowrap; font-size: 1.3em; }
     h1 .version { display: none; }
+    .footer-version { display: block; }   /* show version in the footer on mobile */
     :global(.home-link) { white-space: nowrap; }
 
     table, thead, tbody, th, td, tr { display: block; }
