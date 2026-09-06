@@ -831,6 +831,13 @@
     main { padding: 12px; }
     .form-section, .list-section { padding: 12px; }
 
+    /* Header: keep the title and Home link on one line; the long
+       git-describe version string is hidden on mobile to avoid crowding. */
+    h1 { flex-wrap: nowrap; gap: 8px; align-items: center; }
+    h1 > span { white-space: nowrap; font-size: 1.3em; }
+    h1 .version { display: none; }
+    :global(.home-link) { white-space: nowrap; }
+
     table, thead, tbody, th, td, tr { display: block; }
     thead { display: none; }
 
