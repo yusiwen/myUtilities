@@ -38,10 +38,8 @@ default:
 inject-shared:
 	@for dir in $(FRONTEND_DIRS); do \
 	  html="$$dir/frontend/index.html"; \
-	  sed -i '/<!-- inject:theme -->/r $(THEME_PARTIAL)' "$$html"; \
-	  sed -i '/<!-- inject:theme -->/d' "$$html"; \
-	  sed -i '/<!-- inject:common -->/r $(COMMON_PARTIAL)' "$$html"; \
-	  sed -i '/<!-- inject:common -->/d' "$$html"; \
+	  THEME_PARTIAL=$(THEME_PARTIAL) perl -0pi -e 'BEGIN{local $$/; open my $$fh,"<","$$ENV{THEME_PARTIAL}" or die $$!; $$c=<$$fh>;} s{^[ \t]*<!-- inject:theme -->[ \t]*$$}{$$c}mg' "$$html"; \
+	  COMMON_PARTIAL=$(COMMON_PARTIAL) perl -0pi -e 'BEGIN{local $$/; open my $$fh,"<","$$ENV{COMMON_PARTIAL}" or die $$!; $$c=<$$fh>;} s{^[ \t]*<!-- inject:common -->[ \t]*$$}{$$c}mg' "$$html"; \
 	done
 	@echo "Shared partials injected into all frontends"
 
