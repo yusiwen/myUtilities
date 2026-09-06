@@ -884,5 +884,9 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+
+    /* Move the fixed theme toggle to the bottom-right on mobile so it
+       no longer overlaps the settings (lock) button at the top-right. */
+    :global(.toggle-btn) { top: auto; bottom: 12px; right: 12px; }
   }
 </style>
