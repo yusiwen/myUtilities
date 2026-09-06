@@ -823,4 +823,66 @@
   .btn-cancel:hover {
     background: #7f8c8d;
   }
+
+  /* Mobile: turn the aliases table into stacked cards, keep it clean.
+     - Hide the Boot Status column on narrow screens.
+     - Action buttons sit side by side with comfortable tap targets. */
+  @media (max-width: 640px) {
+    main { padding: 12px; }
+    .form-section, .list-section { padding: 12px; }
+
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+
+    tr {
+      position: relative;      /* anchor for the absolutely-positioned status */
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    td { border: none; padding: 6px 0; background: transparent; }
+    tr.favorite-row { background: var(--highlight); }
+    .favorite-row td { background: transparent; }
+
+    /* Boot status indicator sits in the card's top-right corner;
+       its hover history (tooltip) stays hidden on touch. */
+    .boot-cell {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      font-size: 0.9em;
+      white-space: nowrap;
+    }
+    .boot-cell .tooltip { display: none; }
+
+    .host-cell {
+      font-weight: 600;
+      font-size: 1.08em;
+      gap: 8px;
+      padding: 0 84px 8px 0;   /* reserve space on the right for the status */
+    }
+    .host-cell .btn-fav { font-size: 1.2em; padding: 6px; }
+    td.mono { font-size: 0.95em; color: var(--text2); }
+
+    .actions {
+      white-space: normal;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .actions button {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 44px;
+      padding: 10px 6px;
+      margin: 0;
+      font-size: 0.82em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
 </style>
