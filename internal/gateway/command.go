@@ -51,7 +51,7 @@ func landingPage(hasMock bool) string {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>mu Gateway</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
 <style>
@@ -75,14 +75,14 @@ func landingPage(hasMock bool) string {
     --border: #dddddd;
     --border-hover: #4a9eff;
   }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
-  .container { text-align: center; padding: 2rem; position: relative; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100svh; display: flex; }
+  .container { text-align: center; padding: 2rem; position: relative; width: 100%; max-width: 820px; margin: auto; }
   h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-title); }
   .subtitle { color: var(--text2); margin-bottom: 2rem; }
   .subtitle .version { font-size: 0.75em; color: var(--text2); }
-  .apps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; max-width: 780px; margin: 0 auto; }
-  .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 220px; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
+  .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; max-width: 780px; margin: 0 auto; }
+  .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 100%; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
   .app-card:hover { transform: translateY(-4px); border-color: var(--border-hover); }
   .app-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
   .app-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-title); }
@@ -92,6 +92,19 @@ func landingPage(hasMock bool) string {
   .footer a:hover { text-decoration: underline; }
   .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
   .toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
+
+  @media (max-width: 640px) {
+    .container { padding: 1.2rem 1rem; }
+    h1 { font-size: 1.6rem; }
+    .subtitle { margin-bottom: 1.2rem; }
+    .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
+    .app-card { padding: 1.25rem 0.9rem; }
+    .toggle-btn { top: 8px; right: 8px; padding: 5px 10px; }
+    .footer { margin-top: 1.5rem; }
+  }
+  @media (max-width: 380px) {
+    .apps { grid-template-columns: 1fr; }
+  }
 </style>
 <script>
 (function(){
