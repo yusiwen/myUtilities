@@ -51,12 +51,13 @@ case "$raw_arch" in
     *) fail "Unsupported architecture: $raw_arch" ;;
 esac
 
+base_name="${NAME}-${os_name}-${arch_name}"
 case "$os_name" in
     windows) ext="zip" ;;
-    *) ext="gz" ;;
+    *) ext="tar.gz" ;;
 esac
 
-bin_name="${NAME}-${os_name}-${arch_name}-${VERSION}"
+bin_name="${base_name}-${VERSION}"
 download_url="https://github.com/yusiwen/myUtilities/releases/download/${VERSION}/${bin_name}.${ext}"
 
 tmpdir=$(mktemp -d) || fail "Failed to create temp directory"
@@ -65,18 +66,21 @@ echo "Downloading mu ${VERSION} for ${os_name}-${arch_name} ..."
 (cd "$tmpdir" && curl -fL -o "${bin_name}.${ext}" "$download_url") || fail "Download failed"
 
 case "$ext" in
-    gz)
-        command_exists gunzip || fail "gunzip is required"
-        gunzip "$tmpdir/${bin_name}.${ext}"
-        bin_path="$tmpdir/$bin_name"
+    tar.gz)
+        command_exists tar || fail "tar is required"
+        tar xzf "$tmpdir/${bin_name}.${ext}" -C "$tmpdir"
+        # The archive stores the platform binary without the version suffix.
+        bin_path="$tmpdir/$base_name"
+        if [ ! -f "$bin_path" ]; then
+            echo "Error: could not find binary in tar archive" >&2
+            ls -la "$tmpdir" >&2
+            exit 1
+        fi
         ;;
     zip)
         command_exists unzip || fail "unzip is required"
         unzip -q "$tmpdir/${bin_name}.${ext}" -d "$tmpdir"
-        bin_path="$tmpdir/$bin_name"
-        if [ ! -f "$bin_path" ] && [ -f "${bin_path}.exe" ]; then
-            bin_path="${bin_path}.exe"
-        fi
+        bin_path="$tmpdir/$base_name.exe"
         if [ ! -f "$bin_path" ]; then
             echo "Error: could not find binary in zip archive" >&2
             ls -la "$tmpdir" >&2

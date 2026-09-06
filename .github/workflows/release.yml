@@ -26,8 +26,11 @@ jobs:
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
+          # Only the packed archives are published; never a raw, un-archived
+          # binary (which would otherwise lose its exec bit across downloads).
           files: |
-            bin/*
+            bin/*.tar.gz
+            bin/*.zip
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
         env:

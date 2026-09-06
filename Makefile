@@ -161,18 +161,23 @@ windows-arm64: frontend
 windows-arm32v7: frontend
 	GOARCH=arm GOOS=windows GOARM=7 $(GOBUILD) -o $(BINDIR)/$(NAME)-$@.exe $(PKG)
 
-gz_releases=$(addsuffix .gz, $(PLATFORM_LIST))
+# Unix binaries ship as .tar.gz: tar records the exec bit in the archive
+# header, so it survives an HTTP download (a bare .gz does NOT — gzip
+# propagates the .gz file's own filesystem mode, which is lost when the
+# asset is downloaded and re-created with the local umask, e.g. 0644).
+targz_releases=$(addsuffix .tar.gz, $(PLATFORM_LIST))
 zip_releases=$(addsuffix .zip, $(WINDOWS_ARCH_LIST))
 
-$(gz_releases): %.gz : %
-	chmod +x $(BINDIR)/$(NAME)-$(basename $@)
-	gzip -f -S -$(VERSION).gz $(BINDIR)/$(NAME)-$(basename $@)
+$(targz_releases): %.tar.gz : %
+	chmod +x $(BINDIR)/$(NAME)-$*
+	tar czf $(BINDIR)/$(NAME)-$*-$(VERSION).tar.gz -C $(BINDIR) $(NAME)-$*
+	rm -f $(BINDIR)/$(NAME)-$*
 
 $(zip_releases): %.zip : %
 	zip -m -j $(BINDIR)/$(NAME)-$(basename $@)-$(VERSION).zip $(BINDIR)/$(NAME)-$(basename $@).exe
 
 all-arch: $(PLATFORM_LIST) $(WINDOWS_ARCH_LIST)
 
-releases: $(gz_releases) $(zip_releases)
+releases: $(targz_releases) $(zip_releases)
 clean:
 	rm $(BINDIR)/*
