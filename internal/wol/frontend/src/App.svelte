@@ -69,12 +69,17 @@
     if (!dateStr) return null
     const d = new Date(dateStr)
     const now = new Date()
-    const diff = (now - d) / 1000 / 60
-    if (diff < 0) return null
-    if (diff < 5) return 'just now'
-    if (diff < 60) return `${Math.round(diff)}m ago`
-    if (diff < 1440) return `${Math.round(diff / 60)}h ago`
-    return d.toLocaleString()
+    const diffMin = (now - d) / 1000 / 60
+    if (diffMin < 0) return null
+    if (diffMin < 1) return 'just now'
+    if (diffMin < 60) return `${Math.round(diffMin)}m ago`
+    const h = diffMin / 60
+    if (h < 24) return `${Math.round(h)}h ago`
+    const days = h / 24
+    if (days < 30) return `${Math.round(days)}d ago`
+    const mo = days / 30
+    if (mo < 12) return `${Math.round(mo)}mo ago`
+    return `${Math.round(days / 365)}y ago`
   }
 
   async function handleSubmit() {
