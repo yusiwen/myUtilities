@@ -99,7 +99,7 @@ func landingPage(hasMock bool) string {
     .subtitle { margin-bottom: 1.2rem; }
     .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
     .app-card { padding: 1.25rem 0.9rem; }
-    .toggle-btn { top: 8px; right: 8px; padding: 5px 10px; }
+    .toggle-btn { top: auto; bottom: 12px; right: 12px; padding: 5px 10px; }
     .footer { margin-top: 1.5rem; }
   }
   @media (max-width: 380px) {
