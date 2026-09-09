@@ -848,7 +848,9 @@
     /* Header: keep the title and Home link on one line; the long
        git-describe version string is hidden on mobile to avoid crowding. */
     h1 { flex-wrap: nowrap; gap: 8px; align-items: center; font-size: 1.2em; }
-    h1 > span { white-space: nowrap; }   /* title inherits the (smaller) h1 size */
+    /* Let the title shrink/ellipsis so it never pushes the Home link or the
+       lock (settings) button off-screen on narrow phones. */
+    h1 > span { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     h1 .version { display: none; }
     .footer-version { display: block; }   /* show version in the footer on mobile */
     :global(.home-link) { white-space: nowrap; }

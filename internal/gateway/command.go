@@ -94,6 +94,7 @@ func landingPage(hasMock bool) string {
   .toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
 
   @media (max-width: 640px) {
+    html, body { overflow-x: hidden; }
     .container { padding: 1.2rem 1rem; }
     h1 { font-size: 1.6rem; }
     .subtitle { margin-bottom: 1.2rem; }

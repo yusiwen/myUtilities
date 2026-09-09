@@ -32,6 +32,9 @@
        consistent across every module frontend. */
     @media (max-width: 640px) {
       .toggle-btn { top: auto; bottom: 12px; right: 12px; }
+      /* Prevent horizontal pan from pushing the fixed toggle off-screen when
+         any page's content is wider than the viewport. */
+      html, body { overflow-x: hidden; }
     }
   </style>
   <script>
