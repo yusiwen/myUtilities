@@ -173,6 +173,7 @@
     background: var(--surface2);
     padding: 2px 6px;
     border-radius: 4px;
+    word-break: break-all;
   }
 
   .cards {
@@ -290,5 +291,17 @@
   }
   .top-up-link:hover {
     text-decoration: underline;
+  }
+
+  /* Mobile: stack the header (full-width Refresh) and keep cards readable
+     on narrow screens without horizontal overflow. */
+  @media (max-width: 640px) {
+    .container { padding: 24px 16px; }
+    .header { flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    .header-left { min-width: 0; }
+    h1 { font-size: 1.25rem; }
+    .header .btn { flex: 1 1 100%; }   /* Refresh becomes a full-width row below the title */
+    .provider-name { flex-wrap: wrap; }
+    .pkg-amount { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   }
 </style>
