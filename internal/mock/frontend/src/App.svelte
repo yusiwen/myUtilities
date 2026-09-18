@@ -275,10 +275,10 @@
       <tbody>
         {#each endpoints as ep}
           <tr>
-            <td><span class="badge" style="background: {methodColors[ep.method] || '#999'}">{ep.method}</span></td>
-            <td class="path">{ep.path}</td>
-            <td>{ep.status}</td>
-            <td>{ep.delay || '—'}</td>
+            <td data-label="Method"><span class="badge" style="background: {methodColors[ep.method] || '#999'}">{ep.method}</span></td>
+            <td class="path" data-label="Path">{ep.path}</td>
+            <td data-label="Status">{ep.status}</td>
+            <td data-label="Delay">{ep.delay || '—'}</td>
             <td class="actions">
               <button class="btn sm" onclick={() => startEdit(ep)} disabled={editing !== null && editing !== ep.id}>Edit</button>
               <button class="btn sm danger" onclick={() => handleDelete(ep.id)} disabled={saving}>Del</button>
@@ -319,12 +319,12 @@
         <tbody>
           {#each logs as log}
             <tr>
-              <td class="log-time">{log.timestamp}</td>
-              <td><span class="badge" style="background: {methodColors[log.method] || '#999'}">{log.method}</span></td>
-              <td class="path">{log.path}</td>
-              <td>{log.status}</td>
-              <td class="log-dur">{log.duration}</td>
-              <td class="log-ip">{log.remoteAddr}</td>
+              <td class="log-time" data-label="Time">{log.timestamp}</td>
+              <td data-label="Method"><span class="badge" style="background: {methodColors[log.method] || '#999'}">{log.method}</span></td>
+              <td class="path" data-label="Path">{log.path}</td>
+              <td data-label="Status">{log.status}</td>
+              <td class="log-dur" data-label="Duration">{log.duration}</td>
+              <td class="log-ip" data-label="Remote IP">{log.remoteAddr}</td>
             </tr>
           {:else}
             <tr><td colspan="6" class="empty">No invocations recorded yet.</td></tr>
@@ -514,5 +514,44 @@
 
   .field-error { border-color: var(--primary) !important; }
   .err-msg { color: var(--primary); font-size: 12px; margin-top: 2px; display: block; }
+
+  /* Mobile: turn the data tables (endpoints/logs) into stacked cards, like WOL. */
+  @media (max-width: 640px) {
+    .header-actions { width: 100%; }
+    .header-actions .btn { flex: 1; }
+
+    .form-row { flex-direction: column; gap: 10px; }
+
+    /* Drop the table shell so each row can stand alone as a card. */
+    .table-wrap { background: transparent; border: none; border-radius: 0; overflow: visible; }
+    .table-wrap table, .table-wrap thead, .table-wrap tbody,
+    .table-wrap th, .table-wrap td, .table-wrap tr { display: block; }
+    .table-wrap thead { display: none; }
+    .table-wrap tbody tr {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .table-wrap td { border: none; padding: 3px 0; font-size: 14px; }
+
+    /* Each cell becomes a label / value row. */
+    .table-wrap td[data-label] { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .table-wrap td[data-label]::before { content: attr(data-label); flex: 0 0 auto; color: var(--text2); font-size: 12px; }
+    .table-wrap .path { word-break: break-all; text-align: right; }
+
+    /* Row actions become full-width touch targets. */
+    .table-wrap .actions { display: flex; gap: 8px; margin-top: 8px; white-space: normal; }
+    .table-wrap .actions .btn { flex: 1 1 0; margin: 0; min-height: 40px; }
+    .table-wrap .actions .btn + .btn { margin-left: 0; }
+
+    /* The inline edit row should not be styled as a data card. */
+    .table-wrap tr.edit-row { padding: 0; background: transparent; border: none; }
+    .table-wrap tr.edit-row td { padding: 0; }
+
+    /* Doc tables scroll instead of being clipped. */
+    .help-card { overflow-x: auto; }
+  }
 </style>
 
