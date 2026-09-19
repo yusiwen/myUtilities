@@ -178,7 +178,10 @@
 
   .cards {
     display: grid;
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr) instead of 1fr: 1fr implies minmax(auto, 1fr), whose
+       auto minimum is the widest card's min-content — a single long/nowrap
+       row would then widen every card and overflow the viewport. */
+    grid-template-columns: minmax(0, 1fr);
     gap: 16px;
   }
 
@@ -246,6 +249,7 @@
   .pkg-name {
     font-size: 12px;
     color: var(--text2);
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
