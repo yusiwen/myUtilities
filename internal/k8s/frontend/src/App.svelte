@@ -413,10 +413,6 @@
   h1 { font-size: 24px; margin-bottom: 16px; }
   .home-link { float: left; }
 
-  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .tab.active { color: var(--text); border-bottom-color: var(--primary); }
-  .tab:hover { color: var(--text); }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
   .field { margin-bottom: 14px; }

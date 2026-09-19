@@ -11,6 +11,14 @@
 
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
 
+    /* Shared tab bar — used by crypto, network, misc, mock, k8s and svcreg.
+       Kept global (not per-module) so every module gets identical tabs and the
+       same mobile behavior; new modules just use .tabs / .tab. */
+    .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .tab.active { color: var(--text); border-bottom-color: var(--primary); }
+    .tab:hover { color: var(--text); }
+
     .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
     .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; }
 
@@ -24,5 +32,11 @@
     @media (max-width: 640px) {
       .btn { padding: 12px 20px; }
       .card { padding: 16px; }
+
+      /* Scrollable tab bar: keep labels on one line and let the bar scroll
+         horizontally instead of wrapping labels / clipping the last tab. */
+      .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tab { flex: 0 0 auto; white-space: nowrap; padding: 10px 14px; }
     }
   </style>

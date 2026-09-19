@@ -404,10 +404,6 @@
   h1 { font-size: 24px; margin-bottom: 16px; }
   .home-link { float: left; }
 
-  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .tab.active { color: var(--text); border-bottom-color: var(--primary); }
-  .tab:hover { color: var(--text); }
 
   .field { margin-bottom: 14px; }
   .field label, .field-label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
@@ -444,4 +440,8 @@
   .verify-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
   .verify-section summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text2); margin-bottom: 12px; }
   .verify-section summary:hover { color: var(--text); }
+
+  @media (max-width: 640px) {
+    .app { padding: 24px 16px; }
+  }
 </style>

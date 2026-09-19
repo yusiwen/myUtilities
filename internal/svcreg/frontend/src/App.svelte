@@ -337,10 +337,6 @@
   .top-left { display: flex; align-items: center; gap: 10px; }
   .home-link { float: none; }
 
-  .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-  .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-  .tab.active { color: var(--text); border-bottom-color: var(--primary); }
-  .tab:hover { color: var(--text); }
 
   .loading { text-align: center; padding: 60px 0; color: var(--text2); font-size: 16px; }
   .loading-mini { color: var(--text3); font-size: 13px; padding: 4px 0; }
