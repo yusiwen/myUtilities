@@ -41,6 +41,7 @@ mu network port-scan 10.0.0.5 -a -J      # Show all results as JSON
 
 # Serve web UI (standalone)
 mu network serve --port 8091
+mu network --server                       # Shortcut for the default port 8091
 ```
 
 ## `mu network http` — HTTP client

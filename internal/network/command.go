@@ -14,13 +14,20 @@ import (
 
 // Options is the root `mu network` command.
 //
-// Two modes:
-//   - Server mode:  `mu network serve` (or `mu network --server`)
-//   - Client mode:  `mu network http <url>` (or `mu network --client <url>`)
-//
-// Subcommands dns/dig/whois/cert work the same as before.
+// Subcommands cover DNS/DIG/WHOIS lookups, TLS certificate inspection, the
+// curl-like HTTP client, the multi-threaded downloader and the port scanner.
+// Two conveniences live on the parent: `mu network serve` (or the
+// `mu network --server` shortcut) starts the network-tools web server, and a
+// bare `mu network` prints the list of subcommands.
 type Options struct {
-	Server bool `flag:"" name:"server" help:"Start the network-tools HTTP server on the default port."`
+	Server bool `flag:"" name:"server" help:"Start the network-tools HTTP server on the default port (same as 'mu network serve')."`
+
+	// Bare is the hidden placeholder subcommand Kong selects when `mu network`
+	// runs without a subcommand. Kong refuses to select a parent that has
+	// subcommands, so this placeholder is what makes the bare invocation (and
+	// the --server shortcut) reach Run below. Its name must stay in sync with
+	// bareCmdName.
+	Bare bareCommand `cmd:"" name:"bare" hidden:"" default:"1"`
 
 	// Subcommands.
 	Serve    ServeOptions    `cmd:"" name:"serve" help:"Start the network-tools web server."`
@@ -32,6 +39,16 @@ type Options struct {
 	Download DownloadOptions `cmd:"" name:"download" help:"Multi-threaded resumable file download (HTTP/HTTPS)."`
 	PortScan PortScanOptions `cmd:"" name:"port-scan" help:"Port scan: local listeners or remote TCP probe."`
 }
+
+// bareCmdName is the name of the hidden default subcommand declared above.
+const bareCmdName = "bare"
+
+// bareCommand is the hidden default subcommand of `mu network`. It does
+// nothing itself; Options.Run handles the bare invocation.
+type bareCommand struct{}
+
+// Run is a no-op: Options.Run decides what a bare `mu network` invocation does.
+func (b *bareCommand) Run() error { return nil }
 
 // HTTPClientOpt is the CLI surface for `mu network http`.
 // It mirrors the flags previously on `mu http` so existing muscle memory and
@@ -50,14 +67,15 @@ type HTTPClientOpt struct {
 	Output   string   `short:"o" name:"output" help:"Write response body to file instead of stdout."`
 }
 
-// Run handles the top-level `mu network` command.
+// Run handles the top-level `mu network` command: the `--server` shortcut and
+// the bare invocation.
 //
 // Kong invokes the Run method of every node on the selected command path (leaf
-// first, then its parents), so when a subcommand was selected this must stay
-// silent — otherwise every `mu network <sub>` would exit non-zero. Only the
-// bare `mu network` (or `mu network --server`) is handled here.
+// first, then its parents), so when a real subcommand was selected this must
+// stay silent — otherwise every `mu network <sub>` would exit non-zero. The
+// hidden `bare` subcommand is the only other node that reaches this method.
 func (o *Options) Run(ctx *kong.Context) error {
-	if selected := ctx.Selected(); selected != nil && selected.Name != "network" {
+	if selected := ctx.Selected(); selected != nil && selected.Name != bareCmdName {
 		return nil
 	}
 	if o.Server {

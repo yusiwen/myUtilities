@@ -120,15 +120,13 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 | — | **Health Check** (`mu health`) | `mu health check https://api.example.com/health --retries 3 --timeout 5s`. `mu health check-file targets.yaml` — batch check. Output in table or Prometheus exposition format. Notification hooks (webhook/email on failure). Pairs with `fleet` for checking remote service health. | ⭐⭐ ~80 lines |
 | — | **Secret Manager** (`mu secret`) | Lightweight encrypted secrets: `mu secret set API_KEY`, `mu secret get API_KEY`, `mu secret list`, `mu secret rotate TOKEN`. Local encrypted storage (AES-256-GCM with key from `keyring`). Bridges to the keyring plan in [keyring-module-plan.md](./keyring-module-plan.md). | ⭐⭐ ~100 lines |
 
-## Known Defects (found 2026-09-22, not yet fixed)
-
-50. [ ] `mu network --server` shortcut is unreachable
-    → Kong aborts with `expected one of "serve", "dns", ...` before `network.Options.Run()` executes, so
-      both the shortcut and the friendly "no subcommand specified" message in `Run` are dead code.
-    → Workaround: `mu network serve --port 8091`. Fix idea: make the subcommand optional (default
-      subcommand) or remove the `--server` flag.
-
 ## Recently Completed
+
+- **network `--server` shortcut** — `mu network --server` now starts the network-tools web server on `:8091` as
+  advertised, and a bare `mu network` reports the available subcommands instead of Kong's raw
+  `expected one of ...` error. Kong refuses to select a command that has subcommands, so a hidden default
+  subcommand (`bare`, `default:"1"`) was added to let the parent `Run` handle both cases; real subcommands are
+  unaffected. Docs: [docs/network.md](./network.md).
 
 - **NO_COLOR panic in the runner** — the color styles in `internal/core/runner` are left nil when `NO_COLOR`
   is set, and `aec.Apply` dereferences the style it is handed, so `mu run --file <recipe>` crashed with a nil
