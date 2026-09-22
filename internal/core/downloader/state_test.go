@@ -71,3 +71,89 @@ func TestLoadStateUnsupportedVersion(t *testing.T) {
 		t.Fatal("expected an error for an unsupported state version")
 	}
 }
+
+// stateUsableMatrix builds a downloader whose remote info and resume state can
+// be tweaked per case.
+func stateUsableMatrix() (*downloader, *State) {
+	d := &downloader{
+		opts: Options{URL: "https://example.com/file.bin", BlockSize: 1 << 20},
+		info: &RemoteInfo{
+			URL:          "https://example.com/file.bin",
+			FinalURL:     "https://example.com/file.bin",
+			Size:         4 << 20,
+			Ranged:       true,
+			ETag:         `"v1"`,
+			LastModified: "lm-1",
+		},
+	}
+	st := &State{
+		Version:      stateVersion,
+		URL:          d.opts.URL,
+		Size:         4 << 20,
+		ETag:         `"v1"`,
+		LastModified: "lm-1",
+		BlockSize:    1 << 20,
+		DoneBlocks:   []int64{0},
+	}
+	return d, st
+}
+
+func TestStateUsable(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*downloader, *State)
+		part   int64
+		wantOK bool
+	}{
+		{name: "matching state", mutate: func(*downloader, *State) {}, part: 4 << 20, wantOK: true},
+		{name: "missing partial", mutate: func(*downloader, *State) {}, part: -1, wantOK: false},
+		{name: "size changed", mutate: func(_ *downloader, s *State) { s.Size = 8 << 20 }, part: 4 << 20, wantOK: false},
+		{name: "url changed", mutate: func(_ *downloader, s *State) { s.URL = "https://example.com/other.bin" }, part: 4 << 20, wantOK: false},
+		{name: "etag changed", mutate: func(_ *downloader, s *State) { s.ETag = `"v2"` }, part: 4 << 20, wantOK: false},
+		{name: "last-modified changed", mutate: func(_ *downloader, s *State) { s.ETag = ""; s.LastModified = "lm-2" }, part: 4 << 20, wantOK: false},
+		{name: "block size changed", mutate: func(_ *downloader, s *State) { s.BlockSize = 2 << 20 }, part: 4 << 20, wantOK: false},
+		{
+			name: "no validator on either side",
+			mutate: func(d *downloader, s *State) {
+				d.info.ETag = ""
+				d.info.LastModified = ""
+				s.ETag = ""
+				s.LastModified = ""
+			},
+			part:   4 << 20,
+			wantOK: true,
+		},
+		{
+			name:   "state has no validator but remote does",
+			mutate: func(_ *downloader, s *State) { s.ETag = ""; s.LastModified = "" },
+			part:   4 << 20,
+			wantOK: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d, st := stateUsableMatrix()
+			c.mutate(d, st)
+			reason, ok := d.stateUsable(st, c.part)
+			if ok != c.wantOK {
+				t.Fatalf("stateUsable() ok = %v (%s), want %v", ok, reason, c.wantOK)
+			}
+			if !ok && reason == "" {
+				t.Error("a refused resume must explain why")
+			}
+		})
+	}
+}
+
+func TestStateUsableIgnoresBlockSizeWhenNotExplicit(t *testing.T) {
+	d, st := stateUsableMatrix()
+	d.opts.BlockSize = 0 // auto: the state's layout wins, see blockSizeFor
+	st.BlockSize = 2 << 20
+	if reason, ok := d.stateUsable(st, 4<<20); !ok {
+		t.Fatalf("stateUsable() = %v, want usable when no explicit --block-size", reason)
+	}
+	d.state = st
+	if got := d.blockSizeFor(); got != 2<<20 {
+		t.Errorf("blockSizeFor() = %d, want the state's %d", got, 2<<20)
+	}
+}

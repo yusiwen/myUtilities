@@ -98,6 +98,24 @@ func TestProgressRendererQuietAndUnknownSize(t *testing.T) {
 	}
 }
 
+func TestProgressRendererColor(t *testing.T) {
+	var buf bytes.Buffer
+	r := &progressRenderer{out: &buf, isTTY: true, color: true, verbose: true, width: 90}
+	r.Update(sampleSnapshot())
+	r.Close()
+	out := buf.String()
+
+	if !strings.Contains(out, "\x1b[32m") { // aec.GreenF, the filled part of the bar
+		t.Errorf("expected a colored progress bar:\n%q", out)
+	}
+	if !strings.Contains(out, "\x1b[36m") { // aec.CyanF, the percentage
+		t.Errorf("expected a colored percentage:\n%q", out)
+	}
+	if plain := (&progressRenderer{out: &bytes.Buffer{}, isTTY: true, width: 90}); plain.color {
+		t.Error("color must be off unless explicitly enabled")
+	}
+}
+
 func TestProgressRendererLogKeepsRegionConsistent(t *testing.T) {
 	var buf bytes.Buffer
 	r := &progressRenderer{out: &buf, isTTY: true, width: 90}
