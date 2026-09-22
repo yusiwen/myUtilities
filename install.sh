@@ -90,8 +90,14 @@ case "$ext" in
 esac
 
 echo "Installing $bin_name to $PREFIX/ ..."
+maybe_sudo mkdir -p "$PREFIX"
+# The alias symlink is created inside PREFIX, so a relative PREFIX would make the
+# link target relative to the link's own directory and leave it dangling.
+# Resolve PREFIX to an absolute path before creating the files.
+PREFIX=$(cd "$PREFIX" && pwd)
 maybe_sudo install -m 755 "$bin_path" "$PREFIX/$bin_name"
 maybe_sudo ln -sf "$PREFIX/$bin_name" "$PREFIX/$NAME"
 
 echo "Installation complete."
-maybe_sudo "$PREFIX/$NAME" version 2>/dev/null || echo "Run '$NAME version' to verify."
+# The version is exposed as the global --version flag, not as a `version` subcommand.
+maybe_sudo "$PREFIX/$NAME" --version 2>/dev/null || echo "Run '$NAME --version' to verify."
