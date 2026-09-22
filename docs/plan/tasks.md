@@ -120,7 +120,31 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 | — | **Health Check** (`mu health`) | `mu health check https://api.example.com/health --retries 3 --timeout 5s`. `mu health check-file targets.yaml` — batch check. Output in table or Prometheus exposition format. Notification hooks (webhook/email on failure). Pairs with `fleet` for checking remote service health. | ⭐⭐ ~80 lines |
 | — | **Secret Manager** (`mu secret`) | Lightweight encrypted secrets: `mu secret set API_KEY`, `mu secret get API_KEY`, `mu secret list`, `mu secret rotate TOKEN`. Local encrypted storage (AES-256-GCM with key from `keyring`). Bridges to the keyring plan in [keyring-module-plan.md](./keyring-module-plan.md). | ⭐⭐ ~100 lines |
 
+## Known Defects (found 2026-09-22, not yet fixed)
+
+49. [ ] `mu run --file <recipe>` panics (nil pointer dereference, exit 2) when `NO_COLOR` is set
+    → Site: `internal/core/runner/recipe_runner.go` `printSummary` → `aec.Apply(mark, color)`
+    → Cause: the color variables (`successColor`/`errColor` in `CommandRunner.go`) are intentionally left
+      nil when `NO_COLOR` is set, but `aec.Apply` dereferences the style instead of ignoring a nil one.
+      The same nil colors also make `go test ./...` panic in the recipe/fleet tests when `NO_COLOR=1`.
+    → Fix idea: skip the styling when the style is nil (small helper), or install a no-op ANSI value.
+50. [ ] `mu network --server` shortcut is unreachable
+    → Kong aborts with `expected one of "serve", "dns", ...` before `network.Options.Run()` executes, so
+      both the shortcut and the friendly "no subcommand specified" message in `Run` are dead code.
+    → Workaround: `mu network serve --port 8091`. Fix idea: make the subcommand optional (default
+      subcommand) or remove the `--server` flag.
+
 ## Recently Completed
+
+- **network download** — `mu network download <url>`: multi-threaded resumable HTTP(S) downloader. Core engine in
+  `internal/core/downloader/` (block queue + bitmap, `WriteAt` into a preallocated file, probe for size/range
+  support/validators, resume state in `<output>.part.mu-dl.json`, idle-stall watchdog, per-block retries,
+  SHA-256 verification, shared rate limit, proxy/TLS/header/auth options, `--http1`). CLI in
+  `internal/network/download.go` + live display in `progress.go` (bar, speed, ETA, `conn active/total`,
+  `--verbose` per-connection lines, plain fallback off a TTY, `NO_COLOR` respected). Ctrl-C keeps the partial
+  file and exits 130. Docs: [docs/network.md](./network.md); plan:
+  [network-download-plan.md](./plan/network-download-plan.md). Also fixed `mu network <subcommand>`
+  exiting 1 because Kong runs the parent `Run` method after the subcommand.
 
 - **Log Tailer** — `mu log`: tail and filter log files (`internal/log/` + `internal/core/logtail/`). Supports multi-file tail, follow mode (`-f`), minimum level filter (`-l`), time window (`--since`), regex filter (`--grep`), line limit (`-n`), and auto-detection of JSON-line vs plain-text formats with colorized level highlighting (DEBUG=faint, INFO=green, WARN=yellow, ERROR=red, FATAL=red+bold). Follow mode polls every 500 ms and handles file truncation/rotation. See [docs/log.md](./log.md)
 - **HTTP Client** — merged into `mu network http` (curl-like subcommand). Core logic moved to `internal/core/httpclient/`, CLI in `internal/network/httpclient.go`. Supports all methods (`-X`), repeatable request headers (`-H`), body via `-d` or stdin, Bearer auth (`-A`), timeout (`-t`), TLS skip (`-k`), no-redirect (`-N`), forced JSON pretty-print (`-j`), body-only mode (`-b`), and file output (`-o`). Auto-detects JSON responses, color-codes the status line (green 2xx / red 4xx+), and writes a one-line summary to stderr so the body pipes cleanly. See [docs/network.md](./network.md)

@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/alecthomas/kong"
 	"github.com/likexian/whois"
 	corehttp "github.com/yusiwen/myUtilities/internal/core/httpclient"
 	corenet "github.com/yusiwen/myUtilities/internal/core/network"
@@ -22,12 +23,13 @@ type Options struct {
 	Server bool `flag:"" name:"server" help:"Start the network-tools HTTP server on the default port."`
 
 	// Subcommands.
-	Serve  ServeOptions  `cmd:"" name:"serve" help:"Start the network-tools web server."`
-	DNS    DNSOptions    `cmd:"" name:"dns" help:"DNS lookup."`
-	DIG    DIGOptions    `cmd:"" name:"dig" help:"Detailed DNS query (dig-style)."`
-	Whois   WhoisOptions    `cmd:"" name:"whois" help:"WHOIS lookup for domain or IP."`
-	Cert    CertOptions     `cmd:"" name:"cert" help:"SSL/TLS certificate details."`
-	HTTP    HTTPClientOpt   `cmd:"" name:"http" help:"HTTP client (curl-like)."`
+	Serve    ServeOptions    `cmd:"" name:"serve" help:"Start the network-tools web server."`
+	DNS      DNSOptions      `cmd:"" name:"dns" help:"DNS lookup."`
+	DIG      DIGOptions      `cmd:"" name:"dig" help:"Detailed DNS query (dig-style)."`
+	Whois    WhoisOptions    `cmd:"" name:"whois" help:"WHOIS lookup for domain or IP."`
+	Cert     CertOptions     `cmd:"" name:"cert" help:"SSL/TLS certificate details."`
+	HTTP     HTTPClientOpt   `cmd:"" name:"http" help:"HTTP client (curl-like)."`
+	Download DownloadOptions `cmd:"" name:"download" help:"Multi-threaded resumable file download (HTTP/HTTPS)."`
 	PortScan PortScanOptions `cmd:"" name:"port-scan" help:"Port scan: local listeners or remote TCP probe."`
 }
 
@@ -48,14 +50,20 @@ type HTTPClientOpt struct {
 	Output   string   `short:"o" name:"output" help:"Write response body to file instead of stdout."`
 }
 
-// Run handles the top-level `mu network` command. Kong routes subcommands
-// (dns/dig/whois/cert/http/serve) themselves; this only handles the
-// `--server` shortcut.
-func (o *Options) Run() error {
+// Run handles the top-level `mu network` command.
+//
+// Kong invokes the Run method of every node on the selected command path (leaf
+// first, then its parents), so when a subcommand was selected this must stay
+// silent — otherwise every `mu network <sub>` would exit non-zero. Only the
+// bare `mu network` (or `mu network --server`) is handled here.
+func (o *Options) Run(ctx *kong.Context) error {
+	if selected := ctx.Selected(); selected != nil && selected.Name != "network" {
+		return nil
+	}
 	if o.Server {
 		return (&ServeOptions{Port: 8091}).Run()
 	}
-	return fmt.Errorf("no subcommand specified. Try: mu network http|serve|dns|dig|whois|cert|port-scan — run 'mu network -h' for help")
+	return fmt.Errorf("no subcommand specified. Try: mu network http|download|serve|dns|dig|whois|cert|port-scan — run 'mu network -h' for help")
 }
 
 func (o *HTTPClientOpt) Run() error {

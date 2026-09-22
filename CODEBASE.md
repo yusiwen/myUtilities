@@ -20,7 +20,7 @@
 
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
-`git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network` (dns/dig/whois/http/serve), `misc`, `crypto`,
+`git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network` (dns/dig/whois/http/download/serve), `misc`, `crypto`,
 `ask`, `budget`, `metrics`, `scip`, `log`, `completion`, `termshot`
 
 ---
@@ -63,6 +63,15 @@
 │   │   │   └── transfer.go    #  ArchiveExt / ExtractArchive (tar.gz/tar/zip) / ComputeSHA256
 │   │   ├── httpclient/        # HTTP client core (curl alternative)
 │   │   │   └── client.go      #  Do(Params) → *Result; Render(p, r); SummaryLine; ReadBodyFromStdin; PrettyJSON
+│   │   ├── downloader/        # Multi-threaded resumable HTTP(S) downloader
+│   │   │   ├── downloader.go  #  Download(ctx, Options) → *Result; block-queue workers, single-stream fallback, rate limit, Ctrl-C, checksum
+│   │   │   ├── probe.go       #  Probe() → RemoteInfo{Size, Ranged, ETag, LastModified, Filename}; HEAD then `Range: bytes=0-0`
+│   │   │   ├── plan.go        #  plan: fixed-size blocks + done bitmap, next()/mark()/doneBytes()
+│   │   │   ├── state.go       #  State (`<output>.part.mu-dl.json`), LoadState/Save (atomic)/RemoveState
+│   │   │   ├── writer.go      #  fileWriter: preallocated file + concurrent WriteAt
+│   │   │   ├── stats.go       #  stats atomics + Snapshot/Progress + speedWindow
+│   │   │   ├── size.go        #  ParseSize (8M/1MiB) / FormatSize
+│   │   │   └── client.go      #  NewClient(Options): proxy, TLS, HTTP/1.1 forcing, headers/auth
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
@@ -121,9 +130,11 @@
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
 │   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  termshot/  watch/
-│   ├── network/               # mu network — DNS, DIG, WHOIS, HTTP client (curl alternative)
-│   │   ├── options.go         #  Subcommands: dns, dig, whois, http, serve
-│   │   ├── command.go         #  DNS/DIG/WHOIS/Cert commands + HTTPClientOptions (mu network http)
+│   ├── network/               # mu network — DNS, DIG, WHOIS, HTTP client, download, port scan
+│   │   ├── command.go         #  DNS/DIG/WHOIS/Cert commands + HTTPClientOptions (mu network http) + subcommand routing
+│   │   ├── download.go        #  DownloadOptions (mu network download): flags, signal handling (exit 130), summary/JSON report
+│   │   ├── progress.go        #  Live display: aggregate bar + `-v` per-connection lines, non-TTY fallback, region clearing
+│   │   ├── ports.go           #  PortScanOptions: local listener list + remote TCP probe
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   └── log/                   # mu log — log tailer and filter
 │   └── (modules with a web UI also contain a `frontend/` dir, embedded via `//go:embed`)
@@ -154,6 +165,7 @@
 | `golang-jwt/jwt/v5` | JWT for OAuth mock server |
 | `bbolt` | Embedded key-value store |
 | `aec` | ANSI escape codes for terminal colors |
+| `golang.org/x/time` | Token-bucket rate limiting for `mu network download --limit-rate` |
 
 ---
 
