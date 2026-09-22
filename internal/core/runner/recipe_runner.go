@@ -139,7 +139,7 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 			taskErr := r.runTask(p.name, p.cmds, p.timeout, useDisplay)
 			elapsed := time.Since(start)
 			for attempt := 1; taskErr != nil && attempt <= p.retry && !r.interrupted.Load(); attempt++ {
-				r.println(aec.Apply(fmt.Sprintf("task %q failed, retrying %d/%d...", p.name, attempt, p.retry), aec.Faint))
+				r.println(applyColor(fmt.Sprintf("task %q failed, retrying %d/%d...", p.name, attempt, p.retry), aec.Faint))
 				start = time.Now()
 				taskErr = r.runTask(p.name, p.cmds, p.timeout, useDisplay)
 				elapsed = time.Since(start)
@@ -150,7 +150,7 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 			if taskErr != nil {
 				failures = append(failures, p.name)
 				results = append(results, TaskResult{Name: p.name, Status: "fail", Duration: elapsed})
-				r.println(aec.Apply(fmt.Sprintf("✗ task %s failed after %s", p.name, formatElapsed(elapsed)), errColor))
+				r.println(applyColor(fmt.Sprintf("✗ task %s failed after %s", p.name, formatElapsed(elapsed)), errColor))
 				if !p.contErr && !opts.KeepGoing {
 					break
 				}
@@ -231,12 +231,12 @@ func (r *CommandRunner) runTask(name string, cmds []Command, timeout time.Durati
 				err = fmt.Errorf("timed out after %s", timeout)
 			}
 			if useDisplay {
-				fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✗ %s", name, formatElapsed(elapsed)), errColor))
+				fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✗ %s", name, formatElapsed(elapsed)), errColor))
 				for _, l := range r.d.failedOut {
 					fmt.Println(l)
 				}
 			}
-			r.println(aec.Apply("Error: "+err.Error(), errColor))
+			r.println(applyColor("Error: "+err.Error(), errColor))
 			return err
 		}
 		if useDisplay {
@@ -244,7 +244,7 @@ func (r *CommandRunner) runTask(name string, cmds []Command, timeout time.Durati
 			if len(cmds) > 1 {
 				suffix = fmt.Sprintf(" (%d/%d)", i+1, len(cmds))
 			}
-			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s%s", name, formatElapsed(elapsed), suffix), successColor))
+			fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✓ %s%s", name, formatElapsed(elapsed), suffix), successColor))
 		} else {
 			r.printf("%s ✓ (%s)\n", name, formatElapsed(elapsed))
 		}
@@ -271,6 +271,6 @@ func (r *CommandRunner) printSummary(results []TaskResult) {
 			mark = "✗"
 			color = errColor
 		}
-		r.printf("  %-*s  %s %s\n", width, res.Name, aec.Apply(mark, color), formatElapsed(res.Duration))
+		r.printf("  %-*s  %s %s\n", width, res.Name, applyColor(mark, color), formatElapsed(res.Duration))
 	}
 }

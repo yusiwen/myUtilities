@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/morikuni/aec"
 )
 
 // These tests exercise the non-TTY path (test stdout is never a terminal),
@@ -308,4 +310,53 @@ func TestRunCommandPTYFailure(t *testing.T) {
 	if !strings.Contains(err.Error(), "exit code 3") {
 		t.Fatalf("error should mention exit code 3, got: %v", err)
 	}
+}
+
+// setColors overrides the package-level color variables for one test and
+// restores them afterwards.
+func setColors(t *testing.T, output, errc, success aec.ANSI) {
+	t.Helper()
+	oldOutput, oldErr, oldSuccess := outputColor, errColor, successColor
+	t.Cleanup(func() { outputColor, errColor, successColor = oldOutput, oldErr, oldSuccess })
+	outputColor, errColor, successColor = output, errc, success
+}
+
+// summaryOutput renders a recipe summary and returns what the injected writer
+// received.
+func summaryOutput(t *testing.T, results []TaskResult) string {
+	t.Helper()
+	var buf bytes.Buffer
+	r := NewCommandRunner(nil)
+	r.OutputWriter = &buf
+	r.printSummary(results)
+	return buf.String()
+}
+
+// TestPrintSummaryStyles guards the NO_COLOR path: init() leaves the color
+// variables nil when NO_COLOR is set, and aec.Apply dereferences the style it
+// is handed, so styling a nil style used to panic while printing the summary.
+func TestPrintSummaryStyles(t *testing.T) {
+	results := []TaskResult{
+		{Name: "ok", Status: "ok", Duration: time.Second},
+		{Name: "bad", Status: "fail", Duration: 2 * time.Second},
+	}
+
+	t.Run("colors disabled", func(t *testing.T) {
+		setColors(t, nil, nil, nil)
+		out := summaryOutput(t, results)
+		if !strings.Contains(out, "Recipe summary:") {
+			t.Fatalf("summary not printed: %q", out)
+		}
+		if strings.Contains(out, "\x1b[") {
+			t.Fatalf("escape codes emitted with colors disabled: %q", out)
+		}
+	})
+
+	t.Run("colors enabled", func(t *testing.T) {
+		setColors(t, aec.BlueF, aec.RedF, aec.GreenF)
+		out := summaryOutput(t, results)
+		if !strings.Contains(out, "\x1b[") {
+			t.Fatalf("expected colored summary, got %q", out)
+		}
+	})
 }

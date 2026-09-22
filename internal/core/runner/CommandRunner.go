@@ -111,6 +111,16 @@ func init() {
 	}
 }
 
+// applyColor styles s with style. The color variables above are deliberately
+// left nil when NO_COLOR is set, and aec.Apply dereferences the style it is
+// given, so a nil style must be handled here as "emit no escape codes".
+func applyColor(s string, style aec.ANSI) string {
+	if style == nil {
+		return s
+	}
+	return aec.Apply(s, style)
+}
+
 // isTerminal reports whether f refers to a character device (a TTY), as
 // opposed to a pipe or file.
 func isTerminal(f *os.File) bool {
@@ -293,7 +303,7 @@ func (r *CommandRunner) runCommands() {
 			// The header is printed here because the display is suspended
 			// during the interactive session and cannot render it.
 			out := fmt.Sprintf("Executing [%s]...", cmd.Name)
-			fmt.Println(aec.Apply(out, outputColor))
+			fmt.Println(applyColor(out, outputColor))
 
 			r.interactiveStart = time.Now()
 			// Suspend the redraw display so it does not interfere with the
@@ -308,13 +318,13 @@ func (r *CommandRunner) runCommands() {
 					break
 				}
 				r.err = err
-				fmt.Println(aec.Apply("Error:", errColor))
+				fmt.Println(applyColor("Error:", errColor))
 				break
 			}
 			elapsed := time.Since(r.interactiveStart)
 			fmt.Printf(ANSI_MOVE_UP)
 			fmt.Print(ANSI_CLEAR_LINE)
-			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
+			fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
 			continue
 		}
 
@@ -329,17 +339,17 @@ func (r *CommandRunner) runCommands() {
 			}
 			r.err = err
 			elapsed := time.Since(r.d.stepStart)
-			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✗ %s", cmd.Name, formatElapsed(elapsed)), errColor))
+			fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✗ %s", cmd.Name, formatElapsed(elapsed)), errColor))
 			// Keep the failed command's recent output visible before the
 			// error is printed, since the display cleanup wiped it.
 			for _, l := range r.d.failedOut {
 				fmt.Println(l)
 			}
-			fmt.Println(aec.Apply("Error:", errColor))
+			fmt.Println(applyColor("Error:", errColor))
 			break
 		} else {
 			elapsed := time.Since(r.d.stepStart)
-			fmt.Println(aec.Apply(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
+			fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
 		}
 	}
 }
@@ -756,10 +766,10 @@ func (d *display) printLocked() {
 	// Header line: "Executing [<name>]... <spinner> <elapsed>"
 	elapsed := time.Since(d.stepStart)
 	header := fmt.Sprintf("Executing [%s]... %s %s", d.stepName, spinnerFrames[d.spinnerIdx%len(spinnerFrames)], formatElapsed(elapsed))
-	fmt.Print(ANSI_CLEAR_LINE + aec.Apply(header, outputColor) + "\n")
+	fmt.Print(ANSI_CLEAR_LINE + applyColor(header, outputColor) + "\n")
 	total := 1 + len(rows)
 	for _, row := range rows {
-		fmt.Print(ANSI_CLEAR_LINE + " " + aec.Apply(row, aec.Faint) + "\n")
+		fmt.Print(ANSI_CLEAR_LINE + " " + applyColor(row, aec.Faint) + "\n")
 	}
 	// Erase rows left over from a taller previous draw.
 	if total < d.prevRows {

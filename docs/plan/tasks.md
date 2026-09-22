@@ -122,12 +122,6 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 
 ## Known Defects (found 2026-09-22, not yet fixed)
 
-49. [ ] `mu run --file <recipe>` panics (nil pointer dereference, exit 2) when `NO_COLOR` is set
-    → Site: `internal/core/runner/recipe_runner.go` `printSummary` → `aec.Apply(mark, color)`
-    → Cause: the color variables (`successColor`/`errColor` in `CommandRunner.go`) are intentionally left
-      nil when `NO_COLOR` is set, but `aec.Apply` dereferences the style instead of ignoring a nil one.
-      The same nil colors also make `go test ./...` panic in the recipe/fleet tests when `NO_COLOR=1`.
-    → Fix idea: skip the styling when the style is nil (small helper), or install a no-op ANSI value.
 50. [ ] `mu network --server` shortcut is unreachable
     → Kong aborts with `expected one of "serve", "dns", ...` before `network.Options.Run()` executes, so
       both the shortcut and the friendly "no subcommand specified" message in `Run` are dead code.
@@ -135,6 +129,12 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
       subcommand) or remove the `--server` flag.
 
 ## Recently Completed
+
+- **NO_COLOR panic in the runner** — the color styles in `internal/core/runner` are left nil when `NO_COLOR`
+  is set, and `aec.Apply` dereferences the style it is handed, so `mu run --file <recipe>` crashed with a nil
+  pointer dereference (exit 2) while printing the recipe summary and the recipe/display tests panicked in any
+  `NO_COLOR=1` environment. All styling now goes through `applyColor`, which returns the plain string for a nil
+  style; colored output is unchanged.
 
 - **Installer verification** — `install.sh` now verifies a fresh install with `mu --version`. The `version`
   subcommand never existed, so the old post-install check always failed and printed a hint pointing at a command
