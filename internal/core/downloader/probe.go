@@ -150,7 +150,8 @@ func filenameFromURL(rawURL string) string {
 	return sanitizeFilename(base)
 }
 
-// sanitizeFilename strips any directory component and control characters.
+// sanitizeFilename strips any directory component and control characters, and
+// rejects names that would not be a plain file in the target directory.
 func sanitizeFilename(name string) string {
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = path.Base(name)
@@ -161,7 +162,8 @@ func sanitizeFilename(name string) string {
 		return r
 	}, name)
 	name = strings.TrimSpace(name)
-	if name == "." || name == ".." {
+	switch name {
+	case "", ".", "..", "/":
 		return ""
 	}
 	return name

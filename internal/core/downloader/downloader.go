@@ -555,8 +555,11 @@ func (d *downloader) fetchBlockWithRetry(ctx context.Context, idx int64, conn in
 	return lastErr
 }
 
-// retryDelay returns 1s, 2s, 4s, ... capped at 30s.
+// retryDelay returns 1s, 2s, 4s, ... capped at 30s for attempt >= 2.
 func retryDelay(attempt int) time.Duration {
+	if attempt < 2 {
+		return time.Second
+	}
 	delay := time.Second << uint(attempt-2)
 	if delay > 30*time.Second {
 		delay = 30 * time.Second
