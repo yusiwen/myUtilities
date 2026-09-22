@@ -1,8 +1,9 @@
 # network — Network tools
 
-Network diagnostics, HTTP client, and port scanning. DNS lookup, DIG, WHOIS
-lookup, curl-like HTTP client, and port scan (local listener list + remote
-TCP probe). Supports both CLI and web UI.
+Network diagnostics, HTTP client, port scanning, and file downloads. DNS lookup,
+DIG, WHOIS lookup, curl-like HTTP client, port scan (local listener list +
+remote TCP probe), and a multi-threaded resumable downloader. Supports both CLI
+and web UI (the downloader is CLI-only).
 
 ```bash
 # DNS lookup
@@ -22,6 +23,12 @@ mu network whois example.com
 mu network http https://api.example.com/users
 mu network http -X POST -d '{"name":"demo"}' https://api.example.com/users
 mu network http -A "Bearer token123" -j https://api.example.com/me
+
+# Download (multi-threaded, resumable)
+mu network download https://example.com/big.iso
+mu network download https://example.com/big.iso -n 8 -o ~/Downloads/
+mu network download https://example.com/big.iso --limit-rate 5M --sha256 <hex>
+mu network download https://example.com/big.iso --json
 
 # Port scan
 mu network port-scan                      # List local TCP/UDP listeners
@@ -72,6 +79,66 @@ latency) to stderr so the body can be cleanly piped or redirected.
   `mu network http … | jq .` still works when combined with `-b` or `-o`.
 - **Colors** — the status line is green for 2xx, red for 4xx/5xx. Respects the
   `NO_COLOR` environment variable.
+
+## `mu network download` — Resumable multi-threaded downloader
+
+Downloads an HTTP(S) file with several parallel connections, resumes an
+interrupted transfer automatically, and shows live progress (bar, speed, ETA and
+the number of working connections).
+
+```
+big.iso  45.2%  ████████████░░░░░░░░  452.1 MiB/1000.0 MiB  24.3 MiB/s  ETA 00:22  conn 6/8
+```
+
+### Download Flags
+
+| Flag | Description |
+|---|---|
+| `[url]` | Remote file to fetch (HTTP/HTTPS). |
+| `-o`, `--output` | Output file or directory. Default: the remote filename (from `Content-Disposition` or the URL path) in the current directory. |
+| `-n`, `--threads` | Parallel connections (default `4`, max `32`). `-n 1` still supports resume. |
+| `--no-resume` | Discard the partial file and resume state, then start over. |
+| `--force-resume` | Resume even when the remote `ETag`/`Last-Modified` changed. |
+| `-f`, `--force` | Overwrite an existing output file. |
+| `--block-size` | Work-unit size, e.g. `8M` or `1MiB`. Default: derived from the file size (1–32 MiB, ~4 blocks per connection). |
+| `--no-preallocate` | Do not preallocate the output file up front. |
+| `-k`, `--insecure` | Skip TLS certificate verification. |
+| `-H`, `--header` | Extra request header as `Key: Value` (repeatable). |
+| `-A`, `--auth` | Bearer token (`Authorization: Bearer <token>`). |
+| `--user` | HTTP basic auth as `user:password`. |
+| `--proxy` | HTTP(S) proxy URL. |
+| `-t`, `--timeout` | Connect/TLS/response-header timeout (default `30s`). |
+| `--idle-timeout` | Abort a connection that stops sending data (default `30s`). |
+| `--retries` | Retries per block (default `3`, exponential backoff). |
+| `--limit-rate` | Global speed cap, e.g. `5M` or `500k`. Default: unlimited. |
+| `--sha256` | Expected SHA-256 checksum; the download fails on mismatch. |
+| `--http1` | Force HTTP/1.1 (disable HTTP/2 connection multiplexing). |
+| `--no-progress` | Disable the live progress display. |
+| `--verbose` | Show one progress line per connection. |
+| `-q`, `--quiet` | Only print errors. |
+| `--json` | Print the final result as JSON. |
+
+### Download Behavior
+
+- **Block queue** — the file is split into fixed-size blocks; every connection
+  pulls the next unfinished block, so a slow connection delays one block instead
+  of a whole contiguous chunk. Blocks are written with `WriteAt` into a
+  preallocated (sparse) file.
+- **Resume** — progress is recorded in `<output>.part.mu-dl.json` and the payload
+  in `<output>.part`; the final file is created only after the transfer (and the
+  optional checksum) succeed. Re-running the same command continues where it
+  stopped, skipping completed blocks. Resume is refused (with a warning and a
+  fresh start) when the remote size/`ETag`/`Last-Modified` changed; the stale
+  partial is kept as `<output>.part.old`.
+- **Servers without range support** — if the server ignores `Range` requests, the
+  downloader falls back to a single connection; such transfers cannot be resumed.
+- **Interrupt** — Ctrl-C flushes the resume state, keeps the partial file, prints
+  a resume hint, and exits with status `130`.
+- **Progress** — the live region is drawn on a TTY and cleared afterwards; on a
+  non-TTY it prints at most one plain line per second, and `--json` keeps stdout
+  machine-readable. Respects `NO_COLOR`.
+- **Checksum** — `--sha256` verifies the finished file; on mismatch the partial
+  file and resume state are kept for inspection and the command exits non-zero.
 
 ## `mu network port-scan` — Port scanning
 
