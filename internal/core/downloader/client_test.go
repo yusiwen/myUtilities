@@ -2,9 +2,12 @@ package downloader
 
 import (
 	"context"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -194,4 +197,75 @@ func TestNewClientInsecureTLS(t *testing.T) {
 		t.Fatalf("GET with --insecure: %v", err)
 	}
 	resp.Body.Close()
+}
+
+// writeServerCert writes a test server's certificate as a PEM file.
+func writeServerCert(t *testing.T, srv *httptest.Server) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "ca.pem")
+	pemData := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
+	if err := os.WriteFile(path, pemData, 0o600); err != nil {
+		t.Fatalf("write cert: %v", err)
+	}
+	return path
+}
+
+func TestNewClientCACert(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok")) //nolint:errcheck // test server
+	}))
+	defer srv.Close()
+
+	caPath := writeServerCert(t, srv)
+
+	// Without --cacert the self-signed server must be rejected.
+	strict, err := NewClient(Options{Threads: 1, Timeout: 5 * time.Second})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := strict.Get(srv.URL); err == nil {
+		t.Fatal("expected a certificate verification failure without --cacert")
+	}
+
+	// With --cacert the certificates are added to the system roots and the
+	// server is trusted, without disabling verification.
+	trusting, err := NewClient(Options{Threads: 1, Timeout: 5 * time.Second, CACert: caPath})
+	if err != nil {
+		t.Fatalf("NewClient with --cacert: %v", err)
+	}
+	tr := trusting.Transport.(*http.Transport)
+	if tr.TLSClientConfig == nil || tr.TLSClientConfig.RootCAs == nil {
+		t.Fatal("--cacert must install a root pool")
+	}
+	if tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("--cacert must not disable verification")
+	}
+	resp, err := trusting.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("GET with --cacert: %v", err)
+	}
+	resp.Body.Close()
+
+	// --insecure still wins when both are given.
+	both, err := NewClient(Options{Threads: 1, Timeout: 5 * time.Second, CACert: caPath, Insecure: true})
+	if err != nil {
+		t.Fatalf("NewClient with --cacert --insecure: %v", err)
+	}
+	if tr := both.Transport.(*http.Transport); tr.TLSClientConfig == nil || !tr.TLSClientConfig.InsecureSkipVerify {
+		t.Error("--insecure must keep skipping verification")
+	}
+}
+
+func TestNewClientCACertErrors(t *testing.T) {
+	if _, err := NewClient(Options{Threads: 1, Timeout: time.Second, CACert: filepath.Join(t.TempDir(), "missing.pem")}); err == nil {
+		t.Error("expected an error for a missing --cacert file")
+	}
+
+	empty := filepath.Join(t.TempDir(), "empty.pem")
+	if err := os.WriteFile(empty, []byte("not a certificate\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewClient(Options{Threads: 1, Timeout: time.Second, CACert: empty}); err == nil {
+		t.Error("expected an error for a PEM file without certificates")
+	}
 }

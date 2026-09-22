@@ -103,6 +103,7 @@ big.iso  45.2%  ████████████░░░░░░░░  45
 | `--block-size` | Work-unit size, e.g. `8M` or `1MiB`. Default: derived from the file size (1–32 MiB, ~4 blocks per connection). |
 | `--no-preallocate` | Do not preallocate the output file up front. |
 | `-k`, `--insecure` | Skip TLS certificate verification. |
+| `--cacert` | PEM file whose certificates are added to the system roots (for private/corporate CAs). Public CAs keep working. |
 | `-H`, `--header` | Extra request header as `Key: Value` (repeatable). |
 | `-A`, `--auth` | Bearer token (`Authorization: Bearer <token>`). |
 | `--user` | HTTP basic auth as `user:password`. |
@@ -137,6 +138,11 @@ big.iso  45.2%  ████████████░░░░░░░░  45
 - **Progress** — the live region is drawn on a TTY and cleared afterwards; on a
   non-TTY it prints at most one plain line per second, and `--json` keeps stdout
   machine-readable. Respects `NO_COLOR`.
+- **TLS** — server certificates are verified against the platform trust store (macOS/Windows
+  use the native verifier, Linux/BSD read the system CA bundle, honouring `SSL_CERT_FILE`/
+  `SSL_CERT_DIR`). `--cacert <pem>` adds extra CAs on top of those roots, so internal or
+  corporate TLS interception certificates work without giving up verification; `-k` skips
+  chain and hostname verification entirely.
 - **Checksum** — `--sha256` verifies the finished file; on mismatch the partial
   file and resume state are kept for inspection and the command exits non-zero.
 

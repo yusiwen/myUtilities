@@ -28,6 +28,7 @@ type DownloadOptions struct {
 	NoPreallocate bool   `name:"no-preallocate" help:"Do not preallocate the output file up front."`
 
 	Insecure bool     `short:"k" name:"insecure" help:"Skip TLS certificate verification."`
+	CACert   string   `name:"cacert" help:"PEM file with extra trusted CA certificates (added to the system roots)."`
 	Headers  []string `short:"H" name:"header" help:"Extra request header as Key: Value (repeatable)."`
 	Auth     string   `short:"A" name:"auth" help:"Bearer token; sets Authorization: Bearer <token>."`
 	User     string   `name:"user" help:"HTTP basic auth as user:password."`
@@ -97,6 +98,7 @@ func (o *DownloadOptions) Run() error {
 		Retries:     o.Retries,
 		LimitRate:   limitRate,
 		Insecure:    o.Insecure,
+		CACert:      o.CACert,
 		HTTP1:       o.HTTP1,
 		SHA256:      o.SHA256,
 		Progress:    renderer,

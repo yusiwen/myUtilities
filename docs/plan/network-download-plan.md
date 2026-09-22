@@ -21,6 +21,9 @@
 >   `Run` method on the command path, so the parent `Options.Run()` error made all
 >   subcommands exit `1` after doing their work. The parent now returns early when
 >   a subcommand was selected.
+> - Added `--cacert <pem>` after review: extra CA certificates are merged into the
+>   system roots instead of replacing them, so private CAs work while public sites
+>   keep verifying (`-k` still disables verification completely).
 
 
 ## Background
