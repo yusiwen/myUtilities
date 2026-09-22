@@ -136,6 +136,12 @@ Modules not yet covered by the Web UI candidates above. Each follows the standar
 
 ## Recently Completed
 
+- **Installer verification** — `install.sh` now verifies a fresh install with `mu --version`. The `version`
+  subcommand never existed, so the old post-install check always failed and printed a hint pointing at a command
+  that exits `80`. The script also creates `PREFIX` when it is missing and resolves it to an absolute path before
+  creating the alias symlink, so a relative `PREFIX` no longer produces a dangling `mu` link. The missing
+  shell-level CI coverage that let both defects ship is tracked in issue #34.
+
 - **network download** — `mu network download <url>`: multi-threaded resumable HTTP(S) downloader. Core engine in
   `internal/core/downloader/` (block queue + bitmap, `WriteAt` into a preallocated file, probe for size/range
   support/validators, resume state in `<output>.part.mu-dl.json`, idle-stall watchdog, per-block retries,
