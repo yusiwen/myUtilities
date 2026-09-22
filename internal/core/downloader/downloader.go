@@ -85,6 +85,8 @@ type Options struct {
 	LimitRate int64
 	// Insecure skips TLS certificate verification.
 	Insecure bool
+	// CACert is a PEM file whose certificates are added to the system roots.
+	CACert string
 	// HTTP1 forces HTTP/1.1 (no HTTP/2 connection multiplexing).
 	HTTP1 bool
 	// SHA256 is the expected checksum; an empty string skips verification.

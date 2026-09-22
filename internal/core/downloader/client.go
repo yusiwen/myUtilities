@@ -3,10 +3,12 @@ package downloader
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -56,8 +58,12 @@ func NewClient(o Options) (*http.Client, error) {
 		transport.TLSNextProto = map[string]func(string, *tls.Conn) http.RoundTripper{}
 	}
 
-	if o.Insecure {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // opt-in via --insecure
+	if o.Insecure || o.CACert != "" {
+		tlsConfig, err := newTLSConfig(o)
+		if err != nil {
+			return nil, err
+		}
+		transport.TLSClientConfig = tlsConfig
 	}
 
 	if o.Proxy != "" {
@@ -69,6 +75,39 @@ func NewClient(o Options) (*http.Client, error) {
 	}
 
 	return &http.Client{Transport: transport}, nil
+}
+
+// newTLSConfig builds the TLS settings for --cacert and --insecure.
+//
+// --cacert appends the given PEM certificates to the platform/system roots, so
+// private CAs (corporate TLS interception, internal services) work without
+// disabling verification. On macOS the pool returned by SystemCertPool keeps its
+// "system pool" marker, which lets the platform verifier run first and the Go
+// verifier fall back to the appended roots; on Linux/BSD it is the bundle read
+// from the standard CA paths (or SSL_CERT_FILE/SSL_CERT_DIR).
+func newTLSConfig(o Options) (*tls.Config, error) {
+	config := &tls.Config{}
+
+	if o.CACert != "" {
+		pool, err := x509.SystemCertPool()
+		if err != nil || pool == nil {
+			pool = x509.NewCertPool()
+		}
+		pemData, err := os.ReadFile(o.CACert)
+		if err != nil {
+			return nil, fmt.Errorf("cannot read --cacert %s: %w", o.CACert, err)
+		}
+		if !pool.AppendCertsFromPEM(pemData) {
+			return nil, fmt.Errorf("--cacert %s contains no usable certificates", o.CACert)
+		}
+		config.RootCAs = pool
+	}
+
+	if o.Insecure {
+		// Opt-in via --insecure: skips chain and hostname verification.
+		config.InsecureSkipVerify = true //nolint:gosec // explicit user request
+	}
+	return config, nil
 }
 
 // validateHeaders rejects malformed `Key: Value` header flags.
