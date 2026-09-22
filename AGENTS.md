@@ -34,6 +34,11 @@ go test ./internal/core/watcher/
 
 # Run a single test function
 go test -run TestFunctionName ./internal/core/watcher/
+
+# Lint and end-to-end test the release installer
+# (requires shellcheck, curl, tar, python3)
+shellcheck install.sh scripts/install-smoke-test.sh
+./scripts/install-smoke-test.sh
 ```
 
 ## Lint Commands

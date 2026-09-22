@@ -141,6 +141,8 @@
 ├── web/
 │   └── shared/frontend/       # Shared theme/common partials injected into all frontends
 ├── install.sh                 # Quick install script for the tool itself
+├── scripts/
+│   └── install-smoke-test.sh  # End-to-end install.sh test (fake release + relative PREFIX)
 ├── go.mod / go.sum
 ├── renovate.json
 ├── AGENTS.md                  # Agent guidance for this project

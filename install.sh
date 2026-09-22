@@ -3,6 +3,9 @@ set -eu
 
 NAME="${NAME:-mu}"
 PREFIX="${PREFIX:-/usr/local/bin}"
+# BASE_URL is overridable so the installer can be exercised against a local
+# mirror; scripts/install-smoke-test.sh relies on it.
+BASE_URL="${BASE_URL:-https://github.com/yusiwen/myUtilities/releases/download}"
 VERSION="v1.3.9"
 
 fail() {
@@ -58,7 +61,7 @@ case "$os_name" in
 esac
 
 bin_name="${base_name}-${VERSION}"
-download_url="https://github.com/yusiwen/myUtilities/releases/download/${VERSION}/${bin_name}.${ext}"
+download_url="${BASE_URL}/${VERSION}/${bin_name}.${ext}"
 
 tmpdir=$(mktemp -d) || fail "Failed to create temp directory"
 
