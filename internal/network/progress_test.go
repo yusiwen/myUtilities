@@ -2,7 +2,9 @@ package network
 
 import (
 	"bytes"
+	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -153,4 +155,38 @@ func TestFormatSpeed(t *testing.T) {
 	if got := formatSpeed(5 << 20); got != "5.0 MiB/s" {
 		t.Errorf("formatSpeed(5MiB) = %q, want %q", got, "5.0 MiB/s")
 	}
+}
+
+// TestProgressRendererConcurrentUse guards the concurrency contract: the
+// downloader calls Update from its reporter goroutine while workers (retries)
+// and the resume-state flusher call Warn/Log from their own goroutines.
+// Run with -race, this fails on the unlocked renderer.
+func TestProgressRendererConcurrentUse(t *testing.T) {
+	r := &progressRenderer{out: io.Discard, isTTY: true, width: 80}
+
+	deadline := time.Now().Add(150 * time.Millisecond)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for time.Now().Before(deadline) {
+			r.Update(sampleSnapshot())
+		}
+	}()
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for time.Now().Before(deadline) {
+				r.Warn("retrying block %d", 7)
+				r.Log("info %d", 1)
+			}
+		}()
+	}
+	wg.Wait()
+	r.Close()
+
+	// A second Close is a no-op, not a double-clear.
+	r.Close()
 }

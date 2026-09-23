@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/morikuni/aec"
@@ -18,7 +19,12 @@ import (
 //
 // With verbose enabled it adds one line per connection. On a non-TTY it falls
 // back to at most one plain line per second, and --quiet disables it entirely.
+//
+// It is used from several goroutines: the downloader reports progress from its
+// reporter goroutine while workers (retries) and the resume-state flusher call
+// Warn/Log from their own. Every method therefore holds mu.
 type progressRenderer struct {
+	mu       sync.Mutex
 	out      io.Writer
 	isTTY    bool
 	color    bool
@@ -51,6 +57,8 @@ func terminalWidth(out *os.File) int {
 
 // Update implements downloader.Progress.
 func (r *progressRenderer) Update(s downloader.Snapshot) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.quiet || r.closed {
 		return
 	}
@@ -79,15 +87,21 @@ func (r *progressRenderer) Update(s downloader.Snapshot) {
 }
 
 // Log prints an informational line above the live region without corrupting it.
+// It may be called from any goroutine.
 func (r *progressRenderer) Log(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.quiet {
 		return
 	}
 	r.printAbove(fmt.Sprintf(format, args...))
 }
 
-// Warn prints a warning line above the live region (also when --quiet).
+// Warn prints a warning line above the live region (also when --quiet). It may
+// be called from any goroutine.
 func (r *progressRenderer) Warn(format string, args ...any) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.printAbove(r.paint("warning: ", aec.YellowF) + fmt.Sprintf(format, args...))
 }
 
@@ -101,6 +115,8 @@ func (r *progressRenderer) printAbove(msg string) {
 
 // Close clears the live region and restores the cursor.
 func (r *progressRenderer) Close() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.closed {
 		return
 	}

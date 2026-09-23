@@ -91,9 +91,13 @@ type Options struct {
 	HTTP1 bool
 	// SHA256 is the expected checksum; an empty string skips verification.
 	SHA256 string
-	// Progress receives live transfer snapshots (optional).
+	// Progress receives live transfer snapshots (optional). Update is called
+	// from the reporter goroutine only, so it never overlaps itself.
 	Progress Progress
 	// Infof and Warnf receive informational and warning messages (optional).
+	// Unlike Progress.Update they are called from worker and flusher
+	// goroutines too, so an implementation may be invoked concurrently and must
+	// guard its own state.
 	Infof func(format string, args ...any)
 	Warnf func(format string, args ...any)
 }
