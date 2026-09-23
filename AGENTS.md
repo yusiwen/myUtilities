@@ -364,7 +364,7 @@ The Makefile injects version info at build time into `internal/core/version`:
 
 ### Testing
 
-Minimal test coverage currently exists. Only `internal/core/watcher/watcher_test.go` contains tests.
+Tests live next to the code they cover (`*_test.go`); the downloader, runner, fleet, svcreg, metrics, scip and mock packages have the largest suites. CI builds only (`make all`), so run `go test ./...` locally; a few pty-based cases cannot run on macOS (see issue #36).
 
 ## Release Process
 
@@ -380,6 +380,6 @@ When making a new release:
 
 ### Notes
 
-- The project uses Go 1.24 (see `go.mod`)
+- The project uses Go 1.26.5 (see `go.mod`)
 - Cross-compilation is supported for multiple platforms (Linux, macOS, Windows, FreeBSD, MIPS)
 - The `docs/plan/tasks.md` file contains a backlog of improvement tasks

@@ -17,27 +17,27 @@ WOL settings are persisted in `~/.config/mu/wol-config.json`.
 
 ```bash
 # Set agent server URL (used by mu wol agent when no URL is given)
-mu wol set server http://192.168.1.100:8080
+mu wol config set server http://192.168.1.100:8080
 
 # Set network interface for the WOL server
-mu wol set interface br-lan
+mu wol config set interface br-lan
 
 # Set HTTP server port
-mu wol set port 8080
+mu wol config set port 8080
 
 # Set BoltDB file path
-mu wol set db-path ~/.config/mu/bolt.db
+mu wol config set db-path ~/.config/mu/bolt.db
 
 # Set API auth token
-mu wol set token my-secret-token
+mu wol config set token my-secret-token
 
 # Set hostname for agent registration
-mu wol set hostname my-machine
+mu wol config set hostname my-machine
 ```
 
 ## Agent Notifications
 
-Send boot/shutdown events or register this machine on the WOL server. The server URL can be given inline or set once via `mu wol set server` and omitted afterwards.
+Send boot/shutdown events or register this machine on the WOL server. The server URL can be given inline or set once via `mu wol config set server` and omitted afterwards.
 
 ```bash
 # Register this machine (stores hostname→MAC mapping)

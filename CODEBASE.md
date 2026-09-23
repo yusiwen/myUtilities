@@ -5,7 +5,7 @@
 `mu` (myUtilities) is a Go CLI tool built with the Kong CLI framework. It bundles multiple utility commands: GitHub release installer, mock servers, database proxy, command runner, Wake-on-LAN server, and Elasticsearch query UI.
 
 - **Module:** `github.com/yusiwen/myUtilities`
-- **Go:** 1.24
+- **Go:** 1.26.5
 - **CLI:** `github.com/alecthomas/kong` v1.12.1
 
 ---
@@ -21,7 +21,7 @@
 **Commands registered** (`cmd/mu/myutilities.go`):
 `install`, `mock`, `qrcode`, `serve`, `svcreg`, `proxy`, `run`, `wol`, `es`,
 `git`, `watch`, `k8s`, `jar`, `gateway`, `diff`, `network` (dns/dig/whois/http/download/serve), `misc`, `crypto`,
-`ask`, `budget`, `metrics`, `scip`, `log`, `completion`, `termshot`
+`ask`, `budget`, `metrics`, `scip`, `fleet`, `log`, `completion`, `termshot`
 
 ---
 
@@ -91,20 +91,18 @@
 │   │   ├── clipboard_darwin.go#  SaveToClipboard via osascript (macOS)
 │   │   ├── clipboard_other.go #  SaveToClipboard stub (non-darwin)
 │   │   └── fonts/             #  Embedded Hack-{Regular,Bold,Italic,BoldItalic}.ttf + monochrome NotoEmoji.ttf (Apache 2.0) + NotoEmoji-LICENSE.txt
-│   ├── installer/             # GitHub release installer
+│   ├── installer/             # GitHub release installer (client/search live in internal/core/installer)
 │   │   ├── options.go         #  Flags: repo, output, token, os/arch override
 │   │   ├── command.go         #  Run() — fetches releases, generates shell install scripts
-│   │   ├── search.go          #  imFeelingLuck() — auto-discovers repo via DuckDuckGo/Google
-│   │   ├── strings.go         #  Regex helpers: getOS, getArch, getFileExt
+│   │   ├── set.go             #  `mu set installer` — store/clear the GitHub token
 │   │   └── templates/
 │   │       ├── templates.go   #  Embeds install.sh.tmpl
 │   │       └── install.sh.tmpl  #  Shell script template for curl/untar install
-│   ├── mock/                  # Mock servers for testing
-│   │   ├── options.go         #  Subcommands: file-server, mock-server, oauth-server
-│   │   ├── fileserver.go      #  File upload server (multipart form)
-│   │   ├── mockserver.go      #  HTTP mock with CSV or random generated data (chaff)
-│   │   ├── oauthserver.go     #  Delegates to mock/oauth/ package
-│   │   └── response.go        #  Response/Status structs
+│   ├── mock/                  # Mock server CLI (the servers live in internal/core/mock)
+│   │   ├── options.go         #  Subcommands: file-server, mock-server, oauth-server, dynamic-server
+│   │   ├── command.go         #  Run() — starts the selected server
+│   │   ├── embed.go           #  Embeds the dynamic server's admin frontend
+│   │   └── oauth/             #  Mock OAuth2 authorisation server (templates, static assets)
 │   ├── proxy/                 # Database proxy CLI
 │   │   ├── options.go         #  Flags: host/port, db routes, health-check params
 │   │   └── dbproxy.go         #  Run() — parses options, starts OracleProxy
@@ -122,11 +120,10 @@
 │   │   │                      #  Agent: boot/shutdown/register with retry backoff
 │   │   │                      #  Interfaces: list network interfaces with WOL suitability
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
-│   ├── es/                    # Elasticsearch query tool
+│   ├── es/                    # Elasticsearch query CLI (client/config live in internal/core/es)
 │   │   ├── options.go         #  Subcommands: set (host/user/password), serve
 │   │   ├── command.go         #  Serve: HTTP server with /api/status, /api/indices, /api/search, /api/config
-│   │   ├── client.go          #  go-elasticsearch client: newESClient, esPing, esListIndices, esSearch
-│   │   ├── config.go          #  ESConfig, load/save JSON config, maskedPassword
+│   │   ├── set.go             #  `mu set es` — persist the connection settings (0600)
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
 │   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  termshot/  watch/
