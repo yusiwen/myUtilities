@@ -65,15 +65,22 @@ var mgr = NewServerManager()
 
 var stateDir string
 
-func adminStatePath() string {
+// dataRoot is the only directory the admin API may write to: the configured
+// config dir when one was given, otherwise ~/.config/mu. It anchors the state
+// file, the serve log and every client-supplied db path.
+func dataRoot() string {
 	if stateDir != "" {
-		return filepath.Join(stateDir, "svcreg-admin.json")
+		return stateDir
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "/tmp/svcreg-admin.json"
+		return "/tmp"
 	}
-	return filepath.Join(home, ".config", "mu", "svcreg-admin.json")
+	return filepath.Join(home, ".config", "mu")
+}
+
+func adminStatePath() string {
+	return filepath.Join(dataRoot(), "svcreg-admin.json")
 }
 
 func NewServerManager() *ServerManager {
@@ -153,8 +160,61 @@ func (m *ServerManager) saveClearedState() {
 	os.WriteFile(m.pidFile, data, 0600)
 }
 
+// logPath is a fixed location under the data root. It is deliberately not
+// derived from request data, so a caller cannot choose where the server writes.
 func (m *ServerManager) logPath() string {
-	return expandTilde(m.config.DBPath) + ".log"
+	return filepath.Join(dataRoot(), "svcreg-serve.log")
+}
+
+// resolveDBPath validates a client-supplied database path: a relative path is
+// taken as relative to the data root, and the result must stay inside the data
+// root, so the admin API cannot create or open a database anywhere on the
+// filesystem.
+func resolveDBPath(raw string) (string, error) {
+	root, err := filepath.Abs(dataRoot())
+	if err != nil {
+		return "", fmt.Errorf("invalid data dir: %w", err)
+	}
+	p := expandTilde(raw)
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(root, p)
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", fmt.Errorf("invalid dbPath %q: %w", raw, err)
+	}
+	rel, err := filepath.Rel(root, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("dbPath %q must be inside %s", raw, root)
+	}
+	return abs, nil
+}
+
+// validateAdminConfig rejects request values that are unsafe to pass to the
+// child process.
+func validateAdminConfig(cfg *adminConfig) error {
+	if cfg.Port < 1 || cfg.Port > 65535 {
+		return fmt.Errorf("port %d out of range", cfg.Port)
+	}
+	if cfg.Host == "" || strings.HasPrefix(cfg.Host, "-") {
+		return fmt.Errorf("invalid host %q", cfg.Host)
+	}
+	// Only literal addresses and plain hostnames: the value is passed to the
+	// child as an argv element, so anything exotic is unnecessary.
+	for _, r := range cfg.Host {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.', r == ':', r == '-', r == '_':
+		default:
+			return fmt.Errorf("invalid host %q", cfg.Host)
+		}
+	}
+	dbPath, err := resolveDBPath(cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	cfg.DBPath = dbPath
+	return nil
 }
 
 func (m *ServerManager) readLogs() []string {
@@ -209,8 +269,8 @@ func (m *ServerManager) Start(cfg adminConfig) error {
 
 	cmd := exec.Command(exe, args...)
 
-	logPath := expandTilde(cfg.DBPath) + ".log"
-	lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	logPath := m.logPath()
+	lf, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("cannot open log file %s: %w", logPath, err)
 	}
@@ -272,27 +332,59 @@ func (m *ServerManager) Stop() error {
 	return nil
 }
 
-// RegisterAdminAPI registers the admin lifecycle endpoints.
+// adminOnly restricts a handler to requests that arrive over the loopback
+// interface.
+//
+// The admin API controls the local svcreg subprocess (start/stop, db path, port,
+// log file) and is also proxied by the gateway, so a remote caller must never be
+// able to drive it. svcreg has no token concept, and the dashboard is used from
+// the same host as the server, so loopback is the boundary.
+func adminOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopbackRequest(r) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": "the svcreg admin API is only available from the local host",
+			})
+			return
+		}
+		next(w, r)
+	}
+}
+
+// isLoopbackRequest reports whether the request came from the local host.
+func isLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// RegisterAdminAPI registers the admin lifecycle endpoints. Every route is
+// loopback-only (see adminOnly).
 func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 	if mgr.running && mgr.config.Port > 0 {
 		client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
 	}
-	mux.HandleFunc("/api/svcreg/admin/config", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/svcreg/admin/config", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"defaultPort":   30100,
 			"defaultHost":   "0.0.0.0",
 			"defaultDBPath": "~/.config/mu/svcreg.db",
 		})
-	})
-	mux.HandleFunc("/api/svcreg/admin/status", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/svcreg/admin/status", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if mgr.running {
 			client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
 		}
 		json.NewEncoder(w).Encode(mgr.Status())
-	})
-	mux.HandleFunc("/api/svcreg/admin/start", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/svcreg/admin/start", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			WriteProxyError(w, fmt.Errorf("POST required"))
 			return
@@ -311,6 +403,10 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 		if cfg.DBPath == "" {
 			cfg.DBPath = "~/.config/mu/svcreg.db"
 		}
+		if err := validateAdminConfig(&cfg); err != nil {
+			WriteProxyError(w, err)
+			return
+		}
 		if err := mgr.Start(cfg); err != nil {
 			WriteProxyError(w, err)
 			return
@@ -318,8 +414,8 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 		client.Server = fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
-	})
-	mux.HandleFunc("/api/svcreg/admin/stop", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/svcreg/admin/stop", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			WriteProxyError(w, fmt.Errorf("POST required"))
 			return
@@ -331,5 +427,5 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 		client.Server = "http://127.0.0.1:30100"
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
-	})
+	}))
 }

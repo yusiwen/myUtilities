@@ -43,6 +43,20 @@ The web frontend (served at `serve --web` or standalone `frontend`) provides fou
 
 The Admin tab persists server state across restarts via PID file recovery.
 
+### Admin API security
+
+The admin endpoints (`/api/svcreg/admin/*`) drive a **local** subprocess — start/stop,
+database path, listen address, log file — so they are restricted to the loopback
+interface: requests from any other address receive `403`. The dashboard keeps working
+as long as you open it on the machine that runs the server (`mu svcreg serve --web`, or
+the gateway on the same host).
+
+The path sent to `start` must resolve inside the data root — the config directory
+(`--config-dir` for the gateway, `~/.config/mu` by default); a relative path is taken as
+relative to it and a path that escapes it is rejected with `400`-style error JSON. The
+serve log is always written to `<data root>/svcreg-serve.log`, never next to a
+caller-supplied path.
+
 ## Configuration
 
 Server settings persisted in `~/.config/mu/svcreg-config.json`:
