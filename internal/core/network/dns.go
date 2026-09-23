@@ -40,7 +40,9 @@ func LookupDNS(host, recordType string) ([]DNSResult, int64, error) {
 }
 
 func lookupByType(host, rtype string) ([]DNSResult, error) {
-	c := dns.Client{SingleInflight: true}
+	// SingleInflight is a documented no-op upstream, so in-flight query
+	// deduplication would have to be implemented here if it is ever needed.
+	var c dns.Client
 	m := dns.Msg{}
 	m.SetQuestion(dns.Fqdn(host), dns.StringToType[rtype])
 
@@ -88,7 +90,9 @@ func Dig(host, rtype, ns string) (string, error) {
 		ns = ns + ":53"
 	}
 
-	c := dns.Client{SingleInflight: true}
+	// SingleInflight is a documented no-op upstream, so in-flight query
+	// deduplication would have to be implemented here if it is ever needed.
+	var c dns.Client
 	m := dns.Msg{}
 	m.SetQuestion(dns.Fqdn(host), dns.StringToType[rtype])
 

@@ -121,10 +121,6 @@ func (ix *Index) symbolsAt(path string, line int) []string {
 }
 
 // OccurrencesAt returns all locations of the given symbol.
-func (ix *Index) occurrences(symbol string) []Location {
-	return ix.bySymbol[symbol]
-}
-
 // FindDefinition returns the definition locations for the symbol at the
 // given path/line (1-based). All distinct symbols on the line are resolved.
 func (ix *Index) FindDefinition(path string, line int) []Location {
@@ -329,16 +325,22 @@ func occLines(occ *scip.Occurrence) (startLine, endLine int, startChar int) {
 			return int(mr.StartLine), int(mr.EndLine), int(mr.StartCharacter)
 		}
 	}
-	if len(occ.Range) >= 3 {
-		sl := int(occ.Range[0])
+	if r := legacyRange(occ); len(r) >= 3 {
+		sl := int(r[0])
 		el := sl
-		if len(occ.Range) >= 4 {
-			el = int(occ.Range[2])
+		if len(r) >= 4 {
+			el = int(r[2])
 		}
-		return sl, el, int(occ.Range[1])
+		return sl, el, int(r[1])
 	}
 	return 0, 0, 0
 }
+
+// legacyRange returns the deprecated Range field: older SCIP indexes populate
+// only that field. Remove this helper once the bindings drop it.
+//
+//lint:ignore SA1019 the legacy field is the only range source for old indexes
+func legacyRange(occ *scip.Occurrence) []int32 { return occ.Range }
 
 func normalizePath(p string) string {
 	p = strings.ReplaceAll(p, "\\", "/")

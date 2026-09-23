@@ -68,7 +68,7 @@ func (b *BraveSearch) Search(ctx context.Context, query string, count int) ([]Re
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Brave API error (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("request to the Brave API failed (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var braveResp braveResponse

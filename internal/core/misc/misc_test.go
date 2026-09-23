@@ -116,7 +116,7 @@ func TestTrackersCache(t *testing.T) {
 	}
 
 	// Second call hits the cache without refetching.
-	got, err = c.Get(false)
+	_, err = c.Get(false)
 	if err != nil || calls != 1 {
 		t.Fatalf("cached Get: calls=%d err=%v", calls, err)
 	}

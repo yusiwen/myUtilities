@@ -322,7 +322,7 @@ func (r *CommandRunner) runCommands() {
 				break
 			}
 			elapsed := time.Since(r.interactiveStart)
-			fmt.Printf(ANSI_MOVE_UP)
+			fmt.Print(ANSI_MOVE_UP)
 			fmt.Print(ANSI_CLEAR_LINE)
 			fmt.Println(applyColor(fmt.Sprintf("Executing [%s]... ✓ %s", cmd.Name, formatElapsed(elapsed)), successColor))
 			continue

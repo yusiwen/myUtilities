@@ -18,10 +18,13 @@ func RegisterProxyAPI(mux *http.ServeMux, serverURL string) {
 	}
 
 	rp := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = base.Scheme
-			req.URL.Host = base.Host
-			req.Host = base.Host
+		// Rewrite replaces Director, which is deprecated since Go 1.26. The
+		// outbound request gets the backend scheme/host while keeping the
+		// incoming path, which is what the Director hook used to do.
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme = base.Scheme
+			pr.Out.URL.Host = base.Host
+			pr.Out.Host = base.Host
 		},
 	}
 

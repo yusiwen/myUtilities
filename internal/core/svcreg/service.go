@@ -23,7 +23,6 @@ type svcHandler struct {
 
 	mu       sync.Mutex
 	eventBus map[string][]*watchSubscriber
-	revision int64
 }
 
 type watchSubscriber struct {
@@ -66,13 +65,6 @@ func (h *svcHandler) leaseLoop() {
 			})
 		}
 	}
-}
-
-func (h *svcHandler) nextRevision() int64 {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.revision++
-	return h.revision
 }
 
 func (h *svcHandler) publish(serviceId string, evt *WatchInstanceResponse) {

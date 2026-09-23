@@ -322,12 +322,12 @@ func (a *ReviewAgent) Run() (*AgentResult, error) {
 			a.progressf("  %s(%s)", tc.Function.Name, args)
 
 			key := tc.Function.Name + "\x00" + tc.Function.Arguments
-			result, dup := seen[key]
-			if !dup {
+			var result string
+			if _, dup := seen[key]; dup {
+				result = "note: this exact call was already executed in this step; its result is above and unchanged."
+			} else {
 				result = a.executeTool(tc)
 				seen[key] = result
-			} else {
-				result = "note: this exact call was already executed in this step; its result is above and unchanged."
 			}
 			a.messages = append(a.messages, openai.Message{
 				Role:       "tool",

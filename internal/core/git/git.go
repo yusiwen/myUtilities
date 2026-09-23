@@ -74,7 +74,7 @@ func noChangesErr(args []string) error {
 	untracked := GetUntrackedFiles()
 	if len(untracked) == 0 {
 		if n := stagedChangesCount(); n > 0 {
-			return fmt.Errorf("no unstaged changes to review: %d file(s) are staged. Use 'mu git review --staged' to review them, or 'git reset' to unstage.", n)
+			return fmt.Errorf("no unstaged changes to review: %d file(s) are staged. Use 'mu git review --staged' to review them, or 'git reset' to unstage", n)
 		}
 		return errors.New("no changes to review")
 	}

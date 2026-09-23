@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 )
@@ -29,14 +28,6 @@ func defaultConfigPath() (string, error) {
 		return "", fmt.Errorf("unable to create config directory: %w", err)
 	}
 	return filepath.Join(dir, "watch.json"), nil
-}
-
-func resolvePath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }
 
 func loadConfig(configPath string) (*Config, error) {

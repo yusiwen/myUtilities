@@ -49,7 +49,7 @@ func (m MultiProvider) MarshalJSON() ([]byte, error) {
 
 // Names returns the list of provider names.
 func (m MultiProvider) Names() []string {
-	if m == nil || len(m) == 0 {
+	if len(m) == 0 {
 		return nil
 	}
 	return []string(m)

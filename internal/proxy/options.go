@@ -3,7 +3,6 @@ package proxy
 type DBProxyOptions struct {
 	Host           string   `help:"Host to listen on." default:"localhost"`
 	Port           int      `help:"Port to listen on." default:"1521"`
-	Mode           string   `help:"Mode of database" default:"oracle"`
 	RouteName      []string `help:"Name of route" default:""`
 	RoutePriority  []int    `help:"Priority of route" default:"0"`
 	DbHost         []string `help:"Host of database" default:""`

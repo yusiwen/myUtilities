@@ -167,7 +167,6 @@ func (s *MockServer) queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "%s", res)
-	return
 }
 
 func fileNameWithoutExtension(fileName string) string {

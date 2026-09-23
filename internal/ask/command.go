@@ -185,7 +185,7 @@ func (o *Options) Run() error {
 	withSearch := o.Search
 	if withSearch {
 		if cfg.SearchAPIKey == "" {
-			return fmt.Errorf("Brave Search API key is required for --search. Set it via:\n" +
+			return fmt.Errorf("missing Brave Search API key for --search; set it via:\n" +
 				"  - BRAVE_SEARCH_API_KEY environment variable\n" +
 				"  - --search-api-key flag\n" +
 				"  - search_api_key in ~/.config/mu/ask-config.json")

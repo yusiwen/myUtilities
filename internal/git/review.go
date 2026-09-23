@@ -98,7 +98,7 @@ func (o *ReviewOptions) Run() error {
 				"To review this range correctly:\n"+
 				"  git checkout %s\n"+
 				"  mu git review --base %s\n"+
-				"or drop --target to review up to the current HEAD.",
+				"or drop --target to review up to the current HEAD",
 				o.Target, shortHash(targetHash), shortHash(headHash), o.Target, o.Base)
 		}
 		if coregit.IsDirty() {
@@ -433,39 +433,6 @@ func buildReviewSystemPrompt(lang string) string {
 	}
 }
 
-func buildReviewUserPrompt(strategy string, diff *coregit.DiffResult, userContext string) string {
-	var sb strings.Builder
-
-	sb.WriteString("Please review the following code changes.\n\n")
-
-	if userContext != "" {
-		sb.WriteString("Additional context from the author:\n")
-		sb.WriteString(userContext)
-		sb.WriteString("\n\n")
-	}
-
-	switch strategy {
-	case "summary":
-		sb.WriteString("Since the diff is large, review the following summary and stat, focusing on the most impactful changes:\n\n")
-		sb.WriteString("```\n")
-		sb.WriteString(term.StripANSI(diff.Stat))
-		sb.WriteString("\n```")
-	case "medium":
-		sb.WriteString("Diff stat:\n\n```\n")
-		sb.WriteString(term.StripANSI(diff.Stat))
-		sb.WriteString("\n```\n\n")
-		sb.WriteString("Partial diff (truncated):\n\n```diff\n")
-		sb.WriteString(coregit.Truncate(diff.Diff, 3000))
-		sb.WriteString("\n```")
-	default:
-		sb.WriteString("```diff\n")
-		sb.WriteString(diff.Diff)
-		sb.WriteString("\n```")
-	}
-
-	return sb.String()
-}
-
 // shortHash returns the first 8 characters of a full commit hash.
 func shortHash(h string) string {
 	if len(h) > 8 {
@@ -508,15 +475,4 @@ func pagerCommand() string {
 		return "more"
 	}
 	return ""
-}
-
-func resolveReviewStrategy(diffLen int) string {
-	switch {
-	case diffLen <= 6000:
-		return "full"
-	case diffLen <= 16000:
-		return "medium"
-	default:
-		return "summary"
-	}
 }

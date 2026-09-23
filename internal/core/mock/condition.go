@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -189,22 +188,4 @@ func mergeHeaders(base, override map[string]string) map[string]string {
 		return nil
 	}
 	return h
-}
-
-func fmtCondition(expr string) string {
-	cond := parseCondition(expr)
-	if cond == nil {
-		return ""
-	}
-	switch cond.Operator {
-	case "":
-		return fmt.Sprintf("{{%s}} exists", cond.LeftTemplate)
-	case "!=":
-		if cond.RightValue == "" {
-			return fmt.Sprintf("{{%s}} exists", cond.LeftTemplate)
-		}
-		return fmt.Sprintf("{{%s}} != '%s'", cond.LeftTemplate, cond.RightValue)
-	default:
-		return fmt.Sprintf("{{%s}} %s '%s'", cond.LeftTemplate, cond.Operator, cond.RightValue)
-	}
 }
