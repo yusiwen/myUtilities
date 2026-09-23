@@ -11,6 +11,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -79,6 +80,13 @@ type AuthRequest struct {
 
 // AuthServer holds all state for the OAuth2 mock server.
 type AuthServer struct {
+	// mu serializes the HTTP handlers. Every map below is read and written
+	// from handler goroutines, and Go's runtime aborts the process on a
+	// concurrent map write, so the handlers are serialized by SetupRoutes.
+	// The handlers only do local work (templates, JWT signing), so the coarse
+	// lock costs nothing that matters for a mock.
+	mu sync.Mutex
+
 	clients      map[string]*Client
 	users        map[string]*User
 	authCodes    map[string]*AuthorizationCode
@@ -166,15 +174,28 @@ func parseTemplates() (*template.Template, error) {
 }
 
 // SetupRoutes registers HTTP route handlers on the given mux.
+//
+// Every stateful handler runs under s.mu (see AuthServer.mu): the server keeps
+// its state in plain maps and Go aborts the process on concurrent map writes,
+// so serializing the handlers removes that class of crash outright. The static
+// file server touches no state and is deliberately left unlocked.
 func (s *AuthServer) SetupRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/", s.homeHandler)
-	mux.HandleFunc("/clients", s.clientsHandler)
-	mux.HandleFunc("/login", s.loginHandler)
-	mux.HandleFunc("/auth", s.authHandler)
-	mux.HandleFunc("/authorize", s.authorizeHandler)
-	mux.HandleFunc("/token", s.tokenHandler)
-	mux.HandleFunc("/userinfo", s.userInfoHandler)
-	mux.HandleFunc("/verify", s.verifyTokenHandler)
+	handle := func(h http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			h(w, r)
+		}
+	}
+
+	mux.HandleFunc("/", handle(s.homeHandler))
+	mux.HandleFunc("/clients", handle(s.clientsHandler))
+	mux.HandleFunc("/login", handle(s.loginHandler))
+	mux.HandleFunc("/auth", handle(s.authHandler))
+	mux.HandleFunc("/authorize", handle(s.authorizeHandler))
+	mux.HandleFunc("/token", handle(s.tokenHandler))
+	mux.HandleFunc("/userinfo", handle(s.userInfoHandler))
+	mux.HandleFunc("/verify", handle(s.verifyTokenHandler))
 
 	// Serve static files
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(s.staticFS)))
