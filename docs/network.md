@@ -130,8 +130,14 @@ big.iso  45.2%  ████████████░░░░░░░░  45
   in `<output>.part`; the final file is created only after the transfer (and the
   optional checksum) succeed. Re-running the same command continues where it
   stopped, skipping completed blocks. Resume is refused (with a warning and a
-  fresh start) when the remote size/`ETag`/`Last-Modified` changed; the stale
-  partial is kept as `<output>.part.old`.
+  fresh start) when the remote size/`ETag`/`Last-Modified` changed, and also when
+  the partial file no longer matches the recorded blocks — either shorter than
+  the highest completed block (a truncated or sparse-unaware copy) or larger than
+  the remote size (stale bytes appended). Those cases would otherwise publish a
+  file with zero-filled holes or trailing junk, so the download restarts from
+  scratch. The stale partial is kept as `<output>.part.old`. Completed blocks are
+  only recorded after the payload is flushed to disk, so a crash cannot leave
+  blocks marked done whose bytes never landed.
 - **Servers without range support** — if the server ignores `Range` requests, the
   downloader falls back to a single connection; such transfers cannot be resumed.
 - **Interrupt** — Ctrl-C flushes the resume state, keeps the partial file, prints

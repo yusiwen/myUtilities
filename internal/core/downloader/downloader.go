@@ -279,6 +279,30 @@ func (d *downloader) stateUsable(st *State, partSize int64) (reason string, ok b
 	if st.Size != d.info.Size {
 		return fmt.Sprintf("remote size changed (%d -> %d)", st.Size, d.info.Size), false
 	}
+	// The partial file must be able to hold every block the state claims is
+	// done. Resuming from a truncated (or otherwise shortened) partial would
+	// re-create it with zeros and publish a silently corrupt file.
+	if st.Size > 0 && st.BlockSize > 0 {
+		total := (st.Size + st.BlockSize - 1) / st.BlockSize
+		maxDone := int64(-1)
+		for _, b := range st.DoneBlocks {
+			if b >= 0 && b < total && b > maxDone {
+				maxDone = b
+			}
+		}
+		if maxDone >= 0 {
+			required := (maxDone + 1) * st.BlockSize
+			if required > st.Size {
+				required = st.Size
+			}
+			if partSize < required {
+				return fmt.Sprintf("partial file is shorter than its recorded blocks (%d < %d bytes)", partSize, required), false
+			}
+		}
+	}
+	if st.Size > 0 && partSize > st.Size {
+		return fmt.Sprintf("partial file is larger than the remote size (%d > %d bytes)", partSize, st.Size), false
+	}
 	if st.URL != "" && d.opts.URL != "" && st.URL != d.opts.URL {
 		return "URL changed", false
 	}
@@ -876,6 +900,15 @@ func (d *downloader) saveState(force bool) error {
 	defer d.stateMu.Unlock()
 	if !force && slices.Equal(done, d.stateSaved) {
 		return nil
+	}
+	// Flush the data before recording the blocks as complete. The state file is
+	// fsynced, so without this a crash could leave blocks marked done whose
+	// bytes never reached disk — the resumed download would then skip them and
+	// publish a file with holes.
+	if d.writer != nil {
+		if err := d.writer.Sync(); err != nil {
+			return fmt.Errorf("sync data before saving resume state: %w", err)
+		}
 	}
 	now := time.Now()
 	st := &State{
