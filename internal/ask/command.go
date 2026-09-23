@@ -63,6 +63,7 @@ type Options struct {
 	SearchAPIKey string `help:"Brave Search API key." env:"BRAVE_SEARCH_API_KEY"`
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	Question     string `arg:"" name:"question" help:"Question to ask." optional:""`
+	Config       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func buildSystemPrompt(lang string, withSearch bool) string {
@@ -157,7 +158,7 @@ func askWithProvider(cfg *llm.Config, p *llm.Provider, sysPrompt, userPrompt str
 }
 
 func (o *Options) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfigFrom(o.Config, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

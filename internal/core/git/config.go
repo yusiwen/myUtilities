@@ -82,19 +82,34 @@ func oldCommitConfigPath() (string, error) {
 }
 
 func LoadGitConfig() (*GitConfig, error) {
-	gc := &GitConfig{}
-
 	path, err := configPath()
 	if err != nil {
 		return nil, err
 	}
+	return loadGitConfigFile(path, true)
+}
+
+// LoadGitConfigFrom loads from path when it is non-empty, otherwise from the
+// default ~/.config/mu/git-config.json.
+func LoadGitConfigFrom(path string) (*GitConfig, error) {
+	if path == "" {
+		return LoadGitConfig()
+	}
+	return loadGitConfigFile(path, false)
+}
+
+// loadGitConfigFile reads one git config file. migrate is only meaningful for
+// the default location, where the legacy commit-config.json is folded in.
+func loadGitConfigFile(path string, migrate bool) (*GitConfig, error) {
+	gc := &GitConfig{}
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			gc, migrErr := migrateFromOldConfig()
-			if migrErr != nil {
-				return &GitConfig{}, nil
+			if migrate {
+				if migrated, migrErr := migrateFromOldConfig(); migrErr == nil {
+					return migrated, nil
+				}
 			}
 			return gc, nil
 		}
@@ -171,6 +186,24 @@ func SaveGitConfig(gc *GitConfig) error {
 	path, err := configPath()
 	if err != nil {
 		return err
+	}
+	return saveGitConfigFile(path, gc)
+}
+
+// SaveGitConfigTo saves to path when it is non-empty, otherwise to the default
+// ~/.config/mu/git-config.json.
+func SaveGitConfigTo(path string, gc *GitConfig) error {
+	if path == "" {
+		return SaveGitConfig(gc)
+	}
+	return saveGitConfigFile(path, gc)
+}
+
+func saveGitConfigFile(path string, gc *GitConfig) error {
+	if dir := filepath.Dir(path); dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("unable to create config directory: %w", err)
+		}
 	}
 
 	data, err := json.MarshalIndent(gc, "", "  ")

@@ -56,10 +56,11 @@ type ProviderAddCmd struct {
 	BaseURL string `help:"Base URL of the AI service." required:""`
 	APIKey  string `help:"API key for the AI service." required:""`
 	Model   string `help:"Model name (e.g. gpt-4o-mini, deepseek-chat)."`
+	Path    string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
 }
 
 func (o *ProviderAddCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Path)
 	if err != nil {
 		return err
 	}
@@ -76,15 +77,16 @@ func (o *ProviderAddCmd) Run() error {
 		APIKey:  o.APIKey,
 		Model:   o.Model,
 	})
-	return coregit.SaveGitConfig(gc)
+	return coregit.SaveGitConfigTo(o.Path, gc)
 }
 
 type ProviderRmCmd struct {
 	Name string `help:"Provider name to remove." required:""`
+	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
 }
 
 func (o *ProviderRmCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Path)
 	if err != nil {
 		return err
 	}
@@ -107,13 +109,15 @@ func (o *ProviderRmCmd) Run() error {
 	}
 
 	gc.Providers = append(gc.Providers[:idx], gc.Providers[idx+1:]...)
-	return coregit.SaveGitConfig(gc)
+	return coregit.SaveGitConfigTo(o.Path, gc)
 }
 
-type ProviderListCmd struct{}
+type ProviderListCmd struct {
+	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
+}
 
 func (o *ProviderListCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Path)
 	if err != nil {
 		return err
 	}
@@ -146,6 +150,7 @@ func (o *ProviderListCmd) Run() error {
 type CommitModuleCmd struct {
 	Provider string `help:"Provider name(s) to use, comma-separated for fallback (e.g. 'fast,advanced')."`
 	Lang     string `help:"Output language (en, cn)."`
+	Path     string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
 }
 
 func validLang(lang string) bool {
@@ -153,7 +158,7 @@ func validLang(lang string) bool {
 }
 
 func (o *CommitModuleCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Path)
 	if err != nil {
 		return err
 	}
@@ -175,7 +180,7 @@ func (o *CommitModuleCmd) Run() error {
 		}
 		gc.Commit.Lang = o.Lang
 	}
-	return coregit.SaveGitConfig(gc)
+	return coregit.SaveGitConfigTo(o.Path, gc)
 }
 
 type ReviewModuleCmd struct {
@@ -184,10 +189,11 @@ type ReviewModuleCmd struct {
 	ReviewsDir    string `help:"Directory to store review reports." name:"reviews-dir"`
 	ScipVersion   string `help:"Set SCIP indexer version override as lang=tag (e.g. go=v0.3.0)." name:"scip-version"`
 	ScipVersionRm string `help:"Remove SCIP version override for a language (e.g. go)." name:"scip-version-rm"`
+	Path          string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
 }
 
 func (o *ReviewModuleCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Path)
 	if err != nil {
 		return err
 	}
@@ -227,5 +233,5 @@ func (o *ReviewModuleCmd) Run() error {
 			delete(gc.Review.Scip.Versions, o.ScipVersionRm)
 		}
 	}
-	return coregit.SaveGitConfig(gc)
+	return coregit.SaveGitConfigTo(o.Path, gc)
 }

@@ -173,7 +173,9 @@ companion SHA256 checksum, so it is downloaded without checksum verification. `r
 builds its SCIP index via load-bearing inference; macro/generic-heavy code may resolve less
 precisely than with `scip-go`.
 
-Configuration lives in `git-config.json` under the `review.scip` key:
+Configuration lives in `git-config.json` under the `review.scip` key (use
+`--config <path>` on `mu set git …`, `mu git commit` and `mu git review` to point
+at a different file):
 
 ```json
 {

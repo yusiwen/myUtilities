@@ -118,3 +118,34 @@ func TestSaveLoadPathConsistency(t *testing.T) {
 		t.Fatalf("expected migrated default provider, got %#v", cfg2.Providers)
 	}
 }
+
+// TestLoadConfigFromRoundTrip covers the --config plumbing for the ask/git
+// providers: a custom path is written and read back, and SaveConfigTo creates
+// the parent directory with 0600.
+func TestLoadConfigFromRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "custom", "ask-config.json")
+	want := &Config{
+		BaseURL:   "https://example.invalid/v1",
+		Model:     "m",
+		Providers: []Provider{{Name: "p1", BaseURL: "https://example.invalid/v1", APIKey: "k"}},
+	}
+	if err := SaveConfigTo(path, "ask", want); err != nil {
+		t.Fatalf("SaveConfigTo: %v", err)
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if got := fi.Mode().Perm(); got != 0o600 {
+		t.Fatalf("mode = %o, want 600", got)
+	}
+
+	got, err := LoadConfigFrom(path, "ask")
+	if err != nil {
+		t.Fatalf("LoadConfigFrom: %v", err)
+	}
+	if got.BaseURL != want.BaseURL || len(got.Providers) != 1 || got.Providers[0].Name != "p1" {
+		t.Fatalf("round-trip mismatch: %+v", got)
+	}
+}

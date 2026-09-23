@@ -126,6 +126,25 @@ func LoadConfig(appName string) (*Config, error) {
 	return LoadConfigFromPath(path)
 }
 
+// LoadConfigFrom loads from path when it is non-empty, otherwise from the
+// default location for appName. It exists so a CLI --config flag can be threaded
+// through without every caller repeating the empty-path check.
+func LoadConfigFrom(path, appName string) (*Config, error) {
+	if path != "" {
+		return LoadConfigFromPath(path)
+	}
+	return LoadConfig(appName)
+}
+
+// SaveConfigTo saves to path when it is non-empty, otherwise to the default
+// location for appName.
+func SaveConfigTo(path, appName string, cfg *Config) error {
+	if path != "" {
+		return SaveConfigToPath(path, cfg)
+	}
+	return SaveConfig(appName, cfg)
+}
+
 // LoadConfigFromPath loads config from an explicit path instead of the default
 // ~/.config/mu/<app>-config.json location. A missing file yields the defaults.
 func LoadConfigFromPath(path string) (*Config, error) {

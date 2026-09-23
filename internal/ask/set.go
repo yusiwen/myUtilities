@@ -107,10 +107,11 @@ type ProviderAddCmd struct {
 	BaseURL string `help:"Base URL of the AI service." required:""`
 	APIKey  string `help:"API key for the AI service." required:""`
 	Model   string `help:"Model name (e.g. gpt-4o-mini, deepseek-chat)."`
+	Path    string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func (o *ProviderAddCmd) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfigFrom(o.Path, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -126,7 +127,7 @@ func (o *ProviderAddCmd) Run() error {
 		APIKey:  o.APIKey,
 		Model:   o.Model,
 	})
-	if err := llm.SaveConfig("ask", cfg); err != nil {
+	if err := llm.SaveConfigTo(o.Path, "ask", cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 	fmt.Printf("Added provider %q\n", o.Name)
@@ -135,10 +136,11 @@ func (o *ProviderAddCmd) Run() error {
 
 type ProviderSetCmd struct {
 	Names string `arg:"" help:"Provider name(s), comma-separated for fallback (e.g. 'default,backup')."`
+	Path  string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func (o *ProviderSetCmd) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfigFrom(o.Path, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -153,7 +155,7 @@ func (o *ProviderSetCmd) Run() error {
 		}
 	}
 	cfg.Provider = names
-	if err := llm.SaveConfig("ask", cfg); err != nil {
+	if err := llm.SaveConfigTo(o.Path, "ask", cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 	fmt.Printf("ask module → provider(s): %s\n", strings.Join(names, ", "))
@@ -162,10 +164,11 @@ func (o *ProviderSetCmd) Run() error {
 
 type ProviderRmCmd struct {
 	Name string `arg:"" help:"Provider name to remove."`
+	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
 }
 
 func (o *ProviderRmCmd) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfigFrom(o.Path, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -187,17 +190,19 @@ func (o *ProviderRmCmd) Run() error {
 	}
 
 	cfg.Providers = append(cfg.Providers[:idx], cfg.Providers[idx+1:]...)
-	if err := llm.SaveConfig("ask", cfg); err != nil {
+	if err := llm.SaveConfigTo(o.Path, "ask", cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
 	fmt.Printf("Removed provider %q\n", o.Name)
 	return nil
 }
 
-type ProviderListCmd struct{}
+type ProviderListCmd struct {
+	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+}
 
 func (o *ProviderListCmd) Run() error {
-	cfg, err := llm.LoadConfig("ask")
+	cfg, err := llm.LoadConfigFrom(o.Path, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

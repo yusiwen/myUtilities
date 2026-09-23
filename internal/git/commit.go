@@ -45,10 +45,11 @@ type CommitOptions struct {
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
+	Config       string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
 }
 
 func (o *CommitOptions) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Config)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

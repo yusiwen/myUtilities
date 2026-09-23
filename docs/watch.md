@@ -29,7 +29,8 @@ export GIT_AUTH_PASS="ghp_xxx"
 mu watch git . --interval 60s
 ```
 
-Or configure in `~/.config/mu/watch.json`:
+Or configure in `~/.config/mu/watch.json` (a different file can be given with
+`mu watch git --config <path>`):
 
 ```json
 {

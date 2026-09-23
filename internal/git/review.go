@@ -52,7 +52,7 @@ func (o *ReviewOptions) Run() error {
 		return cmd.Run()
 	}
 
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Config)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -320,7 +320,7 @@ func buildFrontMatter(project, branch, commit, base, target string, staged bool,
 /* ─── mu git review list ─── */
 
 func (o *ReviewListCmd) Run() error {
-	gc, err := coregit.LoadGitConfig()
+	gc, err := coregit.LoadGitConfigFrom(o.Config)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}

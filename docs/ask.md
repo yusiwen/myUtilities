@@ -47,7 +47,8 @@ mu set ask provider rm fast
 
 ## Configuration
 
-Configuration file: `~/.config/mu/ask-config.json`
+Configuration file: `~/.config/mu/ask-config.json` (override with
+`mu ask --config <path>`, and with `mu set ask … --config <path>`).
 
 ```json
 {
