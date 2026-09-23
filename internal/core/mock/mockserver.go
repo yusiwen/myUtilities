@@ -29,6 +29,13 @@ type queryRequest struct {
 	PageSize int `json:"pageSize"`
 }
 
+// Pagination bounds for /api/mock/query: pageSize is used as a divisor and as a
+// slice length, so it is always clamped into this range.
+const (
+	defaultPageSize = 10
+	maxPageSize     = 1000
+)
+
 // NewMockServer generates data from CSV files (semi-colon separated) or random data of the given size.
 func NewMockServer(size int, csvFiles string) (*MockServer, error) {
 	data := make(map[string][]interface{})
@@ -116,7 +123,15 @@ func (s *MockServer) queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pageNo := max(req.PageNo, 1)
+	// pageSize is a divisor below, so it must be positive; an absent or absurd
+	// value used to panic the handler with "integer divide by zero".
 	pageSize := req.PageSize
+	if pageSize <= 0 {
+		pageSize = defaultPageSize
+	}
+	if pageSize > maxPageSize {
+		pageSize = maxPageSize
+	}
 
 	rsName := r.PathValue("rs")
 	if len(rsName) == 0 {
