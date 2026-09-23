@@ -35,7 +35,9 @@ func buildRequestContext(r *http.Request, pathParams map[string]string) *request
 		ctx.header[strings.ToLower(k)] = r.Header.Get(k)
 	}
 	if r.Body != nil {
-		bodyBytes, err := io.ReadAll(r.Body)
+		// The router already rejected an oversized body (http.MaxBytesReader);
+		// this cap keeps the helper safe on its own as well.
+		bodyBytes, err := io.ReadAll(io.LimitReader(r.Body, maxMockBodyBytes))
 		if err == nil && len(bodyBytes) > 0 {
 			r.Body = io.NopCloser(strings.NewReader(string(bodyBytes)))
 			json.Unmarshal(bodyBytes, &ctx.body)

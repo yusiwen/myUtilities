@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	corenet "github.com/yusiwen/myUtilities/internal/core/net"
 	corestore "github.com/yusiwen/myUtilities/internal/core/store"
 	corewol "github.com/yusiwen/myUtilities/internal/core/wol"
@@ -50,7 +51,7 @@ func (o *ServeOptions) Run() error {
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Starting WOL HTTP server on %s, interface %s", addr, o.Interface)
-	return http.ListenAndServe(addr, mux)
+	return httpserver.ListenAndServe(addr, mux)
 }
 
 func (o *ConfigOptions) AfterApply() error {

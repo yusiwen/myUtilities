@@ -97,7 +97,13 @@ func RegisterHandlers(mux *http.ServeMux, store *Store, cfg *DispatcherConfig) {
 	}))
 }
 
+// maxJobUploadBytes bounds a single job submission (recipe plus file segments).
+// ParseMultipartForm keeps 64 MiB in memory and spills the rest to /tmp, so
+// without this cap a submission has no total limit at all.
+const maxJobUploadBytes = 256 << 20
+
 func handleCreateJob(w http.ResponseWriter, r *http.Request, store *Store, cfg *DispatcherConfig) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJobUploadBytes)
 	if err := r.ParseMultipartForm(64 << 20); err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%v"}`, err), http.StatusBadRequest)
 		return

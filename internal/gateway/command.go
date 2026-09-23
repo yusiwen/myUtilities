@@ -13,6 +13,7 @@ import (
 
 	"github.com/yusiwen/myUtilities/internal/budget"
 	corees "github.com/yusiwen/myUtilities/internal/core/es"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coremetrics "github.com/yusiwen/myUtilities/internal/core/metrics"
 	"github.com/yusiwen/myUtilities/internal/core/store"
 	coresv "github.com/yusiwen/myUtilities/internal/core/svcreg"
@@ -413,7 +414,7 @@ func (o *Options) Run() error {
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Gateway: starting on http://localhost%s", addr)
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := httpserver.New(addr, mux)
 	go func() {
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)

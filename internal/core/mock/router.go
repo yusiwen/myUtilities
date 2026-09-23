@@ -176,9 +176,17 @@ func extractPathParams(pattern string) []string {
 	return params
 }
 
+// maxMockBodyBytes bounds how much of a request body the dynamic mock router
+// buffers in memory (it is kept for matching and for `--verbose` replay).
+const maxMockBodyBytes = 10 << 20
+
 func (r *DynamicRouter) handleMock(w http.ResponseWriter, req *http.Request, ep *ManagedEndpoint, pathParams map[string]string) {
 	start := time.Now()
-	rawBody, _ := io.ReadAll(req.Body)
+	rawBody, err := io.ReadAll(http.MaxBytesReader(w, req.Body, maxMockBodyBytes))
+	if err != nil {
+		http.Error(w, `{"error":"request body too large"}`, http.StatusRequestEntityTooLarge)
+		return
+	}
 	if len(rawBody) > 0 {
 		req.Body = io.NopCloser(bytes.NewBuffer(rawBody))
 	}

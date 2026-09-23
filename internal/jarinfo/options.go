@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	"github.com/yusiwen/myUtilities/internal/core/jarinfo"
 	"golang.org/x/term"
 )
@@ -112,7 +113,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("JAR analyzer server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 func RegisterHandlers(mux *http.ServeMux) {

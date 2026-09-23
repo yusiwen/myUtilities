@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coresv "github.com/yusiwen/myUtilities/internal/core/svcreg"
 )
 
@@ -21,5 +22,5 @@ func (o *FrontendOptions) Run() error {
 	coresv.RegisterProxyAPI(mux, client)
 	mux.Handle("/", FrontendHandler())
 	log.Printf("Service Registry frontend on %s, backend %s", addr, o.Server)
-	return http.ListenAndServe(addr, mux)
+	return httpserver.ListenAndServe(addr, mux)
 }

@@ -172,6 +172,9 @@ The `internal/core/` directory contains reusable business logic:
   - `GetNameStatus(args)` — generic `--name-status` for arbitrary diff args
   - `GetUntrackedFiles()` — returns list of untracked files
   - `RepoName()`, `CurrentBranch()`, `ShortCommit()` — repo metadata helpers
+- `internal/core/httpserver/` - Shared HTTP server defaults
+  - `New(addr, handler)` / `NewWith(addr, handler, Options)` / `ListenAndServe(addr, handler)`: every `serve` subcommand builds its server here instead of calling `http.ListenAndServe`, so `ReadHeaderTimeout` (10s), `ReadTimeout`/`WriteTimeout` (5m) and `IdleTimeout` (2m) are always set. A bare `http.ListenAndServe` has no timeouts and lets a slow-header client pin a connection and goroutine indefinitely.
+  - Request bodies are bounded at the handlers that buffer them: `maxMockBodyBytes` (dynamic mock router, 413), `maxRegistryBodyBytes` (svcreg API), `maxJobUploadBytes` (fleet job submission), `maxPasswordLength` + a 64 KiB body cap (`mu crypto serve`).
 - `internal/core/scip/` - SCIP semantic code intelligence
   - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `internal/core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`

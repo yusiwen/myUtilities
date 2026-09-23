@@ -9,6 +9,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/likexian/whois"
 	corehttp "github.com/yusiwen/myUtilities/internal/core/httpclient"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	corenet "github.com/yusiwen/myUtilities/internal/core/network"
 )
 
@@ -189,7 +190,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("Network tools server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 // RegisterHandlers registers the network API routes on the given mux.

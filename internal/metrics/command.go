@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coremetrics "github.com/yusiwen/myUtilities/internal/core/metrics"
 	"github.com/yusiwen/myUtilities/internal/core/version"
 )
@@ -150,7 +151,7 @@ func (o *ServeOptions) Run() error {
 	addr := fmt.Sprintf(":%d", o.Port)
 	log.Printf("Metrics server listening on %s", addr)
 
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := httpserver.New(addr, mux)
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)

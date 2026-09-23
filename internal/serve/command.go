@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 )
 
 type Options struct {
@@ -42,7 +44,7 @@ func (o *Options) Run() error {
 
 	addr := fmt.Sprintf(":%d", o.Port)
 	fmt.Printf("Serving %s on http://localhost%s\n", absDir, addr)
-	return http.ListenAndServe(addr, h)
+	return httpserver.ListenAndServe(addr, h)
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

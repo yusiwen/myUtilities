@@ -10,6 +10,7 @@ import (
 
 	corebudget "github.com/yusiwen/myUtilities/internal/core/budget"
 	"github.com/yusiwen/myUtilities/internal/core/budget/providers"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 )
 
 type Options struct {
@@ -77,7 +78,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux, "")
 	fmt.Printf("Budget server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 // RegisterHandlers registers the budget API routes on the given mux.

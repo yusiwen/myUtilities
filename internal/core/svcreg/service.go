@@ -119,9 +119,20 @@ func (h *svcHandler) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v4/{project}/registry/microservices/{serviceId}/schemas", h.ListSchema)
 }
 
+// maxRegistryBodyBytes bounds a registry request body. ServiceCenter payloads
+// are small JSON documents, so anything larger is a mistake or an attack.
+const maxRegistryBodyBytes = 4 << 20
+
 func readBody(r *http.Request) ([]byte, error) {
 	defer r.Body.Close()
-	return io.ReadAll(r.Body)
+	data, err := io.ReadAll(io.LimitReader(r.Body, maxRegistryBodyBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxRegistryBodyBytes {
+		return nil, fmt.Errorf("request body exceeds %d bytes", maxRegistryBodyBytes)
+	}
+	return data, nil
 }
 
 func writeJSON(w http.ResponseWriter, v interface{}) {

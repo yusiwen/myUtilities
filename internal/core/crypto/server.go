@@ -8,6 +8,11 @@ import (
 	"net/http"
 )
 
+// maxPasswordLength caps the generated password length. Without it a single
+// request can ask for `{"length": 2000000000}`, which allocates that many bytes
+// and then fills them one crypto/rand draw at a time.
+const maxPasswordLength = 1024
+
 // RegisterHandlers registers the crypto API routes on the given mux.
 func RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/api/crypto/passwd", handlePasswd)
@@ -28,8 +33,12 @@ func handlePasswd(w http.ResponseWriter, r *http.Request) {
 		Digits  *bool `json:"digits,omitempty"`
 		Special bool  `json:"special"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&req); err != nil {
 		http.Error(w, fmt.Sprintf("invalid JSON: %v", err), http.StatusBadRequest)
+		return
+	}
+	if req.Length > maxPasswordLength {
+		http.Error(w, fmt.Sprintf("length %d exceeds the maximum of %d", req.Length, maxPasswordLength), http.StatusBadRequest)
 		return
 	}
 	if req.Length < 8 {

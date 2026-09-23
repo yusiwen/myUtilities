@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coremock "github.com/yusiwen/myUtilities/internal/core/mock"
 	"github.com/yusiwen/myUtilities/internal/mock/oauth"
 )
@@ -17,7 +18,7 @@ func (o FileServerOptions) Run() error {
 
 	fs := coremock.NewFileServer(o.LocalDir, o.FormKey, o.MaxFileSize)
 	fmt.Printf("Server listening at :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), fs.Handler())
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), fs.Handler())
 }
 
 func (o MockServerOptions) Run() error {
@@ -31,7 +32,7 @@ func (o MockServerOptions) Run() error {
 	}
 
 	fmt.Printf("Server listening at :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), server.Handler())
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), server.Handler())
 }
 
 func (o OAuthServerOptions) Run() error {
@@ -39,7 +40,7 @@ func (o OAuthServerOptions) Run() error {
 	mux := http.NewServeMux()
 	authServer.SetupRoutes(mux)
 	fmt.Printf("OAuth server started on http://localhost:%d\n", o.Port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux))
+	log.Fatal(httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux))
 	return nil
 }
 
@@ -63,7 +64,7 @@ func (o DynamicServerOptions) Run() error {
 		fmt.Printf("  %s %s\n", ep.Method, ep.Path)
 	}
 
-	return http.ListenAndServe(fmt.Sprintf(":%d", port), router)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", port), router)
 }
 
 // NewMockAdminHandler creates an http.Handler that serves the mock admin frontend

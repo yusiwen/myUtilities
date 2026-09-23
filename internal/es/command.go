@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	corees "github.com/yusiwen/myUtilities/internal/core/es"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 )
 
 func (o *SetHostOptions) Run() error {
@@ -63,7 +64,7 @@ func (o *ServeOptions) Run() error {
 	}
 	addr := fmt.Sprintf("%s:%d", host, o.Port)
 	log.Printf("Starting ES search UI on http://%s", addr)
-	return http.ListenAndServe(addr, mux)
+	return httpserver.ListenAndServe(addr, mux)
 }
 
 // RegisterHandlers registers the ES API routes on the given mux.

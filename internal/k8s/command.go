@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	corek8s "github.com/yusiwen/myUtilities/internal/core/k8s"
 )
 
@@ -63,7 +64,7 @@ func (o *ServeOptions) Run() error {
 	} else {
 		fmt.Printf("  Kubeconfig: not configured\n")
 	}
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 func (o *SecretOptions) decode() error {

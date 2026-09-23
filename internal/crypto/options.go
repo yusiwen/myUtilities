@@ -10,9 +10,9 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/term"
-
 	corecrypto "github.com/yusiwen/myUtilities/internal/core/crypto"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
+	"golang.org/x/term"
 )
 
 type Options struct {
@@ -433,7 +433,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("Crypto toolkit server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 // RegisterHandlers registers the crypto API routes on the given mux.

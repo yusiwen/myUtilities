@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 )
 
 type statusWriter struct {
@@ -37,12 +39,9 @@ func NewServer(addr string, store Store) *Server {
 	mux := http.NewServeMux()
 	handler.registerRoutes(mux)
 	return &Server{
-		httpServer: &http.Server{
-			Addr:    addr,
-			Handler: loggingMiddleware(mux),
-		},
-		handler: handler,
-		store:   store,
+		httpServer: httpserver.New(addr, loggingMiddleware(mux)),
+		handler:    handler,
+		store:      store,
 	}
 }
 

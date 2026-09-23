@@ -13,6 +13,7 @@ import (
 
 	"github.com/morikuni/aec"
 	corefleet "github.com/yusiwen/myUtilities/internal/core/fleet"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 )
 
 var successColor = aec.GreenF
@@ -95,7 +96,7 @@ func (c *ServeCmd) Run() error {
 	mux := http.NewServeMux()
 	corefleet.RegisterHandlers(mux, store, dc)
 	fmt.Printf("fleet dispatcher listening on %s (data: %s)\n", addr, cfg.DataDir)
-	return http.ListenAndServe(addr, mux)
+	return httpserver.ListenAndServe(addr, mux)
 }
 
 // AgentCmd runs the agent loop.

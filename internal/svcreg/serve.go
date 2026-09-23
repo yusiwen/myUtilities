@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coresv "github.com/yusiwen/myUtilities/internal/core/svcreg"
 )
 
@@ -54,7 +55,7 @@ func (o *ServeOptions) Run() error {
 		mux.Handle("/", FrontendHandler())
 	}
 
-	srv := &http.Server{Addr: addr, Handler: coresv.LoggingMiddleware(mux)}
+	srv := httpserver.New(addr, coresv.LoggingMiddleware(mux))
 
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

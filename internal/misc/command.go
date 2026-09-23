@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	coremisc "github.com/yusiwen/myUtilities/internal/core/misc"
 )
 
@@ -155,7 +156,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("Misc tools server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 var trackersCache = coremisc.DefaultTrackers()

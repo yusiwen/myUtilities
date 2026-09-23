@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sergi/go-diff/diffmatchpatch"
+	"github.com/yusiwen/myUtilities/internal/core/httpserver"
 	"golang.org/x/term"
 )
 
@@ -61,7 +62,7 @@ func (o *ServeOptions) Run() error {
 	mux.Handle("/", FrontendHandler())
 	RegisterHandlers(mux)
 	fmt.Printf("Diff tool server listening on :%d\n", o.Port)
-	return http.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
+	return httpserver.ListenAndServe(fmt.Sprintf(":%d", o.Port), mux)
 }
 
 func RegisterHandlers(mux *http.ServeMux) {
