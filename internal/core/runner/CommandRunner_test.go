@@ -3,6 +3,7 @@ package runner
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -359,4 +360,54 @@ func TestPrintSummaryStyles(t *testing.T) {
 			t.Fatalf("expected colored summary, got %q", out)
 		}
 	})
+}
+
+// TestRunCommandReportsStartFailure covers the display-path handshake: when a
+// command cannot be started (missing workdir, permission denied, broken pty),
+// runCommand must still report a status on r.done. The display only cleans up
+// its step region — and only then signals d.clear, which runCommands waits on —
+// after it receives that status, so a missing report hangs the whole run.
+func TestRunCommandReportsStartFailure(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "does-not-exist")
+	cmd := Command{Name: "bad", CmdLine: "echo hi", Dir: missing}
+
+	for _, tt := range []struct {
+		name   string
+		usePTY bool
+	}{
+		{name: "pipes"},
+		{name: "pty", usePTY: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			r := NewCommandRunner(nil)
+			r.usePTY = tt.usePTY
+
+			// Stand in for the display's update loop, the real consumer of
+			// r.done; without a receiver the status send itself would block.
+			statusCh := make(chan *CmdStatus, 1)
+			go func() { statusCh <- <-r.done }()
+
+			returned := make(chan error, 1)
+			go func() { returned <- r.runCommand(cmd) }()
+
+			var runErr error
+			select {
+			case runErr = <-returned:
+			case <-time.After(10 * time.Second):
+				t.Fatal("runCommand did not return")
+			}
+			if runErr == nil {
+				t.Fatalf("expected an error for the missing workdir %s", missing)
+			}
+
+			select {
+			case st := <-statusCh:
+				if st.isSuccess {
+					t.Fatalf("reported success for a command that never started: %+v", st)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("no status reported on r.done: the display handshake would block forever")
+			}
+		})
+	}
 }

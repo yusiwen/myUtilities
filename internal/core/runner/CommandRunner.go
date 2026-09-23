@@ -401,20 +401,36 @@ func (r *CommandRunner) runCommand(command Command) error {
 	return r.runCommandPipes(command)
 }
 
+// reportStepFailure hands a failed status to the display and returns err.
+//
+// The display path in runCommands and the recipe runner waits for the display
+// to clean the step region up, and the display only does that after it receives
+// a status on r.done. Error paths that happen before — or instead of — the
+// command's own reporting goroutine must therefore report here, otherwise that
+// wait never completes and the run hangs until it is killed.
+func (r *CommandRunner) reportStepFailure(err error) error {
+	r.done <- &CmdStatus{
+		isSuccess: false,
+		exitCode:  -1,
+		errMsg:    err.Error(),
+	}
+	return err
+}
+
 func (r *CommandRunner) runCommandPipes(command Command) error {
 	cmd, ctx, cancel := newBashCommand(command)
 	defer cancel()
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return r.reportStepFailure(err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return r.reportStepFailure(err)
 	}
 	err = cmd.Start()
 	if err != nil {
-		return err
+		return r.reportStepFailure(err)
 	}
 	r.setActive(cmd)
 	defer r.setActive(nil)
@@ -442,7 +458,7 @@ func (r *CommandRunner) runCommandPipes(command Command) error {
 
 	if err := cmd.Wait(); err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return r.reportStepFailure(ctx.Err())
 		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			msg := errorMsg
@@ -478,7 +494,7 @@ func (r *CommandRunner) runCommandPipes(command Command) error {
 func (r *CommandRunner) runCommandPTY(command Command) error {
 	ptmx, tty, err := pty.Open()
 	if err != nil {
-		return err
+		return r.reportStepFailure(err)
 	}
 	cmd, ctx, cancel := newBashCommand(command)
 	defer cancel()
@@ -487,7 +503,7 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 	if err := cmd.Start(); err != nil {
 		ptmx.Close()
 		tty.Close()
-		return err
+		return r.reportStepFailure(err)
 	}
 	r.setActive(cmd)
 	defer r.setActive(nil)
@@ -519,7 +535,7 @@ func (r *CommandRunner) runCommandPTY(command Command) error {
 
 	if err := <-waitCh; err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return r.reportStepFailure(ctx.Err())
 		}
 		if exitError, ok := err.(*exec.ExitError); ok {
 			r.done <- &CmdStatus{
