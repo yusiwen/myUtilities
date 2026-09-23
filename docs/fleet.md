@@ -8,8 +8,12 @@ back. Jobs survive the controller going offline, and temporarily offline hosts
 pick up pending jobs when they return.
 
 ```bash
-# Start the dispatcher (controller endpoint)
+# Start the dispatcher (controller endpoint). Requires a token — see
+# "Auth and security" — and binds loopback by default.
 mu fleet serve
+
+# Let agents on other hosts reach it (exposes the port; the token still applies)
+mu fleet serve --host 0.0.0.0
 
 # On each target host: run the agent, pointing at the dispatcher
 mu fleet agent --server http://laptop:8890 --groups prod
@@ -162,11 +166,22 @@ otherwise `pending`/`running`.
 
 ## Auth and security
 
-- A shared token is sent as `X-Auth-Token` on every request (same pattern as WOL);
+- **A token is required.** The dispatcher refuses to start when neither `token` in
+  `fleet-config.json` nor `--token` is set. The library side fails closed too: a
+  dispatcher built without a token rejects every request with `401` instead of
+  serving anonymously.
+- The token is sent as `X-Auth-Token` on every request (same pattern as WOL);
   `fleet-config.json` is created with `0600` permissions.
+- **The dispatcher binds `127.0.0.1` by default.** Pass `--host 0.0.0.0` (or a
+  specific address) to let agents on other hosts reach it — the token is then the
+  only thing between the network and job execution.
+- `--allow-anonymous` serves without authentication for throwaway local testing.
+  It cannot be combined with a configured token (so a token is never silently
+  ignored), it logs a warning at start-up, and it should stay on loopback.
 - **Risk note:** an agent executes arbitrary commands submitted by the controller —
-  this is an RCE surface and is only suitable for a trusted LAN. Future hardening could
-  use mTLS or per-agent credentials.
+  this is an RCE surface. Keep the dispatcher on a trusted network and treat the
+  token as a root credential. Future hardening could use mTLS or per-agent
+  credentials.
 
 ## Config
 

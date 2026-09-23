@@ -3,8 +3,11 @@ package fleet
 import (
 	"errors"
 	"fmt"
+	"log"
+	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,17 +18,39 @@ import (
 var successColor = aec.GreenF
 var errColor = aec.RedF
 
+// resolveToken returns the effective shared token: the --token flag wins over
+// the config file.
+func (o *CommonOptions) resolveToken(cfg *Config) string {
+	if o.Token != "" {
+		return o.Token
+	}
+	return cfg.Token
+}
+
+// validateServeAuth decides whether the dispatcher may start. It never allows
+// an unauthenticated dispatcher by accident: a token is required unless the
+// caller explicitly opted into anonymous mode, and the two are mutually
+// exclusive so a configured token is never silently ignored.
+func validateServeAuth(token string, allowAnonymous bool) error {
+	switch {
+	case token != "" && allowAnonymous:
+		return errors.New("--allow-anonymous cannot be combined with a configured token: " +
+			"remove the flag, or unset \"token\" in the fleet config")
+	case token == "" && !allowAnonymous:
+		return errors.New("no auth token configured, refusing to serve unauthenticated: " +
+			"set \"token\" in ~/.config/mu/fleet-config.json or pass --token; " +
+			"to serve without authentication anyway, pass --allow-anonymous")
+	}
+	return nil
+}
+
 // clientFor builds a dispatcher client from the given options + config.
 func (o *CommonOptions) clientFor(cfg *Config) *corefleet.Client {
 	server := cfg.Server
 	if o.Server != "" {
 		server = o.Server
 	}
-	token := cfg.Token
-	if o.Token != "" {
-		token = o.Token
-	}
-	return corefleet.NewClient(server, token)
+	return corefleet.NewClient(server, o.resolveToken(cfg))
 }
 
 // ServeCmd starts the dispatcher server.
@@ -36,12 +61,22 @@ func (c *ServeCmd) Run() error {
 	}
 	cfg = cfg.Resolve()
 
+	token := c.resolveToken(cfg)
+	if err := validateServeAuth(token, c.AllowAnonymous); err != nil {
+		return err
+	}
+
 	port := c.Port
 	if port == 0 {
 		port = cfg.Port
 	}
 	if port == 0 {
 		port = 8890
+	}
+	addr := net.JoinHostPort(c.Host, strconv.Itoa(port))
+	if token == "" {
+		log.Printf("WARNING: fleet dispatcher authentication is disabled (--allow-anonymous); "+
+			"anything that can reach %s can run commands on every agent", addr)
 	}
 
 	store, err := corefleet.OpenStore(cfg.DBPath)
@@ -51,15 +86,16 @@ func (c *ServeCmd) Run() error {
 	defer store.Close()
 
 	dc := &corefleet.DispatcherConfig{
-		Token:        cfg.Token,
-		DataDir:      cfg.DataDir,
-		AgentTimeout: 3 * cfg.PollIntervalDuration(),
+		Token:          token,
+		AllowAnonymous: c.AllowAnonymous,
+		DataDir:        cfg.DataDir,
+		AgentTimeout:   3 * cfg.PollIntervalDuration(),
 	}
 
 	mux := http.NewServeMux()
 	corefleet.RegisterHandlers(mux, store, dc)
-	fmt.Printf("fleet dispatcher listening on :%d (data: %s)\n", port, cfg.DataDir)
-	return http.ListenAndServe(fmt.Sprintf(":%d", port), mux)
+	fmt.Printf("fleet dispatcher listening on %s (data: %s)\n", addr, cfg.DataDir)
+	return http.ListenAndServe(addr, mux)
 }
 
 // AgentCmd runs the agent loop.
@@ -82,9 +118,14 @@ func (c *AgentCmd) Run() error {
 		poll = time.Duration(c.PollInterval) * time.Second
 	}
 
+	server := cfg.Server
+	if c.Server != "" {
+		server = c.Server
+	}
+
 	return corefleet.RunAgent(corefleet.AgentConfig{
-		ServerURL:    cfg.Server,
-		Token:        cfg.Token,
+		ServerURL:    server,
+		Token:        c.resolveToken(cfg),
 		Hostname:     hostname,
 		Groups:       groups,
 		PollInterval: poll,

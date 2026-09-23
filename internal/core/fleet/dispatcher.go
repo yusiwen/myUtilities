@@ -14,9 +14,10 @@ import (
 
 // DispatcherConfig configures the fleet dispatcher server.
 type DispatcherConfig struct {
-	Token        string        // shared auth token; empty disables auth
-	DataDir      string        // job file storage root (e.g. ~/.cache/mu/fleet)
-	AgentTimeout time.Duration // heartbeat timeout before an agent is offline
+	Token          string        // shared auth token; an empty token fails closed
+	AllowAnonymous bool          // explicit opt-in to serve without authentication
+	DataDir        string        // job file storage root (e.g. ~/.cache/mu/fleet)
+	AgentTimeout   time.Duration // heartbeat timeout before an agent is offline
 }
 
 // jobID returns a short, readable job identifier.
@@ -25,9 +26,15 @@ func jobID() string {
 }
 
 // RegisterHandlers registers the fleet API routes on the given mux, each
-// guarded by the shared token.
+// guarded by the shared token. Authentication is only skipped when the caller
+// explicitly asked for anonymous access.
 func RegisterHandlers(mux *http.ServeMux, store *Store, cfg *DispatcherConfig) {
-	auth := func(h http.HandlerFunc) http.HandlerFunc { return requireToken(cfg.Token, h) }
+	auth := func(h http.HandlerFunc) http.HandlerFunc {
+		if cfg.AllowAnonymous {
+			return h
+		}
+		return requireToken(cfg.Token, h)
+	}
 
 	mux.HandleFunc("/api/fleet/jobs", auth(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

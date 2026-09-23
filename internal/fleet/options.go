@@ -20,7 +20,9 @@ type Options struct {
 // ServeCmd starts the dispatcher.
 type ServeCmd struct {
 	CommonOptions
-	Port int `help:"Port to listen on (default: config or 8890)." default:"0"`
+	Port           int    `help:"Port to listen on (default: config or 8890)." default:"0"`
+	Host           string `help:"Listen address; use 0.0.0.0 to expose the dispatcher to other hosts." default:"127.0.0.1"`
+	AllowAnonymous bool   `help:"Serve without authentication. Only safe on a trusted network; a token is required otherwise."`
 }
 
 // AgentCmd runs the agent loop.

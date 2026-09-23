@@ -17,12 +17,29 @@ func newTestServer(t *testing.T, token string) (*httptest.Server, *Store, *Clien
 	t.Helper()
 	store := newTestStore(t)
 	dataDir := filepath.Join(t.TempDir(), "data")
-	cfg := &DispatcherConfig{Token: token, DataDir: dataDir, AgentTimeout: time.Minute}
+	// Tests that pass no token exercise the explicit anonymous mode; the
+	// fail-closed behaviour is covered by TestAuthFailsClosedWithoutToken.
+	cfg := &DispatcherConfig{
+		Token:          token,
+		AllowAnonymous: token == "",
+		DataDir:        dataDir,
+		AgentTimeout:   time.Minute,
+	}
 	mux := http.NewServeMux()
 	RegisterHandlers(mux, store, cfg)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv, store, NewClient(srv.URL, token), dataDir
+}
+
+// newDispatcherServer starts a dispatcher with the given config verbatim.
+func newDispatcherServer(t *testing.T, cfg *DispatcherConfig) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	RegisterHandlers(mux, newTestStore(t), cfg)
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
 }
 
 func submitMultipart(t *testing.T, srvURL, token string, jobJSON string, files map[string]string) (*http.Response, string) {
@@ -63,6 +80,70 @@ func TestAuthRequired(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d", resp.StatusCode)
+	}
+}
+
+// TestAuthFailsClosedWithoutToken verifies that a dispatcher with no token
+// rejects every request instead of serving anonymously by accident.
+func TestAuthFailsClosedWithoutToken(t *testing.T) {
+	srv := newDispatcherServer(t, &DispatcherConfig{
+		DataDir:      filepath.Join(t.TempDir(), "data"),
+		AgentTimeout: time.Minute,
+	})
+
+	for _, header := range []string{"", "anything"} {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/fleet/jobs", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if header != "" {
+			req.Header.Set("X-Auth-Token", header)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("token %q: expected 401, got %d", header, resp.StatusCode)
+		}
+	}
+}
+
+// TestAnonymousModeServes verifies the explicit opt-in still serves requests.
+func TestAnonymousModeServes(t *testing.T) {
+	srv := newDispatcherServer(t, &DispatcherConfig{
+		AllowAnonymous: true,
+		DataDir:        filepath.Join(t.TempDir(), "data"),
+		AgentTimeout:   time.Minute,
+	})
+
+	resp, err := http.Get(srv.URL + "/api/fleet/jobs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+}
+
+// TestAuthAcceptsCorrectToken makes sure the fail-closed change did not break
+// the authenticated path.
+func TestAuthAcceptsCorrectToken(t *testing.T) {
+	srv, _, _, _ := newTestServer(t, "secret")
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/fleet/jobs", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("X-Auth-Token", "secret")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with the configured token, got %d", resp.StatusCode)
 	}
 }
 

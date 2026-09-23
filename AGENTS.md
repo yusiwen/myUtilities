@@ -209,7 +209,7 @@ The `internal/core/` directory contains reusable business logic:
 
 - `internal/fleet/` - Remote batch execution CLI (`mu fleet`)
   - `options.go` — subcommands: `serve` (dispatcher), `agent`, `run`, `hosts`, `status`, `jobs`; `Run` methods take no args (kong), config via `--config`
-  - `command.go` — wires subcommands to `internal/core/fleet`; `run --watch` polls job status and prints incremental output + per-host summary
+  - `command.go` — wires subcommands to `internal/core/fleet`; `run --watch` polls job status and prints incremental output + per-host summary; the dispatcher refuses to start without a token (`validateServeAuth`, `--allow-anonymous` opt-in) and binds `127.0.0.1` unless `--host` is given
   - `config.go` — `fleet-config.json` (server/token/hostname/groups/poll_interval/port/db_path/data_dir); missing file → defaults
 
 - `internal/wol/` - Wake-on-LAN HTTP server and agent
