@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +121,58 @@ func TestComputeSHA256(t *testing.T) {
 	// sha256("hello") = 2cf24dba...
 	if sum != "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" {
 		t.Fatalf("unexpected sha256 %q", sum)
+	}
+}
+
+// TestSafeJoinRejectsEscapes covers the archive path check: a plain
+// strings.HasPrefix test accepts a sibling directory whose name merely starts
+// with the target directory.
+func TestSafeJoinRejectsEscapes(t *testing.T) {
+	dir := t.TempDir()
+
+	ok := []struct{ name, want string }{
+		{"file.txt", filepath.Join(dir, "file.txt")},
+		{"sub/file.txt", filepath.Join(dir, "sub", "file.txt")},
+		{"./sub/../file.txt", filepath.Join(dir, "file.txt")},
+		// An absolute name cannot escape either: filepath.Join makes it
+		// relative to dir instead of discarding dir.
+		{"/absolute/file.txt", filepath.Join(dir, "absolute", "file.txt")},
+	}
+	for _, tc := range ok {
+		got, err := safeJoin(dir, tc.name)
+		if err != nil {
+			t.Errorf("safeJoin(%q) = error %v, want %q", tc.name, err, tc.want)
+			continue
+		}
+		if got != tc.want {
+			t.Errorf("safeJoin(%q) = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+
+	bad := []string{
+		"../escape.txt",
+		"../../escape.txt",
+		"../" + filepath.Base(dir) + "-evil/escape.txt",
+		"sub/../../escape.txt",
+	}
+	for _, name := range bad {
+		if got, err := safeJoin(dir, name); err == nil {
+			t.Errorf("safeJoin(%q) = %q, want an error", name, got)
+		}
+	}
+}
+
+// TestValidPathID covers the job-id wildcard validation: ServeMux unescapes the
+// value, so "%2e%2e%2f" arrives as "../".
+func TestValidPathID(t *testing.T) {
+	for _, id := range []string{"abc123", "a-b_c", strings.Repeat("a", 64)} {
+		if !validPathID(id) {
+			t.Errorf("validPathID(%q) = false, want true", id)
+		}
+	}
+	for _, id := range []string{"", "..", "../..", "a/b", `a\b`, "%2e%2e", strings.Repeat("a", 65)} {
+		if validPathID(id) {
+			t.Errorf("validPathID(%q) = true, want false", id)
+		}
 	}
 }

@@ -13,6 +13,19 @@ import (
 	"strings"
 )
 
+// safeJoin joins a name from an archive onto dir and rejects anything that
+// escapes it. A plain strings.HasPrefix check is not enough: it accepts a
+// sibling directory whose name merely starts with dir (for example
+// "/data/files-evil" when dir is "/data/files").
+func safeJoin(dir, name string) (string, error) {
+	target := filepath.Join(dir, filepath.Clean(name))
+	rel, err := filepath.Rel(dir, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("unsafe path %q", name)
+	}
+	return target, nil
+}
+
 // ComputeSHA256 returns the hex SHA-256 of the file at path.
 func ComputeSHA256(path string) (string, error) {
 	f, err := os.Open(path)
@@ -81,9 +94,9 @@ func extractTar(r io.Reader, targetDir string) error {
 		if err != nil {
 			return fmt.Errorf("tar: %w", err)
 		}
-		target := filepath.Join(targetDir, filepath.Clean(hdr.Name))
-		if !strings.HasPrefix(target, targetDir) {
-			return fmt.Errorf("tar: unsafe path %q", hdr.Name)
+		target, err := safeJoin(targetDir, hdr.Name)
+		if err != nil {
+			return fmt.Errorf("tar: %w", err)
 		}
 		switch hdr.Typeflag {
 		case tar.TypeDir:
@@ -124,9 +137,9 @@ func extractZip(f *os.File, targetDir string) error {
 		if strings.HasSuffix(zf.Name, "/") {
 			continue
 		}
-		target := filepath.Join(targetDir, filepath.Clean(zf.Name))
-		if !strings.HasPrefix(target, targetDir) {
-			return fmt.Errorf("zip: unsafe path %q", zf.Name)
+		target, err := safeJoin(targetDir, zf.Name)
+		if err != nil {
+			return fmt.Errorf("zip: %w", err)
 		}
 		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 			return err

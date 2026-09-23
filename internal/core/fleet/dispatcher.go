@@ -346,9 +346,30 @@ func handleComplete(w http.ResponseWriter, r *http.Request, store *Store) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
+// validPathID reports whether an id taken from a URL wildcard is safe to use as
+// a single path element. ServeMux unescapes wildcard values, so "%2e%2e%2f"
+// reaches the handler as "../".
+func validPathID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 func handleDownloadFile(w http.ResponseWriter, r *http.Request, cfg *DispatcherConfig) {
 	jobID := r.PathValue("id")
 	file := r.PathValue("file")
+	if !validPathID(jobID) {
+		http.Error(w, `{"error":"invalid job id"}`, http.StatusBadRequest)
+		return
+	}
 	path := filepath.Join(cfg.DataDir, "jobs", jobID, "files", filepath.Base(file))
 	if _, err := os.Stat(path); err != nil {
 		http.Error(w, `{"error":"file not found"}`, http.StatusNotFound)

@@ -5,15 +5,36 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 )
 
 // Client is an HTTP client for the ServiceCenter-compatible registry API.
 type Client struct {
+	// Server is the backend address. It is read on every request, so once the
+	// client may be shared between goroutines (the admin API swaps the backend
+	// while proxy handlers are serving) mutate it with SetServer instead of
+	// assigning the field directly.
 	Server string
+
+	mu sync.RWMutex
+}
+
+// SetServer updates the backend address for subsequent requests.
+func (c *Client) SetServer(server string) {
+	c.mu.Lock()
+	c.Server = server
+	c.mu.Unlock()
+}
+
+// serverURL returns the backend address under the read lock.
+func (c *Client) serverURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.Server
 }
 
 func (c *Client) url(path string) string {
-	return strings.TrimRight(c.Server, "/") + path
+	return strings.TrimRight(c.serverURL(), "/") + path
 }
 
 func (c *Client) get(path string, v interface{}) error {

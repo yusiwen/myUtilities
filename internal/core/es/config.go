@@ -67,7 +67,13 @@ func SaveConfig(configPath string, cfg *Config) error {
 	return nil
 }
 
+// MaskedConfig returns a copy of cfg with the password replaced by "***".
+// A nil config is tolerated so error paths cannot turn a masking mistake into a
+// panic.
 func MaskedConfig(cfg *Config) *Config {
+	if cfg == nil {
+		return &Config{}
+	}
 	masked := *cfg
 	if masked.Password != "" {
 		masked.Password = "***"

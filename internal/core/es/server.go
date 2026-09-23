@@ -17,8 +17,15 @@ type ServerState struct {
 	configPath string
 }
 
+// NewServerState returns a state with a default configuration, so a missing or
+// unreadable config file can never leave cfg nil: the API handlers dereference
+// it on every request (a corrupt es-config.json used to panic /api/status and
+// /api/config).
 func NewServerState(configPath string) *ServerState {
-	return &ServerState{configPath: configPath}
+	return &ServerState{
+		configPath: configPath,
+		cfg:        &Config{Host: "http://localhost:9200"},
+	}
 }
 
 func (s *ServerState) getClient() *elasticsearch.Client {

@@ -33,11 +33,22 @@ type EventHandler func(event Event)
 
 // ================== Event Dispatch System ==================
 
+// subscription is one Watch client.
+//
+// stop is closed by Unwatch to tell the initial-state and history senders to
+// give up; ch itself is deliberately never closed, because those senders run
+// without the server lock and a close would turn an ordinary unsubscribe into a
+// "send on closed channel" panic. Callers stop reading once they call Unwatch.
+type subscription struct {
+	ch   chan Event
+	stop chan struct{}
+}
+
 // WatchServer dispatches events to registered watchers and their subscribers.
 type WatchServer struct {
 	mu         sync.RWMutex
 	watchers   map[ResourceKey]Watcher
-	clients    map[ResourceKey]map[uint64]chan Event
+	clients    map[ResourceKey]map[uint64]*subscription
 	nextClient uint64
 	eventStore *EventStore
 }
@@ -46,7 +57,7 @@ type WatchServer struct {
 func NewWatchServer() *WatchServer {
 	return &WatchServer{
 		watchers:   make(map[ResourceKey]Watcher),
-		clients:    make(map[ResourceKey]map[uint64]chan Event),
+		clients:    make(map[ResourceKey]map[uint64]*subscription),
 		eventStore: NewEventStore(1000), // Store the most recent 1000 events
 	}
 }
@@ -61,7 +72,7 @@ func (s *WatchServer) RegisterWatcher(key ResourceKey, watcher Watcher) error {
 	}
 
 	s.watchers[key] = watcher
-	s.clients[key] = make(map[uint64]chan Event)
+	s.clients[key] = make(map[uint64]*subscription)
 
 	// Start the watching goroutine
 	go s.startWatching(key, watcher)
@@ -69,7 +80,8 @@ func (s *WatchServer) RegisterWatcher(key ResourceKey, watcher Watcher) error {
 	return nil
 }
 
-// Watch allows a client to subscribe to resource changes.
+// Watch allows a client to subscribe to resource changes. The returned channel
+// is not closed by Unwatch; the caller stops reading after unsubscribing.
 func (s *WatchServer) Watch(key ResourceKey, resourceVersion string) (<-chan Event, uint64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -83,29 +95,33 @@ func (s *WatchServer) Watch(key ResourceKey, resourceVersion string) (<-chan Eve
 	s.nextClient++
 	clientID := s.nextClient
 
-	// Create the event channel
-	eventCh := make(chan Event, 100)
-	s.clients[key][clientID] = eventCh
+	// Create the subscription
+	sub := &subscription{
+		ch:   make(chan Event, 100),
+		stop: make(chan struct{}),
+	}
+	s.clients[key][clientID] = sub
 
 	// If resourceVersion is provided, send historical events
 	if resourceVersion != "" {
-		go s.sendHistoryEvents(key, resourceVersion, eventCh)
+		go s.sendHistoryEvents(key, resourceVersion, sub)
 	} else {
 		// Send current state as ADDED events
-		go s.sendInitialState(key, watcher, eventCh)
+		go s.sendInitialState(key, watcher, sub)
 	}
 
-	return eventCh, clientID, nil
+	return sub.ch, clientID, nil
 }
 
-// Unwatch removes a client subscription.
+// Unwatch removes a client subscription and tells its senders to stop. It is
+// safe to call more than once.
 func (s *WatchServer) Unwatch(key ResourceKey, clientID uint64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if clients, ok := s.clients[key]; ok {
-		if ch, exists := clients[clientID]; exists {
-			close(ch)
+		if sub, exists := clients[clientID]; exists {
+			close(sub.stop)
 			delete(clients, clientID)
 		}
 	}
@@ -129,9 +145,9 @@ func (s *WatchServer) startWatching(key ResourceKey, watcher Watcher) {
 		event.Object = s.addResourceVersion(event.Object, resourceVersion)
 
 		// Dispatch the event to all subscribers
-		for _, clientCh := range s.clients[key] {
+		for _, sub := range s.clients[key] {
 			select {
-			case clientCh <- event:
+			case sub.ch <- event:
 			default:
 				// Skip event to avoid blocking
 			}
@@ -141,10 +157,10 @@ func (s *WatchServer) startWatching(key ResourceKey, watcher Watcher) {
 	}
 }
 
-func (s *WatchServer) sendInitialState(key ResourceKey, watcher Watcher, ch chan<- Event) {
+func (s *WatchServer) sendInitialState(key ResourceKey, watcher Watcher, sub *subscription) {
 	resources, err := watcher.List()
 	if err != nil {
-		ch <- Event{Type: Error, Object: err.Error()}
+		sendEvent(sub, Event{Type: Error, Object: err.Error()})
 		return
 	}
 
@@ -160,27 +176,37 @@ func (s *WatchServer) sendInitialState(key ResourceKey, watcher Watcher, ch chan
 		resourceVersion := s.eventStore.AddEvent(key, event)
 		event.Object = s.addResourceVersion(obj, resourceVersion)
 
-		select {
-		case ch <- event:
-		case <-time.After(100 * time.Millisecond):
-			// Timeout, skip (sendInitialState)
+		if !sendEvent(sub, event) {
+			return
 		}
 	}
 }
 
-func (s *WatchServer) sendHistoryEvents(key ResourceKey, resourceVersion string, ch chan<- Event) {
+func (s *WatchServer) sendHistoryEvents(key ResourceKey, resourceVersion string, sub *subscription) {
 	events, err := s.eventStore.GetEventsAfter(key, resourceVersion)
 	if err != nil {
-		ch <- Event{Type: Error, Object: err.Error()}
+		sendEvent(sub, Event{Type: Error, Object: err.Error()})
 		return
 	}
 
 	for _, event := range events {
-		select {
-		case ch <- event:
-		case <-time.After(100 * time.Millisecond):
-			// Timeout, skip (sendHistoryEvents)
+		if !sendEvent(sub, event) {
+			return
 		}
+	}
+}
+
+// sendEvent delivers one event unless the subscription was cancelled or the
+// subscriber is too slow; it reports whether the sender should continue.
+func sendEvent(sub *subscription, event Event) bool {
+	select {
+	case sub.ch <- event:
+		return true
+	case <-sub.stop:
+		return false
+	case <-time.After(100 * time.Millisecond):
+		// Timeout, skip this event.
+		return true
 	}
 }
 

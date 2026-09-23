@@ -2,6 +2,7 @@ package watcher
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -280,4 +281,49 @@ func checkHasVersion(t *testing.T, obj interface{}, expectedVersion string) {
 	} else {
 		t.Fatalf("Object is not versioned: %T", obj)
 	}
+}
+
+// TestUnwatchDuringInitialState is a regression test: Unwatch used to close the
+// subscriber channel while sendInitialState was still sending on it, which
+// panicked the process with "send on closed channel". The sender must observe
+// the stop signal instead.
+func TestUnwatchDuringInitialState(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 200; i++ {
+		name := filepath.Join(dir, fmt.Sprintf("f%03d.txt", i))
+		if err := os.WriteFile(name, []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	server := NewWatchServer()
+	key := resourceKey("file-watch")
+	if err := server.RegisterWatcher(key, NewFileWatcher(dir, 10*time.Millisecond)); err != nil {
+		t.Fatalf("RegisterWatcher: %v", err)
+	}
+
+	for i := 0; i < 20; i++ {
+		ch, id, err := server.Watch(key, "")
+		if err != nil {
+			t.Fatalf("Watch: %v", err)
+		}
+		// Let the initial-state sender get going, then unsubscribe while it is
+		// still working through the directory.
+		time.Sleep(time.Millisecond)
+		server.Unwatch(key, id)
+
+		// Drain whatever was already buffered so a sender cannot block.
+		for {
+			select {
+			case <-ch:
+				continue
+			default:
+			}
+			break
+		}
+	}
+
+	// Give the suspended senders time to notice the stop signal; a panic here
+	// (before the fix) fails the whole test binary.
+	time.Sleep(200 * time.Millisecond)
 }

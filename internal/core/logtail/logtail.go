@@ -5,6 +5,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"regexp"
 	"strings"
@@ -251,9 +253,12 @@ func (t *Tailer) Follow(ctx context.Context, ch chan<- string) {
 				if info.Size() == offsets[p] {
 					continue
 				}
-				newLines, err := readFromOffset(p, offsets[p])
+				newLines, consumed, err := readFromOffset(p, offsets[p])
 				if err == nil {
-					offsets[p] = info.Size()
+					// Advance only past complete lines: a partially written
+					// trailing line is re-read (and emitted once) after the
+					// writer finishes it.
+					offsets[p] += consumed
 					for _, l := range newLines {
 						select {
 						case ch <- l:
@@ -326,25 +331,42 @@ func readLastLines(path string, n int) ([]string, error) {
 	return lines, nil
 }
 
-// readFromOffset reads new content from a file starting at the given byte offset.
-func readFromOffset(path string, offset int64) ([]string, error) {
+// readFromOffset reads the complete lines starting at the given byte offset and
+// reports how many bytes they occupy.
+//
+// Only newline-terminated content counts: a partially written trailing line is
+// left for the next call so it is emitted once, when it is complete. Lines of
+// any length are handled — the previous bufio.Scanner capped them at 1 MiB and
+// then failed the whole batch, which left such a file permanently stuck.
+func readFromOffset(path string, offset int64) ([]string, int64, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer f.Close()
 
 	if _, err := f.Seek(offset, 0); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024) // up to 1 MiB per line
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+	var (
+		lines    []string
+		consumed int64
+		reader   = bufio.NewReader(f)
+	)
+	for {
+		line, err := reader.ReadString('\n')
+		if strings.HasSuffix(line, "\n") {
+			consumed += int64(len(line))
+			lines = append(lines, strings.TrimRight(line, "\r\n"))
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return lines, consumed, nil
+			}
+			return lines, consumed, err
+		}
 	}
-	return lines, scanner.Err()
 }
 
 // splitLines splits a string into lines, trimming trailing newlines.
@@ -404,4 +426,3 @@ func FilterLines(lines []string, opts FilterOptions) []string {
 	}
 	return out
 }
-

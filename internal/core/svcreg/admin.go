@@ -367,7 +367,7 @@ func isLoopbackRequest(r *http.Request) bool {
 // loopback-only (see adminOnly).
 func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 	if mgr.running && mgr.config.Port > 0 {
-		client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
+		client.SetServer(fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port))
 	}
 	mux.HandleFunc("/api/svcreg/admin/config", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -380,7 +380,7 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 	mux.HandleFunc("/api/svcreg/admin/status", adminOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if mgr.running {
-			client.Server = fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port)
+			client.SetServer(fmt.Sprintf("http://127.0.0.1:%d", mgr.config.Port))
 		}
 		json.NewEncoder(w).Encode(mgr.Status())
 	}))
@@ -411,7 +411,7 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 			WriteProxyError(w, err)
 			return
 		}
-		client.Server = fmt.Sprintf("http://127.0.0.1:%d", cfg.Port)
+		client.SetServer(fmt.Sprintf("http://127.0.0.1:%d", cfg.Port))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "started"})
 	}))
@@ -424,7 +424,7 @@ func RegisterAdminAPI(mux *http.ServeMux, client *Client) {
 			WriteProxyError(w, err)
 			return
 		}
-		client.Server = "http://127.0.0.1:30100"
+		client.SetServer("http://127.0.0.1:30100")
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "stopped"})
 	}))
