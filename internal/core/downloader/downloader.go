@@ -349,6 +349,14 @@ func (d *downloader) transfer(ctx context.Context, started time.Time) (*Result, 
 	if !d.info.Ranged {
 		return d.singleStream(ctx, started)
 	}
+	if d.info.Size < 0 {
+		// A 206 answering the probe with `Content-Range: bytes 0-0/*` means the
+		// server accepts ranges but will not tell us the total size. Planning
+		// blocks needs that size, so a parallel transfer would fetch nothing
+		// and publish an empty file as a success.
+		d.warnf("server did not report a total size; downloading in a single stream")
+		return d.singleStream(ctx, started)
+	}
 	return d.parallel(ctx, started)
 }
 
@@ -423,6 +431,12 @@ func newLimiter(bytesPerSec int64) (*rate.Limiter, int) {
 
 // parallel runs the block-queue transfer.
 func (d *downloader) parallel(ctx context.Context, started time.Time) (*Result, error) {
+	if d.info.Size <= 0 {
+		// Defensive: transfer() only enters the parallel path when the total
+		// size is known, but a range without a parsable total must never turn
+		// into a zero-block, zero-byte "successful" download.
+		return nil, fmt.Errorf("cannot download in parallel with size %d", d.info.Size)
+	}
 	blockSize := d.blockSizeFor()
 	var doneBlocks []int64
 	if d.state != nil {
@@ -754,9 +768,15 @@ func (d *downloader) singleStream(ctx context.Context, started time.Time) (*Resu
 	}
 	_ = RemoveState(d.outPath)
 
+	size := d.info.Size
+	if size < 0 {
+		// Unknown total (Content-Range: bytes 0-0/*): report what was written
+		// instead of -1, which the summary would print as "-1 B".
+		size = written
+	}
 	return &Result{
 		Path:         d.outPath,
-		Size:         d.info.Size,
+		Size:         size,
 		Bytes:        written,
 		Threads:      1,
 		SingleStream: true,

@@ -31,6 +31,7 @@ type fakeServer struct {
 	lieAboutRanges bool
 	rejectHEAD     bool
 	chunked        bool
+	unknownTotal   bool // answer 206 with `Content-Range: bytes s-e/*`
 	throttle       time.Duration
 	abortFirstAt   int64 // byte offset; when > 0 the first range covering it is cut short
 	abortPending   atomic.Bool
@@ -117,7 +118,12 @@ func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		start, end = s, e
-		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(f.data)))
+		total := strconv.Itoa(len(f.data))
+		if f.unknownTotal {
+			// Legal per RFC 9110: the server knows the range but not the total.
+			total = "*"
+		}
+		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%s", start, end, total))
 		w.WriteHeader(http.StatusPartialContent)
 	} else {
 		if !f.chunked {
@@ -347,8 +353,13 @@ func TestDownloadUnknownLength(t *testing.T) {
 	if !res.SingleStream {
 		t.Error("expected single-stream mode for unknown length")
 	}
-	if res.Size != -1 {
-		t.Errorf("Size = %d, want -1 (unknown)", res.Size)
+	// The total is unknown, so the result reports what was actually written
+	// instead of -1 (the summary used to print "-1 B").
+	if res.Size != int64(len(payload)) {
+		t.Errorf("Size = %d, want %d (bytes written)", res.Size, len(payload))
+	}
+	if res.Bytes != int64(len(payload)) {
+		t.Errorf("Bytes = %d, want %d", res.Bytes, len(payload))
 	}
 	if got := readFile(t, out); !bytes.Equal(got, payload) {
 		t.Error("downloaded content differs")
@@ -743,5 +754,40 @@ func TestDownloadRangeIgnoredAtRuntime(t *testing.T) {
 	}
 	if got := readFile(t, out); !bytes.Equal(got, payload) {
 		t.Error("downloaded content differs")
+	}
+}
+
+// TestDownloadUnknownTotalUsesSingleStream covers a probe answered with
+// `Content-Range: bytes 0-0/*` (a legal "range supported, total unknown"
+// response): the parallel planner needs a total size, so the download must fall
+// back to a single stream instead of planning zero blocks and publishing an
+// empty file with exit code 0.
+func TestDownloadUnknownTotalUsesSingleStream(t *testing.T) {
+	payload := testPayload(1 << 20)
+	srv := newFakeServer(t, payload, func(f *fakeServer) {
+		f.rejectHEAD = true
+		f.unknownTotal = true
+	})
+	out := filepath.Join(t.TempDir(), "out.bin")
+
+	opts := testOptions(srv.URL(), out)
+	opts.Threads = 4
+	opts.BlockSize = 256 << 10
+
+	res, err := Download(context.Background(), opts)
+	if err != nil {
+		t.Fatalf("download: %v", err)
+	}
+	if !res.SingleStream {
+		t.Error("expected a single-stream transfer when the total size is unknown")
+	}
+	if res.Size != int64(len(payload)) {
+		t.Errorf("Result.Size = %d, want %d (must not be -1)", res.Size, len(payload))
+	}
+	if res.Bytes != int64(len(payload)) {
+		t.Errorf("Result.Bytes = %d, want %d", res.Bytes, len(payload))
+	}
+	if got := readFile(t, out); !bytes.Equal(got, payload) {
+		t.Errorf("downloaded %d bytes, want %d", len(got), len(payload))
 	}
 }

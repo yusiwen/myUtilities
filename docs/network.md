@@ -140,6 +140,10 @@ big.iso  45.2%  ████████████░░░░░░░░  45
   blocks marked done whose bytes never landed.
 - **Servers without range support** — if the server ignores `Range` requests, the
   downloader falls back to a single connection; such transfers cannot be resumed.
+- **Unknown total size** — a server can accept ranges while reporting
+  `Content-Range: bytes 0-0/*` (no total). The parallel planner needs the size, so
+  such a transfer falls back to a single connection and reports the bytes actually
+  written instead of a `-1 B` summary; it cannot be resumed either.
 - **Interrupt** — Ctrl-C flushes the resume state, keeps the partial file, prints
   a resume hint, and exits with status `130`.
 - **Progress** — the live region is drawn on a TTY and cleared afterwards; on a
