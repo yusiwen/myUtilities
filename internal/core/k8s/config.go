@@ -68,12 +68,20 @@ func LoadIndex() (*ConfigIndex, error) {
 	return idx, nil
 }
 
+// SaveIndex writes the kubeconfig index. The file stores raw kubeconfig text
+// (client keys, tokens), so it is written 0600 and an existing file is chmodded
+// as well: the directory is 0700 by default, but --config-dir can point at a
+// pre-existing world-readable one.
 func SaveIndex(idx *ConfigIndex) error {
 	data, err := yaml.Marshal(idx)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(indexPath(), data, 0644)
+	path := indexPath()
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0o600)
 }
 
 // LoadClient builds a Kubernetes clientset from kubeconfig content.
