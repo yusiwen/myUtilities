@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/glamour"
 	coregit "github.com/yusiwen/myUtilities/internal/core/git"
+	"github.com/yusiwen/myUtilities/internal/core/llm"
 	"github.com/yusiwen/myUtilities/internal/core/openai"
 	"github.com/yusiwen/myUtilities/internal/core/scip"
 	"github.com/yusiwen/myUtilities/internal/core/term"
@@ -62,16 +63,17 @@ func (o *ReviewOptions) Run() error {
 		return err
 	}
 
+	// Providers come from the shared llm-config.json, overridden by any providers
+	// this module config defines.
+	catalog, err := llm.EffectiveCatalog(o.LLMConfig, &gc.Catalog)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
+	}
+
 	// When --provider is explicitly provided, use only that single provider.
-	var providerList coregit.MultiProvider
-	if o.Provider != "" {
-		p, err := coregit.ResolveProvider(gc, o.Provider)
-		if err != nil {
-			return err
-		}
-		providerList = coregit.MultiProvider{p.Name}
-	} else {
-		providerList = moduleCfg.Provider
+	providerList, err := llm.ResolveNames(catalog, o.Provider, moduleCfg.Provider)
+	if err != nil {
+		return err
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {
@@ -179,41 +181,21 @@ func (o *ReviewOptions) Run() error {
 
 	var agentResult *coregit.AgentResult
 
-	runErr := coregit.ForEachProvider(gc, providerList, func(p *coregit.Provider) error {
-		baseURL := p.BaseURL
-		apiKey := p.APIKey
-		model := p.Model
-		if o.BaseURL != "" {
-			baseURL = o.BaseURL
-		}
-		if o.APIKey != "" {
-			apiKey = o.APIKey
-		}
-		if o.Model != "" {
-			model = o.Model
-		}
-
-		if apiKey == "" {
-			return fmt.Errorf("API key is required. Set it via:\n" +
-				"  - OPENAI_API_KEY environment variable\n" +
-				"  - --api-key flag\n" +
-				"  - 'mu set git provider add --name <name> --api-key <key> ...'")
-		}
-
-		fmt.Fprintf(os.Stderr, "%s%s%s\n",
-			term.Faint("Calling provider "),
-			term.Bright(p.Name),
-			term.Faint("..."))
-
-		oneShot := openai.NewClient(baseURL, apiKey, model)
+	// The review agent needs the client rather than a single prompt, so it uses
+	// the shared fallback walker directly instead of llm.Complete.
+	runErr := llm.ForEachProvider(catalog, providerList, llm.CallOptions{
+		FlagBaseURL: o.BaseURL,
+		FlagAPIKey:  o.APIKey,
+		FlagModel:   o.Model,
+		Verbose:     o.Verbose,
+	}, func(client *openai.Client, _ *llm.Provider) error {
 		if o.Verbose {
-			oneShot.DebugWriter = os.Stderr
 			fmt.Fprintln(os.Stderr, sysPrompt)
 		}
 
 		maxTurns := o.MaxTurns
 		start := time.Now()
-		agent, err := coregit.NewReviewAgent(oneShot, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose, indexSet)
+		agent, err := coregit.NewReviewAgent(client, diff, diffArgs, lang, o.Context, repoName, branchName, commitHash, maxTurns, o.Verbose, indexSet)
 		if err != nil {
 			return err
 		}
@@ -234,7 +216,7 @@ func (o *ReviewOptions) Run() error {
 	})
 
 	if runErr != nil {
-		return fmt.Errorf("all provider(s) failed: %w", runErr)
+		return runErr
 	}
 
 	timestamp := time.Now()

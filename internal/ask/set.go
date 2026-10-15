@@ -103,11 +103,12 @@ type ProviderCmd struct {
 }
 
 type ProviderAddCmd struct {
-	Name    string `help:"Provider name (e.g. default, advanced)." required:""`
-	BaseURL string `help:"Base URL of the AI service." required:""`
-	APIKey  string `help:"API key for the AI service." required:""`
-	Model   string `help:"Model name (e.g. gpt-4o-mini, deepseek-chat)."`
-	Path    string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	Name      string `help:"Provider name (e.g. default, advanced)." required:""`
+	BaseURL   string `help:"Base URL of the AI service. Required for a new name; omit to inherit it from the shared catalog and override other fields only."`
+	APIKey    string `help:"API key for the AI service. Required for a new name; omit to inherit it from the shared catalog."`
+	Model     string `help:"Model name (e.g. gpt-4o-mini, deepseek-chat)."`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *ProviderAddCmd) Run() error {
@@ -116,17 +117,17 @@ func (o *ProviderAddCmd) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	for _, p := range cfg.Providers {
-		if p.Name == o.Name {
-			return fmt.Errorf("provider %q already exists", o.Name)
-		}
+	if err := llm.ValidateProviderAdd(&cfg.Catalog, o.Name, o.BaseURL, o.APIKey, o.LLMConfig); err != nil {
+		return err
 	}
-	cfg.Providers = append(cfg.Providers, llm.Provider{
+	if err := cfg.Add(llm.Provider{
 		Name:    o.Name,
 		BaseURL: o.BaseURL,
 		APIKey:  o.APIKey,
 		Model:   o.Model,
-	})
+	}); err != nil {
+		return err
+	}
 	if err := llm.SaveConfigTo(o.Path, "ask", cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -135,8 +136,9 @@ func (o *ProviderAddCmd) Run() error {
 }
 
 type ProviderSetCmd struct {
-	Names string `arg:"" help:"Provider name(s), comma-separated for fallback (e.g. 'default,backup')."`
-	Path  string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	Names     string `arg:"" help:"Provider name(s), comma-separated for fallback (e.g. 'default,backup')."`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *ProviderSetCmd) Run() error {
@@ -149,8 +151,14 @@ func (o *ProviderSetCmd) Run() error {
 	if err != nil {
 		return err
 	}
+	// Names may come from this module's file or from the shared catalog, so the
+	// check runs against the merged view.
+	catalog, err := llm.EffectiveCatalog(o.LLMConfig, &cfg.Catalog)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
+	}
 	for _, name := range names {
-		if _, err := llm.ResolveProvider(cfg, name); err != nil {
+		if _, err := catalog.Resolve(name); err != nil {
 			return err
 		}
 	}
@@ -163,8 +171,9 @@ func (o *ProviderSetCmd) Run() error {
 }
 
 type ProviderRmCmd struct {
-	Name string `arg:"" help:"Provider name to remove."`
-	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	Name      string `arg:"" help:"Provider name to remove."`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *ProviderRmCmd) Run() error {
@@ -173,23 +182,12 @@ func (o *ProviderRmCmd) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	idx := -1
-	for i, p := range cfg.Providers {
-		if p.Name == o.Name {
-			idx = i
-			break
-		}
+	if err := llm.ExplainInheritedProvider(o.Name, &cfg.Catalog, o.LLMConfig); err != nil {
+		return err
 	}
-	if idx == -1 {
-		return fmt.Errorf("provider %q not found", o.Name)
+	if err := cfg.Remove(o.Name, false, llm.Reference{Module: "ask", Names: cfg.Provider}); err != nil {
+		return err
 	}
-
-	// Check if the ask module references this provider.
-	if cfg.Provider.Contains(o.Name) {
-		return fmt.Errorf("cannot remove provider %q: module 'ask' is using it", o.Name)
-	}
-
-	cfg.Providers = append(cfg.Providers[:idx], cfg.Providers[idx+1:]...)
 	if err := llm.SaveConfigTo(o.Path, "ask", cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
@@ -198,7 +196,8 @@ func (o *ProviderRmCmd) Run() error {
 }
 
 type ProviderListCmd struct {
-	Path string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *ProviderListCmd) Run() error {
@@ -207,14 +206,22 @@ func (o *ProviderListCmd) Run() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if len(cfg.Providers) == 0 {
+	catalog, err := llm.EffectiveCatalog(o.LLMConfig, &cfg.Catalog)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
+	}
+
+	if len(catalog.Providers) == 0 {
 		fmt.Println("No providers configured.")
 		return nil
 	}
 
 	fmt.Fprintln(os.Stdout, "Providers:")
-	for _, p := range cfg.Providers {
+	for _, p := range catalog.Providers {
 		fmt.Fprintf(os.Stdout, "  %s → %s (model: %s)\n", p.Name, p.BaseURL, p.Model)
+	}
+	if inherited := llm.InheritedNames(&cfg.Catalog, o.LLMConfig); len(inherited) > 0 {
+		fmt.Fprintf(os.Stdout, "\nInherited from %s: %s\n", llm.GlobalConfigFileName, strings.Join(inherited, ", "))
 	}
 
 	if len(cfg.Provider) > 0 {
@@ -230,6 +237,7 @@ type ModuleSetCmd struct {
 	Provider  string `help:"Provider name(s) to use, comma-separated for fallback."`
 	SearchKey string `help:"Brave Search API key." name:"search-key"`
 	Path      string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *ModuleSetCmd) configPath() string {
@@ -250,8 +258,12 @@ func (o *ModuleSetCmd) Run() error {
 		if err != nil {
 			return err
 		}
+		catalog, err := llm.EffectiveCatalog(o.LLMConfig, &cfg.Catalog)
+		if err != nil {
+			return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
+		}
 		for _, name := range names {
-			if _, err := llm.ResolveProvider(cfg, name); err != nil {
+			if _, err := catalog.Resolve(name); err != nil {
 				return err
 			}
 		}

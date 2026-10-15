@@ -28,6 +28,9 @@ import (
 	"github.com/yusiwen/myUtilities/internal/termshot"
 	"github.com/yusiwen/myUtilities/internal/watch"
 	"github.com/yusiwen/myUtilities/internal/wol"
+
+	// Registers the `mu set llm` subcommands (the shared provider catalog).
+	_ "github.com/yusiwen/myUtilities/internal/llm"
 )
 
 type MyUtilities struct {
