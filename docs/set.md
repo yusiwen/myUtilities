@@ -7,11 +7,34 @@ the binary was built with.
 ```bash
 # List the available modules
 mu set
-# ask, es, git, installer, svcreg, watch, wol
+# ask, es, git, installer, llm, svcreg, watch, wol
 ```
 
 `set` is handled before the CLI parser, so it does not appear in `mu --help`;
 `mu set` on its own prints the module list.
+
+## llm
+
+The shared provider catalog (`~/.config/mu/llm-config.json`) is read by every LLM
+module — `ask`, `git commit`, `git review` — so one endpoint is defined once:
+
+```bash
+mu set llm provider add --name deepseek --base-url https://api.deepseek.com/v1 --api-key sk-xxx --model deepseek-chat
+mu set llm provider list      # shared providers + the modules depending on them
+mu set llm provider rm deepseek          # refused while a module references it
+mu set llm provider rm deepseek --force  # remove anyway
+```
+
+A module config may still define its own `providers`. For the same name the module
+entry wins **field by field**: a non-empty field overrides the shared value and an
+empty field keeps it, so a module can change just the `model` of a shared endpoint —
+`mu set ask provider add --name deepseek --model deepseek-chat` is enough, and a new
+name still requires `--base-url` and `--api-key`. A module config without `providers`
+uses the shared catalog unchanged, and reading a config file never rewrites it —
+`mu set ask provider add …` stays the explicit per-module override path.
+
+`--llm-config <path>` selects the catalog file for the readers (`mu ask`,
+`mu git commit`, `mu git review`) and for the `mu set llm` subcommands.
 
 ## ask
 
@@ -95,8 +118,9 @@ mu set wol --server http://192.168.1.100:8080 --port 8080 \
 ## Config files
 
 Every module keeps its settings in `~/.config/mu/<module>-config.json` (the
-`watch` module uses `~/.config/mu/watch.json`), and secret-bearing files are
-written with mode `0600`. Use `mu set <module> --help` for the exact flags and
+`watch` module uses `~/.config/mu/watch.json`), secret-bearing files are written with
+mode `0600`, and the shared LLM provider catalog is
+`~/.config/mu/llm-config.json`. Use `mu set <module> --help` for the exact flags and
 defaults.
 
 `--config <path>` selects the file to use, and it applies to readers as well as

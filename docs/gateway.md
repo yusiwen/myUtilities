@@ -17,6 +17,7 @@ By default, module configs are read from `~/.config/mu/`:
 ├── budget-config.json
 ├── ask-config.json
 ├── git-config.json
+├── llm-config.json      (shared LLM providers, read by ask and git)
 ├── svcreg-config.json
 └── watch.json
 ```

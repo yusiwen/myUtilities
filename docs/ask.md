@@ -49,7 +49,6 @@ mu set ask provider rm fast
 
 Configuration file: `~/.config/mu/ask-config.json` (override with
 `mu ask --config <path>`, and with `mu set ask … --config <path>`).
-
 ```json
 {
   "base_url": "https://api.openai.com/v1",
@@ -65,3 +64,30 @@ Configuration file: `~/.config/mu/ask-config.json` (override with
 ```
 
 All settings can also be set via environment variables (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `BRAVE_SEARCH_API_KEY`) or CLI flags.
+
+## Shared providers
+
+Providers can also live in the shared catalog `~/.config/mu/llm-config.json`, so one
+endpoint definition serves `mu ask`, `mu git commit` and `mu git review`:
+
+```bash
+mu set llm provider add --name deepseek --base-url https://api.deepseek.com/v1 \
+  --api-key sk-xxx --model deepseek-chat
+mu set ask module --provider deepseek
+mu set llm provider list       # shows the modules depending on the catalog
+```
+
+Precedence, for a name defined in both files: the `ask-config.json` entry wins
+**field by field** — a non-empty field overrides the shared value and an empty field
+keeps it, so this module can change only the `model` of a shared endpoint:
+
+```bash
+mu set ask provider add --name deepseek --model deepseek-chat   # keep the shared endpoint and key
+```
+
+A config without `providers` uses the shared catalog unchanged, and nothing in the
+shared file is copied into `ask-config.json` (loading never rewrites a config file).
+
+`--llm-config <path>` points every reader and `mu set llm …` at a different catalog
+file, matching the `--config` convention.
+
