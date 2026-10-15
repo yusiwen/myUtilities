@@ -24,7 +24,7 @@ jobs:
         run: make releases
 
       - name: Upload Release Assets
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           # Only the packed archives are published; never a raw, un-archived
           # binary (which would otherwise lose its exec bit across downloads).
