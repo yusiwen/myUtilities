@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/yusiwen/myUtilities/internal/core/llm"
 )
 
 // TestGitConfigExplicitPathRoundTrip covers the --config plumbing: a custom path
@@ -11,8 +13,8 @@ import (
 func TestGitConfigExplicitPathRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "custom", "git-config.json")
 	want := &GitConfig{
-		Providers: []Provider{{Name: "p1", BaseURL: "https://example.invalid/v1", APIKey: "k"}},
-		Commit:    ModuleConfig{Provider: MultiProvider{"p1"}, Lang: "en"},
+		Catalog: llm.Catalog{Providers: []llm.Provider{{Name: "p1", BaseURL: "https://example.invalid/v1", APIKey: "k"}}},
+		Commit:  ModuleConfig{Provider: llm.MultiProvider{"p1"}, Lang: "en"},
 	}
 	if err := SaveGitConfigTo(path, want); err != nil {
 		t.Fatalf("SaveGitConfigTo: %v", err)

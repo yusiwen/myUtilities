@@ -65,30 +65,24 @@ func (m MultiProvider) Contains(name string) bool {
 	return false
 }
 
-// Provider represents a named LLM provider configuration.
-type Provider struct {
-	Name    string `json:"name"`
-	BaseURL string `json:"base_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
-}
-
 // Config is the ask module configuration file structure.
 //
 // Legacy mode: flat fields (base_url, api_key, model) are used directly.
 //
-// New mode: providers[] defines named providers, and provider[] references
-// them by name, enabling fallback chains.
+// New mode: the embedded Catalog's providers[] defines named providers, and
+// provider[] references them by name, enabling fallback chains. Providers may
+// also live in the shared llm-config.json; this file's entries override them.
 //
 // On load, flat fields are auto-migrated into a "default" provider if
 // providers[] is not set. On save, both formats coexist so existing
 // tooling continues to work.
 type Config struct {
+	Catalog
+
 	BaseURL      string        `json:"base_url,omitempty"`
 	APIKey       string        `json:"api_key,omitempty"`
 	Model        string        `json:"model,omitempty"`
 	SearchAPIKey string        `json:"search_api_key,omitempty"`
-	Providers    []Provider    `json:"providers,omitempty"`
 	Provider     MultiProvider `json:"provider,omitempty"`
 }
 
@@ -170,6 +164,9 @@ func LoadConfigFromPath(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	// Name the file so a provider lookup failure can point at it.
+	cfg.Source = filepath.Base(resolved)
+
 	migrateConfig(cfg)
 	return cfg, nil
 }
@@ -194,7 +191,7 @@ func migrateConfig(cfg *Config) {
 		}}
 	}
 	if len(cfg.Provider) == 0 && len(cfg.Providers) > 0 {
-		if _, err := ResolveProvider(cfg, "default"); err == nil {
+		if _, err := cfg.Resolve("default"); err == nil {
 			cfg.Provider = MultiProvider{"default"}
 		}
 	}
@@ -248,32 +245,4 @@ func ParseProviderList(s string) (MultiProvider, error) {
 		return nil, fmt.Errorf("provider list is empty after trimming whitespace")
 	}
 	return result, nil
-}
-
-// ResolveProvider finds a named provider in the config.
-func ResolveProvider(cfg *Config, name string) (*Provider, error) {
-	for i := range cfg.Providers {
-		if cfg.Providers[i].Name == name {
-			return &cfg.Providers[i], nil
-		}
-	}
-	return nil, fmt.Errorf("provider %q not found in ask-config.json", name)
-}
-
-// EffectiveClientConfig returns the effective base URL, API key, and model
-// to use for an LLM call, merging provider settings with flag overrides.
-func EffectiveClientConfig(cfg *Config, p *Provider, flagBaseURL, flagAPIKey, flagModel string) (baseURL, apiKey, model string) {
-	baseURL = p.BaseURL
-	apiKey = p.APIKey
-	model = p.Model
-	if flagBaseURL != "" {
-		baseURL = flagBaseURL
-	}
-	if flagAPIKey != "" {
-		apiKey = flagAPIKey
-	}
-	if flagModel != "" {
-		model = flagModel
-	}
-	return
 }

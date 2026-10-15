@@ -125,9 +125,9 @@ func TestSaveLoadPathConsistency(t *testing.T) {
 func TestLoadConfigFromRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "custom", "ask-config.json")
 	want := &Config{
-		BaseURL:   "https://example.invalid/v1",
-		Model:     "m",
-		Providers: []Provider{{Name: "p1", BaseURL: "https://example.invalid/v1", APIKey: "k"}},
+		BaseURL: "https://example.invalid/v1",
+		Model:   "m",
+		Catalog: Catalog{Providers: []Provider{{Name: "p1", BaseURL: "https://example.invalid/v1", APIKey: "k"}}},
 	}
 	if err := SaveConfigTo(path, "ask", want); err != nil {
 		t.Fatalf("SaveConfigTo: %v", err)

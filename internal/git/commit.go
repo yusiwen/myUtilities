@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	coregit "github.com/yusiwen/myUtilities/internal/core/git"
+	"github.com/yusiwen/myUtilities/internal/core/llm"
 	"github.com/yusiwen/myUtilities/internal/core/openai"
 	"github.com/yusiwen/myUtilities/internal/core/term"
 )
@@ -46,6 +46,7 @@ type CommitOptions struct {
 	DiffStrategy string `help:"How much diff to send to AI." short:"s" default:"auto" enum:"auto,full,summary"`
 	Lang         string `help:"Language for commit message." short:"L" default:"en" enum:"en,cn"`
 	Config       string `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
+	LLMConfig    string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func (o *CommitOptions) Run() error {
@@ -59,16 +60,17 @@ func (o *CommitOptions) Run() error {
 		return err
 	}
 
+	// Providers come from the shared llm-config.json, overridden by any providers
+	// this module config defines.
+	catalog, err := llm.EffectiveCatalog(o.LLMConfig, &gc.Catalog)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
+	}
+
 	// When --provider is explicitly provided, use only that single provider.
-	var providerList coregit.MultiProvider
-	if o.Provider != "" {
-		p, err := coregit.ResolveProvider(gc, o.Provider)
-		if err != nil {
-			return err
-		}
-		providerList = coregit.MultiProvider{p.Name}
-	} else {
-		providerList = moduleCfg.Provider
+	providerList, err := llm.ResolveNames(catalog, o.Provider, moduleCfg.Provider)
+	if err != nil {
+		return err
 	}
 
 	if err := coregit.CheckPreflight(); err != nil {
@@ -103,63 +105,19 @@ func (o *CommitOptions) Run() error {
 	sysPrompt := buildSystemPrompt(lang)
 	userPrompt := buildUserPrompt(strategy, diff.Diff, diff.Stat, nameStatus)
 
-	if o.Verbose {
-		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
-		fmt.Fprintln(os.Stderr, sysPrompt)
-		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
-		fmt.Fprintln(os.Stderr, userPrompt)
-	}
+	// Verbose prompt dumping happens inside llm.Complete, so every module prints
+	// the same way.
 
 	var result *openai.ChatResult
 
-	err = coregit.ForEachProvider(gc, providerList, func(p *coregit.Provider) error {
-		baseURL := p.BaseURL
-		apiKey := p.APIKey
-		model := p.Model
-		if o.BaseURL != "" {
-			baseURL = o.BaseURL
-		}
-		if o.APIKey != "" {
-			apiKey = o.APIKey
-		}
-		if o.Model != "" {
-			model = o.Model
-		}
-
-		if apiKey == "" {
-			return fmt.Errorf("API key is required. Set it via:\n" +
-				"  - OPENAI_API_KEY environment variable\n" +
-				"  - --api-key flag\n" +
-				"  - 'mu set git provider add --name <name> --api-key <key> ...'")
-		}
-
-		fmt.Fprintf(os.Stderr, "%s%s%s\n",
-			term.Faint("Calling provider "),
-			term.Bright(p.Name),
-			term.Faint("..."))
-
-		start := time.Now()
-		oneShot := openai.NewClient(baseURL, apiKey, model)
-		if o.Verbose {
-			oneShot.DebugWriter = os.Stderr
-		}
-
-		var callErr error
-		result, callErr = oneShot.ChatCompletion(sysPrompt, userPrompt)
-		elapsed := time.Since(start)
-		if callErr != nil {
-			return fmt.Errorf("request failed: %w", callErr)
-		}
-
-		if o.Verbose {
-			fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
-			fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
-		}
-
-		return nil
-	})
+	result, err = llm.Complete(catalog, providerList, llm.CallOptions{
+		FlagBaseURL: o.BaseURL,
+		FlagAPIKey:  o.APIKey,
+		FlagModel:   o.Model,
+		Verbose:     o.Verbose,
+	}, sysPrompt, userPrompt)
 	if err != nil {
-		return fmt.Errorf("all provider(s) failed: %w", err)
+		return err
 	}
 
 	sep := strings.Repeat("─", 50)

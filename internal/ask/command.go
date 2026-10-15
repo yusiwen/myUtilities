@@ -6,11 +6,9 @@ import (
 	"io"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/morikuni/aec"
 	"github.com/yusiwen/myUtilities/internal/core/llm"
-	"github.com/yusiwen/myUtilities/internal/core/openai"
 	"github.com/yusiwen/myUtilities/internal/core/search"
 )
 
@@ -64,6 +62,7 @@ type Options struct {
 	Verbose      bool   `help:"Print prompts and raw API responses for debugging."`
 	Question     string `arg:"" name:"question" help:"Question to ask." optional:""`
 	Config       string `name:"config" help:"Config file path. Default: ~/.config/mu/ask-config.json"`
+	LLMConfig    string `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 }
 
 func buildSystemPrompt(lang string, withSearch bool) string {
@@ -91,76 +90,17 @@ func formatSearchResults(results []search.Result) string {
 	return b.String()
 }
 
-// resolveProviderList determines the provider list to use.
-// When --provider flag is set, it resolves a single provider by name.
-// Otherwise, it uses the provider list from config.
-func resolveProviderList(cfg *llm.Config, override string) (llm.MultiProvider, error) {
-	if override != "" {
-		p, err := llm.ResolveProvider(cfg, override)
-		if err != nil {
-			return nil, err
-		}
-		return llm.MultiProvider{p.Name}, nil
-	}
-	return cfg.Provider, nil
-}
-
-// askWithProvider calls the LLM API for a single provider.
-// If fallback is available and the provider is not the last one,
-// a short dial timeout is used so that an unresponsive provider
-// is abandoned quickly (fast-fail).
-func askWithProvider(cfg *llm.Config, p *llm.Provider, sysPrompt, userPrompt string, o *Options, isLast bool) (*openai.ChatResult, error) {
-	baseURL, apiKey, model := llm.EffectiveClientConfig(cfg, p, o.BaseURL, o.APIKey, o.Model)
-
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key is required. Set it via:\n" +
-			"  - OPENAI_API_KEY environment variable\n" +
-			"  - --api-key flag\n" +
-			"  - ~/.config/mu/ask-config.json config file")
-	}
-
-	fmt.Fprintf(os.Stderr, "%s%s%s\n",
-		faint("Calling provider "),
-		bright(p.Name),
-		faint("..."))
-
-	// When a fallback is available, use a short dial timeout so that an
-	// unresponsive provider is abandoned within seconds instead of
-	// waiting for the full 60s request timeout.
-	var client *openai.Client
-	if !isLast {
-		client = openai.NewClientWithFastDial(baseURL, apiKey, model, 2*time.Second)
-	} else {
-		client = openai.NewClient(baseURL, apiKey, model)
-	}
-
-	if o.Verbose {
-		client.DebugWriter = os.Stderr
-		fmt.Fprintln(os.Stderr, "─── System Prompt ───")
-		fmt.Fprintln(os.Stderr, sysPrompt)
-		fmt.Fprintln(os.Stderr, "─── User Prompt ───")
-		fmt.Fprintln(os.Stderr, userPrompt)
-	}
-
-	start := time.Now()
-	result, err := client.ChatCompletion(sysPrompt, userPrompt)
-	if err != nil {
-		return nil, fmt.Errorf("request failed: %w", err)
-	}
-	elapsed := time.Since(start)
-
-	if o.Verbose {
-		fmt.Fprintf(os.Stderr, "─── Raw Response ───\n%s\n", result.Content)
-		fmt.Fprintf(os.Stderr, "─── API Time: %s ───\n", elapsed)
-	}
-
-	return result, nil
-}
-
 func (o *Options) Run() error {
 	cfg, err := llm.LoadConfigFrom(o.Config, "ask")
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Providers come from the shared llm-config.json, overridden by any
+	// providers this module config defines.
+	catalog, err := llm.EffectiveCatalog(o.LLMConfig, &cfg.Catalog)
+	if err != nil {
+		return fmt.Errorf("failed to load %s: %w", llm.GlobalConfigFileName, err)
 	}
 
 	// The --search-api-key flag / BRAVE_SEARCH_API_KEY env override the
@@ -218,39 +158,22 @@ func (o *Options) Run() error {
 		userPrompt = question
 	}
 
-	// Resolve provider list (from flag or config).
-	providerList, err := resolveProviderList(cfg, o.Provider)
+	// Resolve the provider chain (--provider flag overrides the module config),
+	// then hand the prompt to the shared caller: it owns the fallback walk, the
+	// API-key check and the fast-dial policy for providers with a fallback.
+	providerList, err := llm.ResolveNames(catalog, o.Provider, cfg.Provider)
 	if err != nil {
 		return err
 	}
-	if len(providerList) == 0 {
-		return fmt.Errorf("no provider configured. Set one with 'mu set ask provider set <name>' or 'mu set ask module --provider <name>'")
-	}
 
-	// Iterate providers: try each until one succeeds.
-	names := providerList.Names()
-	var result *openai.ChatResult
-	var lastErr error
-
-	for i, name := range names {
-		p, err := llm.ResolveProvider(cfg, name)
-		if err != nil {
-			lastErr = fmt.Errorf("provider %q not found: %w", name, err)
-			continue
-		}
-
-		isLast := i == len(names)-1
-		result, lastErr = askWithProvider(cfg, p, sysPrompt, userPrompt, o, isLast)
-		if lastErr == nil {
-			break // success
-		}
-		if isLast {
-			break // last provider failed
-		}
-	}
-
-	if lastErr != nil {
-		return fmt.Errorf("all provider(s) failed: %w", lastErr)
+	result, err := llm.Complete(catalog, providerList, llm.CallOptions{
+		FlagBaseURL: o.BaseURL,
+		FlagAPIKey:  o.APIKey,
+		FlagModel:   o.Model,
+		Verbose:     o.Verbose,
+	}, sysPrompt, userPrompt)
+	if err != nil {
+		return err
 	}
 
 	fmt.Fprintln(os.Stderr, faint("Answer:"))

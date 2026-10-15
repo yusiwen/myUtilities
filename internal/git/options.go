@@ -23,6 +23,7 @@ type ReviewOptions struct {
 	Paths       []string `arg:"" optional:"" name:"path" help:"Files or paths to review."`
 	List        bool     `help:"List saved review reports." name:"list"`
 	Config      string   `name:"config" help:"Config file path. Default: ~/.config/mu/git-config.json"`
+	LLMConfig   string   `name:"llm-config" help:"Shared provider catalog path. Default: ~/.config/mu/llm-config.json"`
 	ListAll     bool     `help:"When listing, include reviews from all projects." name:"list-all"`
 }
 

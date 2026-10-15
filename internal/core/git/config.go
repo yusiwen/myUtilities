@@ -10,16 +10,12 @@ import (
 	"github.com/yusiwen/myUtilities/internal/core/llm"
 )
 
-// Type aliases for shared types defined in core/llm/config.go.
-type Provider = llm.Provider
-type MultiProvider = llm.MultiProvider
-
 // ModuleConfig holds the per-module (commit or review) configuration.
 type ModuleConfig struct {
-	Provider   MultiProvider `json:"provider"`
-	Lang       string        `json:"lang,omitempty"`
-	ReviewsDir string        `json:"reviews_dir,omitempty"`
-	Scip       ScipConfig    `json:"scip,omitempty"`
+	Provider   llm.MultiProvider `json:"provider"`
+	Lang       string            `json:"lang,omitempty"`
+	ReviewsDir string            `json:"reviews_dir,omitempty"`
+	Scip       ScipConfig        `json:"scip,omitempty"`
 }
 
 func (m *ModuleConfig) ReviewsDirPath() string {
@@ -43,10 +39,14 @@ type ScipConfig struct {
 	Versions    map[string]string `json:"versions,omitempty"`     // lang → release tag override
 }
 
+// GitConfig is the git module configuration file structure. The embedded
+// llm.Catalog holds this file's own providers; providers from the shared
+// llm-config.json are merged underneath them (see llm.EffectiveCatalog).
 type GitConfig struct {
-	Providers []Provider   `json:"providers"`
-	Commit    ModuleConfig `json:"commit"`
-	Review    ModuleConfig `json:"review"`
+	llm.Catalog
+
+	Commit ModuleConfig `json:"commit"`
+	Review ModuleConfig `json:"review"`
 }
 
 const configDir = "~/.config/mu"
@@ -120,6 +120,9 @@ func loadGitConfigFile(path string, migrate bool) (*GitConfig, error) {
 		return nil, fmt.Errorf("failed to parse git-config.json: %w", err)
 	}
 
+	// Name the file so a provider lookup failure can point at it.
+	gc.Source = filepath.Base(path)
+
 	return gc, nil
 }
 
@@ -155,20 +158,23 @@ func migrateFromOldConfig() (*GitConfig, error) {
 	}
 
 	gc := &GitConfig{
-		Providers: []Provider{
-			{
-				Name:    "default",
-				BaseURL: oldCfg.BaseURL,
-				APIKey:  oldCfg.APIKey,
-				Model:   oldCfg.Model,
+		Catalog: llm.Catalog{
+			Providers: []llm.Provider{
+				{
+					Name:    "default",
+					BaseURL: oldCfg.BaseURL,
+					APIKey:  oldCfg.APIKey,
+					Model:   oldCfg.Model,
+				},
 			},
+			Source: configFileName,
 		},
 		Commit: ModuleConfig{
-			Provider: MultiProvider{"default"},
+			Provider: llm.MultiProvider{"default"},
 			Lang:     "en",
 		},
 		Review: ModuleConfig{
-			Provider: MultiProvider{"default"},
+			Provider: llm.MultiProvider{"default"},
 			Lang:     "en",
 		},
 	}
@@ -218,16 +224,6 @@ func saveGitConfigFile(path string, gc *GitConfig) error {
 	return nil
 }
 
-// ResolveProvider finds a named provider in the git config.
-func ResolveProvider(gc *GitConfig, name string) (*Provider, error) {
-	for i := range gc.Providers {
-		if gc.Providers[i].Name == name {
-			return &gc.Providers[i], nil
-		}
-	}
-	return nil, fmt.Errorf("provider %q not found in git-config.json", name)
-}
-
 func GetModuleConfig(gc *GitConfig, module string) (*ModuleConfig, error) {
 	switch module {
 	case "commit":
@@ -239,38 +235,11 @@ func GetModuleConfig(gc *GitConfig, module string) (*ModuleConfig, error) {
 	}
 }
 
-// ForEachProvider iterates through provider names and calls fn for each.
-// fn receives the resolved *Provider. If a provider is not found in the
-// config, the next provider is tried; an error is returned only when every
-// provider in the chain has been exhausted without success.
-func ForEachProvider(gc *GitConfig, providerNames MultiProvider, fn func(*Provider) error) error {
-	names := providerNames.Names()
-	if len(names) == 0 {
-		return fmt.Errorf("no provider configured for this module (set one with 'mu set git <module> --provider <name>')")
+// References returns the provider lists this config points at, so a provider
+// removal can be refused while commit or review still names it.
+func (gc *GitConfig) References() []llm.Reference {
+	return []llm.Reference{
+		{Module: "commit", Names: gc.Commit.Provider},
+		{Module: "review", Names: gc.Review.Provider},
 	}
-
-	// lastErr tracks errors across the fallback chain. Not-found errors are
-	// all accumulated (useful when a provider name is misspelled midway). fn
-	// errors are tracked for the final wrap.
-	var lastErr error
-	for i, name := range names {
-		p, err := ResolveProvider(gc, name)
-		if err != nil {
-			lastErr = fmt.Errorf("provider %q not found in git-config.json: %w", name, err)
-			continue
-		}
-		if err := fn(p); err != nil {
-			// If there are more providers to try, record the error and continue.
-			if i < len(names)-1 {
-				lastErr = fmt.Errorf("provider %q failed: %w", name, err)
-				continue
-			}
-			// This was the last provider — wrap consistently so the outer
-			// "all provider(s) failed" message always carries detail.
-			return fmt.Errorf("provider %q failed: %w", name, err)
-		}
-		// Success — stop immediately.
-		return nil
-	}
-	return lastErr
 }
