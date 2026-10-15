@@ -243,16 +243,29 @@ LLM settings shared by `git commit` and `git review` are stored in `~/.config/mu
 Configure via `mu set git`:
 
 ```bash
-# Add a provider
+# Providers can instead live in the shared catalog, read by every LLM module
+mu set llm provider add --name default --base-url <url> --api-key <key> --model <model>
+mu set git commit --provider default --lang en      # reference a shared provider
+
+# Add a provider to this module's config (a shared one only needs `mu set llm provider add`)
 mu set git provider add --name default --base-url <url> --api-key <key> --model <model>
 
-# Remove a provider
+# Remove a provider (refused while commit/review still reference it; --force overrides)
 mu set git provider rm --name <name>
 
-# List providers
+# List providers (the merged view, plus what is inherited from llm-config.json)
 mu set git provider list
 
 # Configure module defaults
 mu set git commit --provider default --lang en
 mu set git review --provider default --lang cn --reviews-dir ~/reviews
 ```
+
+For a name defined in both files, the `git-config.json` entry wins **field by field**:
+a non-empty field overrides the shared value and an empty field keeps it, so this
+module can override just the `model` of a shared endpoint —
+`mu set git provider add --name default --model other-model` — while a new name still
+requires `--base-url` and `--api-key`. A `git-config.json` without `providers` uses the
+shared catalog unchanged, and loading never rewrites a config file. `--llm-config
+<path>` points the readers and `mu set llm …` at a different catalog file, matching the
+`--config` convention.

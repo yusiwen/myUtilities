@@ -94,8 +94,8 @@ Example — `internal/git/` → `internal/core/openai/` + `internal/core/git/`:
 
 - `internal/git/commit.go` — Options struct, Run(), interactive prompt, editor, systemPrompt
 - `internal/core/git/agent.go` — Multi-turn agent loop with `ChatWithTools`, 7 tools (read_file, read_diff, search_code, read_function, find_references, find_definition, symbol_info)
-- `internal/git/config.go` — `GitConfig` with `providers` array, `commit`/`review` module configs; `git-config.json`
-- `internal/core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`
+- `internal/core/git/config.go` — `GitConfig` embedding `llm.Catalog` (its own `providers`), plus `commit`/`review` module configs and `References()`; `git-config.json`
+- `internal/core/openai/client.go` — `Client` struct, `ChatCompletion()` → `*ChatResult`, `ChatWithTools()` → `*ChatResponse`; `NewClient` and `NewClientWithFastDial` share `applyProviderDefaults` (both disable DeepSeek thinking), and `DialTimeout()` reports the fast-fail dial timeout (0 = default transport)
 - `internal/core/git/git.go` — `CheckPreflight()`, `GetStagedDiff()`, `GetDiff()`, `GetNameStatus()`, `GetUntrackedFiles()`, `ResolveRev()`, `IsDirty()`; `noChangesErr()` hints at untracked/staged files on an empty diff
 
 ### Configuration File Convention
@@ -110,9 +110,18 @@ stored under `~/.config/mu/` by default:
 | git | `git-config.json` |
 | es | `es-config.json` |
 | installer | `installer-config.json` |
+| llm (shared providers, not a command) | `llm-config.json` |
 | mock | `mock-config.json` |
 | svcreg | `svcreg-config.json` |
 | wol | `wol-config.json` |
+
+**Shared LLM providers:** `llm-config.json` holds named providers that every
+LLM module (`ask`, `git commit`, `git review`) reads; `mu set llm provider add/rm/list`
+edits it. A module config may still define its own `providers` — for the same name
+the module entry wins **field by field** (an empty field keeps the shared value), so a
+module can override just the `model` of a shared endpoint. A module config without
+`providers` uses the shared catalog unchanged, and reading a module config never
+rewrites it. `--llm-config <path>` overrides the catalog location.
 
 **Directory override:** The `mu gateway --config-dir <path>` flag
 overrides the base directory for all gateway-integrated modules.
@@ -164,6 +173,11 @@ The `internal/core/` directory contains reusable business logic:
   - `ChatResult` includes content, prompt tokens, completion tokens, total tokens
   - `ChatResponse` extends `ChatResult` with `ToolCalls []ToolCall`
   - Types: `Message`, `ToolDef`, `ToolFunction`, `ToolCall`, `ToolCallFunc`
+- `internal/core/llm/` - Shared LLM provider layer (the only place provider policy lives)
+  - `provider.go` — `Provider`, `Catalog` (embedded by the ask and git configs, and loaded from `llm-config.json`), `Resolve`/`Add`/`Remove`, `MergeCatalogs` (field-level module override), `ResolveNames`, `EffectiveClientConfig`
+  - `call.go` — `CallOptions` (flag overrides, verbose writer, fast-dial timeout), `ForEachProvider` (the single fallback walker: fast-dial for every non-last provider, the one API-key hint, the `Calling provider` line, one shared `all provider(s) failed` wrap), `Complete` (one-shot prompt path used by `ask` and `git commit`)
+  - `store.go` — `llm-config.json` load/save (0600), `EffectiveCatalog` (shared catalog + module override), `InheritedNames`, `DependentReferences`, `ExplainInheritedProvider`
+  - `git review` keeps its own agent loop and only takes its client from `ForEachProvider`
 - `internal/core/git/` - Git operations
   - `CheckPreflight()` — verifies git is installed and in a repository
   - `GetStagedDiff()` — returns staged diff + stat with truncation
@@ -232,6 +246,11 @@ The `internal/core/` directory contains reusable business logic:
     - Shared config with `commit` via `git-config.json`
     - Optional SCIP semantic tools via `internal/core/scip` (upgraded `read_function`); controlled by `--no-scip`/`--refresh-scip` and `review.scip` config
     - Empty-diff errors hint at untracked (`git add -N`) and staged (`--staged`/`git reset`) files, consistent with `git diff` semantics
+
+- `internal/llm/` - `mu set llm` command: registers the `llm` setter and edits the shared
+  provider catalog (`provider add/rm/list`). `rm` refuses while `ask`, `git commit` or
+  `git review` still reference the name (only names a module cannot satisfy from its own
+  `providers` count) unless `--force` is given.
 
 - `internal/scip/` - SCIP semantic code intelligence command
   - `install <lang>` — treesitter-nvim-style auto-download of an indexer binary
