@@ -18,6 +18,17 @@ type Client struct {
 	HTTPClient      *http.Client
 	DebugWriter     io.Writer
 	DisableThinking bool
+
+	// dialTimeout is the fast-fail dial timeout when HTTPClient carries a custom
+	// transport, and zero when it uses the default transport.
+	dialTimeout time.Duration
+}
+
+// DialTimeout reports the fast-fail dial timeout this client was built with. Zero
+// means the client uses the default transport, i.e. an unresponsive endpoint
+// consumes the full request timeout instead of being abandoned early.
+func (c *Client) DialTimeout() time.Duration {
+	return c.dialTimeout
 }
 
 type ChatResult struct {
@@ -101,17 +112,26 @@ func NewClient(baseURL, apiKey, model string) *Client {
 		Model:      model,
 		HTTPClient: &http.Client{Timeout: 60 * time.Second},
 	}
+	applyProviderDefaults(c, baseURL)
+	return c
+}
+
+// applyProviderDefaults sets the per-endpoint quirks every constructor must
+// respect. Both constructors go through it so a client built for a provider that
+// has a fallback behind it cannot silently behave differently from the same
+// provider used on its own.
+func applyProviderDefaults(c *Client, baseURL string) {
 	if strings.Contains(strings.ToLower(baseURL), "deepseek") {
 		c.DisableThinking = true
 	}
-	return c
 }
 
 // NewClientWithFastDial creates an OpenAI client with a short dial timeout
 // for fast-fail on fallback. The connection phase uses [dialTimeout] — if a
 // TCP+TLS handshake doesn't complete within that window, the request fails
 // immediately and the next provider is tried. Once connected, the client
-// still waits up to 60s for the response body.
+// still waits up to 60s for the response body. Provider defaults (for example
+// disabling DeepSeek thinking) are applied exactly as in NewClient.
 func NewClientWithFastDial(baseURL, apiKey, model string, dialTimeout time.Duration) *Client {
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
@@ -119,15 +139,18 @@ func NewClientWithFastDial(baseURL, apiKey, model string, dialTimeout time.Durat
 		}).DialContext,
 		TLSHandshakeTimeout: dialTimeout,
 	}
-	return &Client{
-		BaseURL:    baseURL,
-		APIKey:     apiKey,
-		Model:      model,
+	c := &Client{
+		BaseURL: baseURL,
+		APIKey:  apiKey,
+		Model:   model,
 		HTTPClient: &http.Client{
 			Timeout:   60 * time.Second,
 			Transport: transport,
 		},
+		dialTimeout: dialTimeout,
 	}
+	applyProviderDefaults(c, baseURL)
+	return c
 }
 
 func (c *Client) ChatCompletion(systemPrompt, userPrompt string) (*ChatResult, error) {
