@@ -12,14 +12,23 @@
     in
     {
       devShells = forAllSystems (system:
-        let pkgs = import nixpkgs { inherit system; };
-        in {
-          default = pkgs.mkShell {
+        let
+          pkgs = import nixpkgs { inherit system; };
+          # pkgs.git pulls python3, whose sysconfig data references clang-wrapper —
+          # which is how a ~1.2 GiB C toolchain ends up in a shell that never
+          # compiles C. Dropping python/perl support severs that chain while
+          # keeping the macOS keychain credential helper that gitMinimal drops.
+          slimGit = pkgs.git.override { pythonSupport = false; perlSupport = false; };
+        in
+        {
+          # mkShellNoCC: no cgo anywhere in this repo (Makefile builds with
+          # CGO_ENABLED=0), so the shell needs no C compiler.
+          default = pkgs.mkShellNoCC {
             packages = with pkgs; [
               go_1_26
               nodejs_24
               gnumake
-              git
+              slimGit
               gzip
               zip
             ];
