@@ -33,10 +33,12 @@
               zip
             ];
             shellHook = ''
-              # Pin GOROOT to the Nix Go toolchain. An ambient GOROOT (e.g. a system
-              # /opt/go) can leak into this shell and shadow the Nix Go binary,
-              # breaking `go build` with "compile: version X does not match go tool version Y".
-              export GOROOT="$(env -u GOROOT go env GOROOT)"
+              # Go locates its toolchain from the `go` binary on PATH, but an ambient
+              # GOROOT overrides that and sends this `go` to another install's
+              # `compile` binary: "compile: version X does not match go tool version Y".
+              # A host toolchain manager (mise) exports GOROOT globally, so drop it
+              # rather than re-point it -- every `go` binary then self-locates.
+              unset GOROOT GOBIN
               echo "mu dev shell: go $(go version | sed 's/go version //') | node $(node --version) | make $(make --version | head -1 | sed 's/.* //')"
             '';
           };
