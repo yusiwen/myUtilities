@@ -356,7 +356,12 @@
               {@const st = bootStatus(name)}
               <tr class={favorites.includes(name) ? 'favorite-row' : ''}>
                 <td class="fav-cell">
-                  <button class="fav" class:on={favorites.includes(name)} onclick={() => toggleFavorite(name)} aria-label="Toggle favorite">
+                  <button
+                    class="fav"
+                    class:on={favorites.includes(name)}
+                    onclick={() => toggleFavorite(name)}
+                    aria-label={favorites.includes(name) ? `Remove ${name} from favorites` : `Add ${name} to favorites`}
+                    aria-pressed={favorites.includes(name)}>
                     <svg viewBox="0 0 24 24" fill={favorites.includes(name) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 14.6 9l6 .9-4.3 4.2 1 6-5.3-2.8L6.7 20l1-6L3.4 9.9l6-.9z"/></svg>
                   </button>
                 </td>
@@ -431,7 +436,10 @@
   .count { color: var(--text3); font-family: var(--mono); font-size: 12px; }
 
   .th-row { display: inline-flex; align-items: center; gap: 6px; }
-  .refresh svg { width: 13px; height: 13px; }
+  .refresh { display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text3); cursor: pointer; }
+  .refresh:hover:not(:disabled) { background: var(--surface2); color: var(--text); }
+  .refresh:disabled { opacity: 0.6; cursor: default; }
+  .refresh svg { width: 14px; height: 14px; }
   .spinning { animation: spin 0.9s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -470,24 +478,36 @@
   .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 
   @media (max-width: 700px) {
-    .table-wrap, .table-wrap table, .table-wrap thead, .table-wrap tbody,
-    .table-wrap th, .table-wrap td, .table-wrap tr { display: block; }
+    .table-wrap table, .table-wrap thead, .table-wrap tbody { display: block; }
     .table-wrap thead { display: none; }
     .table-wrap tbody tr {
-      position: relative;
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      grid-template-areas:
+        'fav host boot'
+        '.   mac  mac'
+        'act act  act';
+      align-items: center;
+      column-gap: 8px;
+      row-gap: 4px;
       margin-bottom: 12px;
       padding: 12px 14px;
       border: 1px solid var(--border);
       border-radius: 12px;
       background: var(--surface);
     }
-    .table-wrap td { border: 0; padding: 2px 0; background: transparent; }
-    .favorite-row td { background: transparent; }
-    .fav-cell { position: absolute; top: 12px; left: 12px; }
-    .host-cell { padding-left: 30px; font-size: 15px; }
-    .boot-cell { position: absolute; top: 12px; right: 14px; }
+    .table-wrap td { padding: 0; border: 0; background: transparent; }
+    .fav-cell { grid-area: fav; width: auto; align-self: start; }
+    .fav { width: 32px; height: 32px; margin: -4px; }
+    .host-cell { grid-area: host; min-width: 0; overflow-wrap: anywhere; font-size: 15px; line-height: 1.35; }
+    .table-wrap td.mono { grid-area: mac; }
+    .boot-cell { grid-area: boot; align-self: start; }
     .boot-cell .tooltip { display: none; }
-    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .actions { grid-area: act; display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+    .favorite-row td { background: transparent; }
+  }
+
+  @media (max-width: 480px) {
     .actions .btn { flex: 1; }
   }
 </style>
