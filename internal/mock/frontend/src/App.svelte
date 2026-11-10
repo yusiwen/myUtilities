@@ -29,8 +29,6 @@
     return { method: 'GET', path: '', status: 200, delay: '', headers: [], body: '', conditions: [] }
   }
 
-  const methodColors = { GET: '#61affe', POST: '#49cc90', PUT: '#fca130', PATCH: '#50e3c2', DELETE: '#f93e3e' }
-
   async function load() {
     try {
       endpoints = await listEndpoints()
@@ -225,27 +223,29 @@
   }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">mock</span>
+  </a>
+</header>
+
 <div class="app">
-  <header class="header">
-    <h1>
-      {#if inGateway}
-        <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-      {/if}
-      Dynamic Mock Server
-    </h1>
-    <div class="header-actions">
-      <button class="btn primary" onclick={startAdd}>+ Add Endpoint</button>
-      <button class="btn" onclick={handleSaveConfig} disabled={saving}>
-        {saving ? 'Saving...' : 'Save to Config'}
-      </button>
+  <div class="page-head row">
+    <div>
+      <h1>Mock Server</h1>
+      <p>Mock endpoints and responses</p>
     </div>
-  </header>
+    <div class="head-actions">
+      <button class="btn" onclick={handleSaveConfig} disabled={saving}>{saving ? 'Saving...' : 'Save to config'}</button>
+      <button class="btn primary" onclick={startAdd}>Add endpoint</button>
+    </div>
+  </div>
 
   {#if error}
-    <button class="toast error" onclick={() => error = ''}>{error}</button>
+    <button class="msg error block" onclick={() => error = ''}>{error}</button>
   {/if}
   {#if success}
-    <button class="toast success" onclick={() => success = ''}>{success}</button>
+    <button class="msg success block" onclick={() => success = ''}>{success}</button>
   {/if}
 
   <div class="tabs">
@@ -256,63 +256,61 @@
 
   {#if tab === 'endpoints'}
 
-  {#if editing === 'new'}
-    <div class="edit-panel">
-      <h2>New Endpoint</h2>
-      <FormFields {form} {addHeader} {removeHeader} {formatBody} />
-      <div class="edit-actions">
-        <button class="btn primary" onclick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
-        <button class="btn" onclick={cancelEdit}>Cancel</button>
+    {#if editing === 'new'}
+      <div class="card edit">
+        <h2>New endpoint</h2>
+        <FormFields {form} {addHeader} {removeHeader} {formatBody} />
+        <div class="row-actions">
+          <button class="btn primary" onclick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Create'}</button>
+          <button class="btn" onclick={cancelEdit}>Cancel</button>
+        </div>
       </div>
-    </div>
-  {/if}
+    {/if}
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr><th>Method</th><th>Path</th><th>Status</th><th>Delay</th><th>Actions</th></tr>
-      </thead>
-      <tbody>
-        {#each endpoints as ep}
-          <tr>
-            <td data-label="Method"><span class="badge" style="background: {methodColors[ep.method] || '#999'}">{ep.method}</span></td>
-            <td class="path" data-label="Path">{ep.path}</td>
-            <td data-label="Status">{ep.status}</td>
-            <td data-label="Delay">{ep.delay || '—'}</td>
-            <td class="actions">
-              <button class="btn sm" onclick={() => startEdit(ep)} disabled={editing !== null && editing !== ep.id}>Edit</button>
-              <button class="btn sm danger" onclick={() => handleDelete(ep.id)} disabled={saving}>Del</button>
-            </td>
-          </tr>
-          {#if editing === ep.id}
-            <tr class="edit-row">
-              <td colspan="5">
-                <div class="edit-panel inline">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Method</th><th>Path</th><th>Status</th><th>Delay</th><th></th></tr>
+        </thead>
+        <tbody>
+          {#each endpoints as ep}
+            <tr>
+              <td data-label="Method"><span class="method">{ep.method}</span></td>
+              <td class="path" data-label="Path">{ep.path}</td>
+              <td data-label="Status"><span class="status" class:ok={ep.status >= 200 && ep.status < 300} class:warn={ep.status >= 400 && ep.status < 500} class:err={ep.status >= 500}>{ep.status}</span></td>
+              <td class="muted" data-label="Delay">{ep.delay || '—'}</td>
+              <td class="actions">
+                <button class="btn xs" onclick={() => startEdit(ep)} disabled={editing !== null && editing !== ep.id}>Edit</button>
+                <button class="btn xs danger" onclick={() => handleDelete(ep.id)} disabled={saving}>Delete</button>
+              </td>
+            </tr>
+            {#if editing === ep.id}
+              <tr class="edit-row">
+                <td colspan="5">
                   <FormFields {form} {addHeader} {removeHeader} {formatBody} />
-                  <div class="edit-actions">
+                  <div class="row-actions">
                     <button class="btn primary" onclick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
                     <button class="btn" onclick={cancelEdit}>Cancel</button>
                   </div>
-                </div>
-              </td>
-            </tr>
-          {/if}
-        {/each}
-      </tbody>
-    </table>
-    {#if endpoints.length === 0}
-      <div class="empty">No endpoints defined. Click "+ Add Endpoint" to create one.</div>
-    {/if}
-  </div>
+                </td>
+              </tr>
+            {/if}
+          {/each}
+        </tbody>
+      </table>
+      {#if endpoints.length === 0}
+        <div class="empty">No endpoints yet. Add one to get started.</div>
+      {/if}
+    </div>
   {/if}
 
   {#if tab === 'logs'}
+    <div class="toolbar">
+      <span class="count">{logs.length} invocations</span>
+      <button class="btn xs" onclick={loadLogsData}>Refresh</button>
+    </div>
     <div class="table-wrap">
-      <div class="log-bar">
-        <span class="count">{logs.length} invocation(s)</span>
-        <button class="btn sm" onclick={loadLogsData}>🔄</button>
-      </div>
-      <table>
+      <table class="table">
         <thead>
           <tr><th>Time</th><th>Method</th><th>Path</th><th>Status</th><th>Duration</th><th>Remote IP</th></tr>
         </thead>
@@ -320,30 +318,30 @@
           {#each logs as log}
             <tr>
               <td class="log-time" data-label="Time">{log.timestamp}</td>
-              <td data-label="Method"><span class="badge" style="background: {methodColors[log.method] || '#999'}">{log.method}</span></td>
+              <td><span class="method">{log.method}</span></td>
               <td class="path" data-label="Path">{log.path}</td>
-              <td data-label="Status">{log.status}</td>
-              <td class="log-dur" data-label="Duration">{log.duration}</td>
-              <td class="log-ip" data-label="Remote IP">{log.remoteAddr}</td>
+              <td data-label="Status"><span class="status" class:ok={log.status >= 200 && log.status < 300} class:warn={log.status >= 400 && log.status < 500} class:err={log.status >= 500}>{log.status}</span></td>
+              <td class="mono muted" data-label="Duration">{log.duration}</td>
+              <td class="mono muted" data-label="Remote IP">{log.remoteAddr}</td>
             </tr>
-          {:else}
-            <tr><td colspan="6" class="empty">No invocations recorded yet.</td></tr>
           {/each}
         </tbody>
       </table>
+      {#if logs.length === 0}
+        <div class="empty">No invocations recorded yet</div>
+      {/if}
     </div>
   {/if}
 
   {#if tab === 'help'}
-    <div class="help-section">
-      <div class="help-card">
-        <h2>Template Variables</h2>
-        <p class="help-desc">Use <code>{"{{"}source.key{"}}"}</code> in the response body or headers to
-        dynamically inject values from the incoming request.</p>
-        <table class="help-table">
+    <div class="help">
+      <div class="card">
+        <h2>Template variables</h2>
+        <p class="help-desc">Use <code>{"{{"}source.key{"}}"}</code> in the response body or headers to inject values from the incoming request.</p>
+        <table class="table">
           <thead><tr><th>Source</th><th>Syntax</th><th>Example</th></tr></thead>
           <tbody>
-            <tr><td>URL path param</td><td><code>{"{{"}path.id{"}}"}</code></td><td>Url <code>/api/users/:id</code> → <code>42</code></td></tr>
+            <tr><td>URL path param</td><td><code>{"{{"}path.id{"}}"}</code></td><td>URL <code>/api/users/:id</code> → <code>42</code></td></tr>
             <tr><td>Query string</td><td><code>{"{{"}query.page{"}}"}</code></td><td><code>?page=3</code> → <code>3</code></td></tr>
             <tr><td>Request header</td><td><code>{"{{"}header.authorization{"}}"}</code></td><td><code>Authorization: Bearer xxx</code> → <code>Bearer xxx</code></td></tr>
             <tr><td>JSON body (top-level)</td><td><code>&#123;&#123;body.name&#125;&#125;</code></td><td><code>&#123;"name":"alice"&#125;</code> → <code>alice</code></td></tr>
@@ -351,27 +349,26 @@
           </tbody>
         </table>
 
-        <h3>Example Endpoint</h3>
-        <div class="help-example"><pre>{exampleEndpoint}</pre></div>
-          <p class="help-desc">Request <code>POST /api/users/42?page=3</code> with body
-          <code>&#123;"name":"alice"&#125;</code> → <code>&#123;"userId":"42","name":"alice","page":"3"&#125;</code></p>
+        <h3>Example endpoint</h3>
+        <pre class="help-code">{exampleEndpoint}</pre>
+        <p class="help-desc">Request <code>POST /api/users/42?page=3</code> with body <code>&#123;"name":"alice"&#125;</code> → <code>&#123;"userId":"42","name":"alice","page":"3"&#125;</code></p>
       </div>
 
-      <div class="help-card">
-        <h2>Additional Options</h2>
-        <table class="help-table">
+      <div class="card">
+        <h2>Additional options</h2>
+        <table class="table">
           <thead><tr><th>Field</th><th>Format</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>delay</code></td><td><code>"500ms"</code>, <code>"2s"</code>, <code>"1.5m"</code></td><td>Simulated response delay</td></tr>
             <tr><td><code>status</code></td><td><code>200</code>, <code>404</code>, <code>500</code></td><td>Custom HTTP status code</td></tr>
-              <tr><td><code>headers</code></td><td><code>&#123;"X-Custom": "value"&#125;</code></td><td>Response headers (supports templates)</td></tr>
+            <tr><td><code>headers</code></td><td><code>&#123;"X-Custom": "value"&#125;</code></td><td>Response headers (supports templates)</td></tr>
           </tbody>
         </table>
       </div>
 
-      <div class="help-card">
+      <div class="card">
         <h2>Admin API</h2>
-        <table class="help-table">
+        <table class="table">
           <thead><tr><th>Endpoint</th><th>Method</th><th>Description</th></tr></thead>
           <tbody>
             <tr><td><code>/__admin/api/endpoints</code></td><td>GET</td><td>List all endpoints</td></tr>
@@ -389,165 +386,154 @@
 
 {#snippet FormFields()}
   <div class="form">
-    <div class="form-row">
-      <label>Method
+    <div class="field-row">
+      <label class="field method-field">
+        <span class="field-label">Method</span>
         <select bind:value={form.method}>
           <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
         </select>
       </label>
-      <label class="grow">Path
-        <input type="text" bind:value={form.path} placeholder="/api/example" class:field-error={errors.path} />
-        {#if errors.path}<span class="err-msg">{errors.path}</span>{/if}
+      <label class="field grow">
+        <span class="field-label">Path</span>
+        <input type="text" bind:value={form.path} placeholder="/api/example" class:invalid={errors.path} />
+        {#if errors.path}<span class="err">{errors.path}</span>{/if}
       </label>
     </div>
-    <div class="form-row">
-      <label>Status
-        <input type="number" bind:value={form.status} min="100" max="599" class:field-error={errors.status} />
-        {#if errors.status}<span class="err-msg">{errors.status}</span>{/if}
+    <div class="field-row">
+      <label class="field">
+        <span class="field-label">Status</span>
+        <input type="number" bind:value={form.status} min="100" max="599" class:invalid={errors.status} />
+        {#if errors.status}<span class="err">{errors.status}</span>{/if}
       </label>
-      <label class="grow">Delay
-        <input type="text" bind:value={form.delay} placeholder="e.g. 500ms, 2s" class:field-error={errors.delay} />
-        {#if errors.delay}<span class="err-msg">{errors.delay}</span>{/if}
+      <label class="field">
+        <span class="field-label">Delay</span>
+        <input type="text" bind:value={form.delay} placeholder="e.g. 500ms, 2s" class:invalid={errors.delay} />
+        {#if errors.delay}<span class="err">{errors.delay}</span>{/if}
       </label>
     </div>
-    <label>Headers
-      <div class="headers-list">
+    <div class="field">
+      <span class="field-label">Headers</span>
+      <div class="kv-list">
         {#each form.headers as h, i (i)}
-          <div class="hr">
+          <div class="kv-row">
             <input type="text" bind:value={h.key} placeholder="Key" />
-            <span class="sep">:</span>
             <input type="text" bind:value={h.value} placeholder="Value" />
-            <button class="btn xs" onclick={() => removeHeader(i)}>x</button>
+            <button class="btn xs icon-btn" onclick={() => removeHeader(i)} aria-label="Remove header">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
           </div>
         {/each}
-        <button class="btn xs" onclick={addHeader}>+ Add Header</button>
+        <button class="btn xs add" onclick={addHeader}>Add header</button>
       </div>
-    </label>
-    <div class="cond-section">
-      <button class="btn xs" onclick={addCondition}>+ Add Condition</button>
     </div>
-    {#each form.conditions as cond (cond._uid)}
-      <ConditionTree node={cond} level={0} onRemove={removeCondition} condErrors={errors.condErrors || {}} />
-    {/each}
-    <label>Response Body <button class="btn xs" onclick={formatBody} style="float:right">Format</button>
-      <div class="body-editor">
-        <textarea bind:value={form.body} rows="10" placeholder='response body (JSON or plain text) — this IS the default fallback'></textarea>
+    <div class="conditions">
+      <button class="btn xs" onclick={addCondition}>Add condition</button>
+      {#each form.conditions as cond (cond._uid)}
+        <ConditionTree node={cond} level={0} onRemove={removeCondition} condErrors={errors.condErrors || {}} />
+      {/each}
+    </div>
+    <div class="field">
+      <div class="label-row">
+        <span class="field-label">Response body</span>
+        <button class="btn xs" onclick={formatBody}>Format</button>
       </div>
-    </label>
+      <textarea bind:value={form.body} rows="10" placeholder="Response body (JSON or plain text). This is the default fallback."></textarea>
+    </div>
   </div>
 {/snippet}
 
 <style>
-  .app { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-  .header h1 { font-size: 22px; font-weight: 600; }
-  .header-actions { display: flex; gap: 8px; }
+  :global(body) { --page-max: 960px; }
+  .block { margin-bottom: 12px; }
+  .count { color: var(--text3); font-family: var(--mono); font-size: 12px; }
+  .head-actions, .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row-actions { margin-top: 16px; }
 
-  .btn { padding: 8px 16px; }
-  .btn.danger { border-color: var(--danger); color: var(--danger); }
-  .btn.danger:hover { background: var(--danger); color: #fff; }
-  .btn.sm { font-size: 12px; padding: 4px 10px; }
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--r-md); overflow: auto; }
+  .table .path { font-family: var(--mono); font-size: 12.5px; }
+  .table .method { color: var(--text2); font-family: var(--mono); font-size: 11px; }
+  .table .mono { font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .table .muted { color: var(--text3); font-size: 12px; }
+  .table .actions { white-space: nowrap; text-align: right; }
+  .table .actions .btn + .btn { margin-left: 6px; }
+  .table .status { font-family: var(--mono); font-size: 12px; }
+  .table .status.ok { color: var(--success); }
+  .table .status.warn { color: var(--warning); }
+  .table .status.err { color: var(--danger); }
 
-  .toast { padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; font-size: 14px; cursor: pointer; }
-  .toast.error { background: #3d1f2a; border: 1px solid var(--danger); color: var(--danger); }
-  .toast.success { background: #1a3d2a; border: 1px solid var(--success); color: var(--success); }
+  .edit { margin-bottom: 16px; }
+  .edit h2 { margin-bottom: 16px; }
+  .edit-row td { padding: 0; background: var(--highlight); }
+  .edit-row .form { padding: 16px 20px; }
 
-  .edit-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-  .edit-panel.inline { margin: 0; }
-  .edit-panel h2 { font-size: 16px; margin-bottom: 12px; }
+  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 
-  .form { display: flex; flex-direction: column; gap: 12px; }
-  .form-row { display: flex; gap: 12px; }
-  .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text2); flex: 1; }
-  .form-row label.grow { flex: 2; }
-  .form-row input, .form-row select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 14px; }
-  .form-row select { cursor: pointer; }
+  .form { display: flex; flex-direction: column; gap: 16px; }
+  .field-label { display: block; margin-bottom: 6px; color: var(--text2); font-size: 12px; font-weight: 500; }
+  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .label-row .field-label { margin-bottom: 0; }
+  .field-row .field { margin-bottom: 0; }
+  .grow { flex: 2; }
+  .method-field { flex: 0 0 140px; }
+  .invalid { border-color: var(--danger); }
+  .err { display: block; margin-top: 4px; color: var(--danger); font-size: 12px; }
 
-  .headers-list { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-  .hr { display: flex; align-items: center; gap: 6px; }
-  .hr input { flex: 1; padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; }
-  .sep { color: var(--text2); font-size: 13px; }
+  .kv-list, .conditions { display: flex; flex-direction: column; gap: 8px; }
+  .kv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center; }
+  .kv-row input { min-height: 32px; padding: 6px 10px; font-family: var(--mono); font-size: 12.5px; }
+  .icon-btn { width: 26px; padding: 0; }
+  .add { align-self: flex-start; }
 
-  .body-editor { margin-top: 4px; }
-  .body-editor textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-family: 'Menlo', 'Consolas', monospace; resize: vertical; line-height: 1.5; }
+  .help { display: flex; flex-direction: column; gap: 16px; }
+  .help h2 { margin-bottom: 8px; }
+  .help h3 { margin: 24px 0 8px; }
+  .help-desc { margin: 0 0 12px; color: var(--text2); font-size: 13px; }
+  .help-desc code, .table code {
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface2);
+    font-size: 12px;
+  }
+  .help-code {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    font-size: 12.5px;
+    line-height: 1.55;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .help .table td:first-child { white-space: nowrap; }
 
-  .edit-actions { display: flex; gap: 8px; margin-top: 16px; }
+  @media (max-width: 700px) {
+    .head-actions { width: 100%; }
+    .head-actions .btn { flex: 1; }
+    .method-field { flex: 1 1 100%; }
+    .edit-row .form { padding: 12px; }
 
-  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; padding: 12px 16px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text2); border-bottom: 1px solid var(--border); }
-  td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
-  tr:last-child td { border-bottom: none; }
-  .path { font-family: 'Menlo', 'Consolas', monospace; font-size: 13px; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; }
-  .actions { white-space: nowrap; }
-  .actions .btn + .btn { margin-left: 4px; }
-  .empty { padding: 32px; text-align: center; color: var(--text2); font-size: 14px; }
-
-
-  .log-bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--border); }
-  .log-bar .count { font-size: 13px; color: var(--text3); }
-  .log-bar .btn.sm { padding: 4px 8px; font-size: 14px; }
-
-  .log-time { font-size: 12px; color: var(--text2); white-space: nowrap; }
-  .log-dur { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text2); white-space: nowrap; }
-  .log-ip { font-family: 'Menlo', 'Consolas', monospace; font-size: 12px; color: var(--text3); white-space: nowrap; }
-
-  .help-section { display: flex; flex-direction: column; gap: 16px; }
-  .help-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-  .help-card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--text); }
-  .help-card h3 { margin: 16px 0 6px; font-size: 0.95rem; color: var(--text); }
-  .help-desc { font-size: 14px; color: var(--text2); margin: 0 0 12px; }
-  .help-desc code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-  .help-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  .help-table th, .help-table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); }
-  .help-table th { color: var(--text2); font-weight: 600; font-size: 13px; }
-  .help-table td { color: var(--text); }
-  .help-table code { background: var(--surface2); padding: 2px 5px; border-radius: 3px; font-family: 'Menlo','Consolas',monospace; font-size: 13px; }
-  .help-example { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: 'Menlo','Consolas',monospace; font-size: 13px; line-height: 1.5; white-space: pre; overflow-x: auto; color: var(--text); }
-
-  .cond-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-
-  .field-error { border-color: var(--primary) !important; }
-  .err-msg { color: var(--primary); font-size: 12px; margin-top: 2px; display: block; }
-
-  /* Mobile: turn the data tables (endpoints/logs) into stacked cards, like WOL. */
-  @media (max-width: 640px) {
-    .header-actions { width: 100%; }
-    .header-actions .btn { flex: 1; }
-
-    .form-row { flex-direction: column; gap: 10px; }
-
-    /* Drop the table shell so each row can stand alone as a card. */
-    .table-wrap { background: transparent; border: none; border-radius: 0; overflow: visible; }
+    /* Endpoint and log rows become cards so the row actions stay reachable. */
+    .table-wrap { border: 0; overflow: visible; }
     .table-wrap table, .table-wrap thead, .table-wrap tbody,
     .table-wrap th, .table-wrap td, .table-wrap tr { display: block; }
     .table-wrap thead { display: none; }
     .table-wrap tbody tr {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px 14px;
       margin-bottom: 12px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
     }
-    .table-wrap td { border: none; padding: 3px 0; font-size: 14px; }
-
-    /* Each cell becomes a label / value row. */
-    .table-wrap td[data-label] { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-    .table-wrap td[data-label]::before { content: attr(data-label); flex: 0 0 auto; color: var(--text2); font-size: 12px; }
-    .table-wrap .path { word-break: break-all; text-align: right; }
-
-    /* Row actions become full-width touch targets. */
-    .table-wrap .actions { display: flex; gap: 8px; margin-top: 8px; white-space: normal; }
-    .table-wrap .actions .btn { flex: 1 1 0; margin: 0; min-height: 40px; }
-    .table-wrap .actions .btn + .btn { margin-left: 0; }
-
-    /* The inline edit row should not be styled as a data card. */
-    .table-wrap tr.edit-row { padding: 0; background: transparent; border: none; }
+    .table-wrap td { border: 0; padding: 2px 0; }
+    .table-wrap td[data-label] { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .table-wrap td[data-label]::before { content: attr(data-label); flex: none; color: var(--text2); font-size: 12px; }
+    .table-wrap td.path { overflow-wrap: anywhere; text-align: right; }
+    .table-wrap .actions { display: flex; gap: 8px; margin-top: 10px; text-align: left; }
+    .table-wrap .actions .btn { flex: 1; }
+    .table-wrap tr.edit-row { padding: 0; border: 0; background: transparent; }
     .table-wrap tr.edit-row td { padding: 0; }
-
-    /* Doc tables scroll instead of being clipped. */
-    .help-card { overflow-x: auto; }
+    .card { overflow-x: auto; }
   }
 </style>
-

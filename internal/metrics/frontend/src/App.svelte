@@ -30,7 +30,7 @@
     { value: '24h', label: '24h' }
   ]
 
-  const palette = ['#4a9eff', '#e94560', '#4caf50', '#ff9800', '#ab47bc', '#00bcd4', '#fdd835', '#8d6e63']
+  const palette = ['#e94560', '#6aa9ff', '#4cc38a', '#d9a441', '#a4aab8', '#8b91a1']
   const hostColor = new Map()
   let colorIdx = 0
 
@@ -298,41 +298,40 @@
   }
 </script>
 
-<div class="container">
-  <div class="header">
-    <div class="header-left">
-      {#if inGateway}
-        <a href="/" class="home-link">← Home</a>
-      {/if}
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">metrics</span>
+  </a>
+</header>
+
+<div class="app">
+  <div class="page-head row">
+    <div>
       <h1>Metrics</h1>
+      <p>System time-series charts</p>
     </div>
     <div class="controls">
-      <select class="host-select" bind:value={selectedHost} onchange={load}>
+      <select class="host" bind:value={selectedHost} onchange={load} aria-label="Host">
         <option value="all">All hosts</option>
         {#each hosts as h}
           <option value={h}>{h}</option>
         {/each}
       </select>
-      <select class="range-select" bind:value={range} onchange={load}>
+      <select bind:value={range} onchange={load} aria-label="Range">
         {#each ranges as r}
           <option value={r.value}>{r.label}</option>
         {/each}
       </select>
-      <label class="auto-refresh">
-        <input type="checkbox" bind:checked={autoRefresh} />
-        auto
-      </label>
-      <button class="btn xs" onclick={load} disabled={loading}>
-        {loading ? 'Refreshing...' : 'Refresh'}
-      </button>
+      <label class="check"><input type="checkbox" bind:checked={autoRefresh} /><span>Auto</span></label>
+      <button class="btn" onclick={load} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
     </div>
   </div>
 
   {#if admin && admin.state}
     <div class="admin-bar">
-      <span class="admin-state admin-{admin.state}">{admin.state}</span>
+      <span class="admin-state admin-{admin.state}"><span class="dot"></span>{admin.state}</span>
       {#if admin.state === 'running' || admin.state === 'starting'}
-        <span class="admin-meta">pid {admin.pid}</span>
+        <span class="admin-meta">PID {admin.pid}</span>
         {#if adminDuration()}<span class="admin-meta">{adminDuration()}</span>{/if}
       {/if}
       {#if admin.error}
@@ -346,51 +345,49 @@
           {admin.state === 'external' ? 'External' : 'Start'}
         </button>
       {/if}
-      <button class="btn xs" onclick={showStatus} disabled={statusLoading}>
-        {statusLoading ? 'Loading...' : 'Status'}
-      </button>
+      <button class="btn xs" onclick={showStatus} disabled={statusLoading}>{statusLoading ? 'Loading...' : 'Status'}</button>
       {#if admin.log && admin.log.length}
         <button class="btn xs" onclick={showLog}>Log</button>
       {/if}
     </div>
   {/if}
 
-  <dialog bind:this={statusDialog} class="status-dialog" onclose={() => { statusErr = ''; statusText = '' }}>
+  <dialog bind:this={statusDialog} class="dialog" onclose={() => { statusErr = ''; statusText = '' }}>
     <div class="dialog-head">
-      <h3>Server Status</h3>
-      <button class="btn xs" onclick={closeStatus} title="Close">✕</button>
+      <h3>Server status</h3>
+      <button class="btn xs" onclick={closeStatus}>Close</button>
     </div>
     {#if statusErr}
-      <div class="admin-error">{statusErr}</div>
+      <div class="msg error">{statusErr}</div>
     {/if}
     <pre>{statusText}</pre>
   </dialog>
 
-  <dialog bind:this={logDialog} class="status-dialog" onclose={() => { logText = '' }}>
+  <dialog bind:this={logDialog} class="dialog" onclose={() => { logText = '' }}>
     <div class="dialog-head">
-      <h3>Server Log</h3>
-      <button class="btn xs" onclick={closeLog} title="Close">✕</button>
+      <h3>Server log</h3>
+      <button class="btn xs" onclick={closeLog}>Close</button>
     </div>
     <pre>{logText}</pre>
   </dialog>
 
   {#if error}
-    <div class="msg error">{error}</div>
+    <div class="msg error block">{error}</div>
   {/if}
 
   {#if loading && series.length === 0 && !error}
-    <p class="loading">Loading metrics...</p>
+    <p class="muted">Loading metrics...</p>
   {:else if series.length === 0 && !error}
-    <div class="empty">
-      <p>No metrics collected.</p>
+    <div class="card empty-card">
+      <p>No metrics collected</p>
       <p class="hint">Start the collector with <code>mu metrics serve --agent</code></p>
     </div>
   {:else}
     <div class="summary">
       {#each summary as s}
-        <div class="card summary-card">
-          <div class="summary-label">{s.label}</div>
-          <div class="summary-value">{fmt(s.value)}{s.unit}</div>
+        <div class="card stat">
+          <div class="stat-label">{s.label}</div>
+          <div class="stat-value">{fmt(s.value)}{s.unit}</div>
         </div>
       {/each}
       {#if lastUpdated}
@@ -398,21 +395,21 @@
       {/if}
     </div>
 
-    <div class="cards">
+    <div class="charts">
       {#each series as s}
-        <div class="card metric-card">
-          <div class="metric-head">
-            <span class="metric-name">{s.name}</span>
+        <div class="card chart-card">
+          <div class="chart-head">
+            <span class="chart-name">{s.name}</span>
             {#if s.lines.length > 1}
-              <span class="host-tag">{s.lines.length} hosts</span>
+              <span class="badge">{s.lines.length} hosts</span>
             {:else if s.lines[0]?.host}
-              <span class="host-tag">{s.lines[0].host}</span>
+              <span class="badge">{s.lines[0].host}</span>
             {/if}
           </div>
           {#if s.error}
-            <div class="metric-error">{s.error}</div>
+            <div class="chart-error">{s.error}</div>
           {:else}
-            <Chart lines={s.lines} height={160} from={rangeFrom} to={rangeTo} />
+            <Chart lines={s.lines} height={150} from={rangeFrom} to={rangeTo} />
             <Stats card={s} host={selectedHost} />
           {/if}
         </div>
@@ -422,257 +419,51 @@
 </div>
 
 <style>
-  .container {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 40px 20px;
-  }
+  :global(body) { --page-max: 1080px; }
+  .block { margin-bottom: 16px; }
+  .hint { margin-top: 8px; color: var(--text3); font-size: 13px; }
+  .hint code { padding: 2px 6px; border-radius: 4px; background: var(--surface2); }
 
-  .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 24px;
-  }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .controls select { width: auto; min-width: 96px; }
+  .controls .host { max-width: 180px; }
+  .check { display: inline-flex; align-items: center; gap: 6px; color: var(--text2); font-size: 13px; cursor: pointer; }
+  .check input { width: 14px; height: 14px; margin: 0; accent-color: var(--text); }
 
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
+  .admin-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface); }
+  .admin-state { display: inline-flex; align-items: center; gap: 6px; color: var(--text2); font-family: var(--mono); font-size: 12px; }
+  .admin-state .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+  .admin-running .dot { background: var(--success); }
+  .admin-running { color: var(--success); }
+  .admin-starting { color: var(--warning); }
+  .admin-starting .dot { background: var(--warning); }
+  .admin-external { color: var(--info); }
+  .admin-external .dot { background: var(--info); }
+  .admin-stopped { color: var(--text3); }
+  .admin-error { color: var(--danger); font-size: 12px; }
+  .admin-meta { color: var(--text3); font-family: var(--mono); font-size: 12px; }
 
-  h1 {
-    font-size: 1.5rem;
-    color: var(--text);
-  }
+  .dialog { width: 100%; max-width: min(720px, 92vw); margin: auto; padding: 16px 20px; border: 1px solid var(--border2); border-radius: var(--r-lg); background: var(--surface); color: var(--text); }
+  .dialog[open] { display: flex; flex-direction: column; }
+  .dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+  .dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .dialog pre { max-height: 60vh; margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); color: var(--text2); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; overflow: auto; }
 
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+  .summary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-bottom: 16px; }
+  .stat { min-width: 132px; padding: 12px 16px; }
+  .stat-label { margin-bottom: 4px; color: var(--text2); font-size: 12px; }
+  .stat-value { color: var(--text); font-family: var(--mono); font-size: 18px; font-variant-numeric: tabular-nums; }
+  .updated { margin-left: auto; color: var(--text3); font-family: var(--mono); font-size: 12px; }
 
-  .range-select {
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 13px;
-  }
-
-  .host-select {
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface);
-    color: var(--text);
-    font-size: 13px;
-    max-width: 180px;
-  }
-
-  .auto-refresh {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: 13px;
-    color: var(--text2);
-  }
-
-  .admin-bar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-bottom: 18px;
-    padding: 10px 14px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    font-size: 13px;
-  }
-
-  .admin-state {
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .admin-stopped {
-    color: var(--text2);
-  }
-
-  .admin-starting {
-    color: var(--primary);
-  }
-
-  .admin-running {
-    color: var(--ok);
-  }
-
-  .admin-external {
-    color: var(--primary);
-  }
-
-  .admin-error {
-    color: var(--danger);
-  }
-
-  .admin-meta {
-    color: var(--text2);
-  }
-
-  .status-dialog {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    background: var(--surface);
-    color: var(--text);
-    padding: 16px 20px;
-    max-width: min(720px, 90vw);
-    width: 100%;
-    margin: auto;
-  }
-
-  .status-dialog[open] {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .status-dialog::backdrop {
-    background: rgba(0, 0, 0, 0.45);
-  }
-
-  .dialog-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-
-  .dialog-head h3 {
-    margin: 0;
-    font-size: 1rem;
-    color: var(--text);
-  }
-
-  .status-dialog pre {
-    margin: 0;
-    max-width: 100%;
-    max-height: 60vh;
-    overflow: auto;
-    padding: 10px 12px;
-    border-radius: 6px;
-    background: var(--surface2);
-    color: var(--text2);
-    font-size: 12px;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .loading {
-    color: var(--text2);
-    font-size: 14px;
-  }
-
-  .empty {
-    text-align: center;
-    padding: 40px;
-    color: var(--text2);
-  }
-
-  .hint {
-    font-size: 13px;
-    margin-top: 8px;
-    color: var(--text3);
-  }
-
-  .hint code {
-    background: var(--surface2);
-    padding: 2px 6px;
-    border-radius: 4px;
-  }
-
-  .summary {
-    display: flex;
-    align-items: flex-end;
-    gap: 12px;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-  }
-
-  .summary-card {
-    min-width: 130px;
-    padding: 14px 18px;
-  }
-
-  .summary-label {
-    font-size: 12px;
-    color: var(--text3);
-    margin-bottom: 4px;
-  }
-
-  .summary-value {
-    font-size: 1.4rem;
-    font-weight: 600;
-    font-family: 'Menlo', 'Consolas', monospace;
-    color: var(--text);
-  }
-
-  .updated {
-    font-size: 12px;
-    color: var(--text3);
-    margin-left: auto;
-  }
-
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
-    gap: 16px;
-  }
-
-  .metric-card {
-    padding: 18px;
-  }
-
-  .metric-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-  }
-
-  .metric-name {
-    font-family: 'Menlo', 'Consolas', monospace;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .host-tag {
-    font-size: 11px;
-    color: var(--text3);
-    background: var(--surface2);
-    border-radius: 4px;
-    padding: 2px 6px;
-    white-space: nowrap;
-  }
-
-  .metric-error {
-    color: #e94560;
-    font-size: 13px;
-    padding: 10px 0;
-  }
+  .charts { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }
+  .chart-card { padding: 16px 18px; }
+  .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  .chart-name { overflow: hidden; color: var(--text); font-family: var(--mono); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+  .chart-error { padding: 8px 0; color: var(--danger); font-size: 13px; }
 
   @media (max-width: 720px) {
-    .cards {
-      grid-template-columns: 1fr;
-    }
+    .charts { grid-template-columns: 1fr; }
+    .controls { width: 100%; }
+    .controls .btn { flex: 1; }
   }
 </style>

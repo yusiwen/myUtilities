@@ -185,16 +185,22 @@
   ]
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">crypto</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>Crypto Toolkit</h1>
+  <div class="page-head">
+    <h1>Crypto</h1>
+    <p>Encrypt, decrypt, passwords</p>
+  </div>
 
   <div class="tabs">
-    <button class="tab" class:active={tab === 'passwd'} onclick={() => tab = 'passwd'}>Password Generator</button>
-    <button class="tab" class:active={tab === 'cipher'} onclick={() => tab = 'cipher'}>Encrypt / Decrypt</button>
-    <button class="tab" class:active={tab === 'encode'} onclick={() => tab = 'encode'}>Encode / Decode</button>
+    <button class="tab" class:active={tab === 'passwd'} onclick={() => tab = 'passwd'}>Password</button>
+    <button class="tab" class:active={tab === 'cipher'} onclick={() => tab = 'cipher'}>Encrypt / decrypt</button>
+    <button class="tab" class:active={tab === 'encode'} onclick={() => tab = 'encode'}>Encode / decode</button>
     <button class="tab" class:active={tab === 'jwt'} onclick={() => tab = 'jwt'}>JWT</button>
   </div>
 
@@ -204,23 +210,15 @@
         <label for="pw-length">Length</label>
         <input id="pw-length" type="number" bind:value={pwLength} min="8" max="128" />
       </div>
-      <div class="field-row toggles">
-        <label class="toggle">
-          <input type="checkbox" bind:checked={pwDigits} />
-          <span class="toggle-label">Digits</span>
-        </label>
-        <label class="toggle">
-          <input type="checkbox" bind:checked={pwSpecial} />
-          <span class="toggle-label">Special chars</span>
-        </label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" bind:checked={pwDigits} /><span>Digits</span></label>
+        <label class="check"><input type="checkbox" bind:checked={pwSpecial} /><span>Special chars</span></label>
       </div>
       <button class="btn primary" onclick={genPasswd}>Generate</button>
 
-      {#if pwError}
-        <div class="msg error">{pwError}</div>
-      {/if}
+      {#if pwError}<div class="msg error block">{pwError}</div>{/if}
       {#if password}
-        <div class="result-box">
+        <div class="result">
           <code class="result-text">{password}</code>
           <button class="btn xs" onclick={() => copy(password, v => copyLabel = v)}>{copyLabel}</button>
         </div>
@@ -248,9 +246,9 @@
 
       <div class="field">
         <div class="field-label">Operation</div>
-        <div class="radio-group">
-          <label><input type="radio" bind:group={op} value="encrypt" /> Encrypt</label>
-          <label><input type="radio" bind:group={op} value="decrypt" /> Decrypt</label>
+        <div class="radios">
+          <label class="check"><input type="radio" bind:group={op} value="encrypt" /><span>Encrypt</span></label>
+          <label class="check"><input type="radio" bind:group={op} value="decrypt" /><span>Decrypt</span></label>
         </div>
       </div>
 
@@ -292,11 +290,9 @@
         {loading ? 'Processing...' : (op === 'encrypt' ? 'Encrypt' : 'Decrypt')}
       </button>
 
-      {#if cipherError}
-        <div class="msg error">{cipherError}</div>
-      {/if}
+      {#if cipherError}<div class="msg error block">{cipherError}</div>{/if}
       {#if result}
-        <div class="result-box">
+        <div class="result">
           <code class="result-text result-mono">{result}</code>
           <button class="btn xs" onclick={() => copy(result, v => copyLabelResult = v)}>{copyLabelResult}</button>
         </div>
@@ -305,35 +301,31 @@
   {:else if tab === 'jwt'}
     <div class="card">
       <div class="field">
-        <label for="jwt-token">JWT Token</label>
+        <label for="jwt-token">JWT token</label>
         <textarea id="jwt-token" bind:value={jwtToken} rows="5" placeholder="Paste a JWT token here"></textarea>
       </div>
 
-      <div class="field-row">
+      <div class="row">
         <button class="btn primary" onclick={doJwtDecode}>Decode</button>
         {#if jwtVerified !== null}
-          <span class="jwt-badge" class:jwt-valid={jwtVerified} class:jwt-invalid={!jwtVerified}>
-            {jwtVerified ? '✅ Valid signature' : '❌ Invalid signature'}
-          </span>
+          <span class="badge" class:ok={jwtVerified} class:err={!jwtVerified}>{jwtVerified ? 'Valid signature' : 'Invalid signature'}</span>
         {/if}
       </div>
 
-      {#if jwtError}
-        <div class="msg error">{jwtError}</div>
-      {/if}
+      {#if jwtError}<div class="msg error block">{jwtError}</div>{/if}
 
       {#if jwtHeader}
         <div class="jwt-section">
-          <div class="jwt-label">Header</div>
-          <pre class="jwt-json">{jwtHeader}</pre>
+          <div class="field-label">Header</div>
+          <pre class="json-block">{jwtHeader}</pre>
         </div>
         <div class="jwt-section">
-          <div class="jwt-label">Payload</div>
-          <pre class="jwt-json">{jwtPayload}</pre>
+          <div class="field-label">Payload</div>
+          <pre class="json-block">{jwtPayload}</pre>
         </div>
       {/if}
 
-      <details class="verify-section">
+      <details class="verify">
         <summary>Verify signature</summary>
         <div class="field-row">
           <div class="field">
@@ -346,12 +338,9 @@
           </div>
           <div class="field" style="flex:2">
             <label for="jwt-key">Secret key</label>
-            <div class="field-row" style="align-items:center">
-              <input id="jwt-key" type="text" bind:value={jwtKey} placeholder="HMAC secret key" style="flex:1" />
-              <label class="toggle" style="white-space:nowrap;flex-shrink:0">
-                <input type="checkbox" bind:checked={jwtKeyB64} />
-                <span class="toggle-label">Base64</span>
-              </label>
+            <div class="inline">
+              <input id="jwt-key" type="text" bind:value={jwtKey} placeholder="HMAC secret key" />
+              <label class="check"><input type="checkbox" bind:checked={jwtKeyB64} /><span>Base64</span></label>
             </div>
           </div>
         </div>
@@ -371,9 +360,9 @@
 
       <div class="field">
         <div class="field-label">Operation</div>
-        <div class="radio-group">
-          <label><input type="radio" name="enc-op" bind:group={encOp} value="encode" onchange={() => switchOp('encode')} /> Encode</label>
-          <label><input type="radio" name="enc-op" bind:group={encOp} value="decode" onchange={() => switchOp('decode')} /> Decode</label>
+        <div class="radios">
+          <label class="check"><input type="radio" name="enc-op" bind:group={encOp} value="encode" onchange={() => switchOp('encode')} /><span>Encode</span></label>
+          <label class="check"><input type="radio" name="enc-op" bind:group={encOp} value="decode" onchange={() => switchOp('decode')} /><span>Decode</span></label>
         </div>
       </div>
 
@@ -382,15 +371,11 @@
         <textarea id="enc-input" bind:value={encInput} rows="4" placeholder="Text to encode or decode"></textarea>
       </div>
 
-      <button class="btn primary" onclick={doEnc}>
-        {encOp === 'encode' ? 'Encode' : 'Decode'}
-      </button>
+      <button class="btn primary" onclick={doEnc}>{encOp === 'encode' ? 'Encode' : 'Decode'}</button>
 
-      {#if encError}
-        <div class="msg error">{encError}</div>
-      {/if}
+      {#if encError}<div class="msg error block">{encError}</div>{/if}
       {#if encResult}
-        <div class="result-box">
+        <div class="result">
           <code class="result-text result-mono">{encResult}</code>
           <button class="btn xs" onclick={() => copy(encResult, v => encLabelResult = v)}>{encLabelResult}</button>
         </div>
@@ -400,48 +385,25 @@
 </div>
 
 <style>
-  .app { max-width: 600px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; margin-bottom: 16px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 600px; }
+  .block { margin: 12px 0; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0; }
 
+  .field-label { margin-bottom: 4px; color: var(--text2); font-size: 12px; font-weight: 500; }
+  .checks, .radios { display: flex; flex-wrap: wrap; gap: 16px; }
+  .check { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: 13px; cursor: pointer; }
+  .check input { width: 14px; height: 14px; margin: 0; accent-color: var(--text); }
+  .inline { display: flex; align-items: center; gap: 8px; }
+  .inline input { flex: 1; }
 
-  .field { margin-bottom: 14px; }
-  .field label, .field-label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
-  .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
-  .field textarea { font-family: 'SF Mono', 'Fira Code', monospace; resize: vertical; }
-  select option { background: var(--bg); color: var(--text); }
-  .field-row { display: flex; gap: 12px; }
-  .field-row .field { flex: 1; }
+  .result { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+  .result-text { flex: 1; color: var(--text); font-size: 13px; line-height: 1.55; word-break: break-all; }
+  .result-mono { font-family: var(--mono); }
 
-  .radio-group { display: flex; gap: 16px; }
-  .radio-group label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
-  .radio-group input { width: auto; }
+  .jwt-section { margin-top: 16px; }
+  .json-block { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
 
-  .toggles { display: flex; gap: 20px; margin-bottom: 14px; }
-  .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
-  .toggle input { width: auto; }
-
-  .btn.primary { width: 100%; text-align: center; }
-  .btn.xs { flex-shrink: 0; }
-
-  .msg { margin-bottom: 10px; }
-
-  .result-box { display: flex; align-items: center; gap: 8px; margin-top: 14px; background: var(--bg); padding: 12px; border-radius: 8px; }
-  .result-text { flex: 1; font-size: 14px; word-break: break-all; }
-  .result-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
-
-  .jwt-section { margin-bottom: 14px; }
-  .jwt-label { font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
-  .jwt-json { background: var(--bg); padding: 12px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; margin: 0; }
-  .jwt-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 600; }
-  .jwt-valid { color: #4caf50; }
-  .jwt-invalid { color: #e94560; }
-  .verify-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
-  .verify-section summary { cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text2); margin-bottom: 12px; }
-  .verify-section summary:hover { color: var(--text); }
-
-  @media (max-width: 640px) {
-    .app { padding: 24px 16px; }
-  }
+  .verify { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .verify summary { margin-bottom: 12px; color: var(--text2); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .verify summary:hover { color: var(--text); }
 </style>

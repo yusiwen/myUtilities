@@ -39,7 +39,7 @@
     <span class="cond-label">When</span>
       <input type="text" bind:value={node.condition} placeholder='e.g. {"{{"}header.authorization{"}}"} != empty' class="cond-input" class:cond-input-error={condErrors[node._uid]} />
     {#if onRemove}
-      <button class="btn xs danger" onclick={() => onRemove(node)}>×</button>
+      <button class="btn xs icon-btn danger" onclick={() => onRemove(node)} aria-label="Remove condition"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     {/if}
   </div>
   {#if condErrors[node._uid]}
@@ -59,10 +59,10 @@
             <input type="text" bind:value={h.key} placeholder="Key" />
             <span class="sep">:</span>
             <input type="text" bind:value={h.value} placeholder="Value" />
-            <button class="btn xs" onclick={() => removeHeader(i)}>x</button>
+            <button class="btn xs icon-btn" onclick={() => removeHeader(i)} aria-label="Remove header"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
           </div>
         {/each}
-        <button class="btn xs" onclick={addHeader}>+ Add Header</button>
+        <button class="btn xs" onclick={addHeader}>Add header</button>
       </div>
     </label>
 
@@ -73,7 +73,7 @@
     </label>
   </div>
 
-  <button class="btn xs" onclick={addChild} style="margin: 4px 0 8px;">+ Add Child Condition</button>
+  <button class="btn xs" onclick={addChild} style="margin: 4px 0 8px;">Add child condition</button>
 
   {#each (node.children || []) as child (child._uid)}
     <ConditionTree node={child} level={level + 1} onRemove={removeChild} condErrors={condErrors} />
@@ -81,10 +81,10 @@
 </div>
 
 <style>
-  .condition-node { border-radius: 8px; background: var(--surface); padding: 12px; border: 1px solid var(--border2); margin-bottom: 8px; }
+  .condition-node { border-radius: var(--r-md); background: var(--surface); padding: 12px; border: 1px solid var(--border); margin-bottom: 8px; }
   .cond-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-  .cond-label { font-weight: 600; font-size: 13px; color: var(--text2); white-space: nowrap; }
-  .cond-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-family: 'Menlo','Consolas',monospace; font-size: 13px; }
+  .cond-label { font-weight: 500; font-size: 12px; color: var(--text2); white-space: nowrap; }
+  .cond-input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; }
   .cond-details { display: flex; gap: 16px; margin-bottom: 8px; }
   .cond-details label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); }
   .cond-details input[type="number"] { width: 70px; padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); }
@@ -92,7 +92,8 @@
   .cond-body-section { margin-left: 20px; margin-top: 12px; }
   .cond-headers-label { font-size: 13px; color: var(--text2); display: block; margin-bottom: 12px; }
   .cond-body-label { display: block; margin-top: 12px; font-size: 13px; color: var(--text2); }
-  .cond-input-error { border-color: var(--primary) !important; }
-  .err-msg { color: var(--primary); font-size: 12px; display: block; margin: -4px 0 6px; }
-  .body-editor textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; font-family: 'Menlo', 'Consolas', monospace; resize: vertical; line-height: 1.5; box-sizing: border-box; }
+  .cond-input-error { border-color: var(--danger) !important; }
+  .err-msg { color: var(--danger); font-size: 12px; display: block; margin: -4px 0 6px; }
+  .body-editor textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); color: var(--text); font-size: 13px; font-family: var(--mono); resize: vertical; line-height: 1.5; box-sizing: border-box; }
+  .icon-btn { width: 26px; padding: 0; flex: none; }
 </style>

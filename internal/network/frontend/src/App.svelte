@@ -80,17 +80,23 @@
   }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">network</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>Network Tools</h1>
+  <div class="page-head">
+    <h1>Network tools</h1>
+    <p>DNS lookup and dig queries</p>
+  </div>
 
   <div class="tabs">
-    <button class="tab" class:active={tab === 'dns'} onclick={() => tab = 'dns'}>DNS Lookup</button>
+    <button class="tab" class:active={tab === 'dns'} onclick={() => tab = 'dns'}>DNS lookup</button>
     <button class="tab" class:active={tab === 'dig'} onclick={() => tab = 'dig'}>DIG</button>
     <button class="tab" class:active={tab === 'whois'} onclick={() => tab = 'whois'}>WHOIS</button>
-    <button class="tab" class:active={tab === 'cert'} onclick={() => tab = 'cert'}>SSL Cert</button>
+    <button class="tab" class:active={tab === 'cert'} onclick={() => tab = 'cert'}>SSL cert</button>
   </div>
 
   {#if tab === 'dns'}
@@ -113,21 +119,18 @@
             <option value="ALL">ALL</option>
           </select>
         </div>
-        <div class="field" style="flex:0">
-          <div style="height:1.5em"></div>
-          <button class="btn" onclick={doDNS}>Query</button>
-        </div>
+        <button class="btn" onclick={doDNS}>Query</button>
       </div>
-      {#if dnsError}<div class="msg error">{dnsError}</div>{/if}
+      {#if dnsError}<div class="msg error block">{dnsError}</div>{/if}
       {#if dnsResults.length > 0}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(dnsResultsText())}>📋 Copy</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(dnsResultsText())}>Copy</button>
           <div class="dns-table">
             {#each dnsResults as r}
-              <div class="dns-row"><span class="dns-type-badge">{r.type}</span><span class="dns-value">{r.value}</span><span class="dns-ttl">TTL:{r.ttl}</span></div>
+              <div class="dns-row"><span class="badge">{r.type}</span><span class="dns-value">{r.value}</span><span class="dns-ttl">{r.ttl}</span></div>
             {/each}
           </div>
-          <div class="dns-query-time">Query time: {dnsTime} ms</div>
+          <div class="dns-meta">Query time {dnsTime} ms</div>
         </div>
       {/if}
     </div>
@@ -156,15 +159,12 @@
           <label for="dig-ns">Nameserver (optional)</label>
           <input id="dig-ns" type="text" bind:value={digNs} placeholder="8.8.8.8" />
         </div>
-        <div class="field" style="flex:0">
-          <div style="height:1.5em"></div>
-          <button class="btn" onclick={doDig}>Dig</button>
-        </div>
+        <button class="btn" onclick={doDig}>Dig</button>
       </div>
-      {#if digError}<div class="msg error">{digError}</div>{/if}
+      {#if digError}<div class="msg error block">{digError}</div>{/if}
       {#if digOutput}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(digOutput)}>📋 Copy</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(digOutput)}>Copy</button>
           <pre class="dig-block">{digOutput}</pre>
         </div>
       {/if}
@@ -178,10 +178,10 @@
           <button class="btn" onclick={doWhois}>Lookup</button>
         </div>
       </div>
-      {#if whoisError}<div class="msg error">{whoisError}</div>{/if}
+      {#if whoisError}<div class="msg error block">{whoisError}</div>{/if}
       {#if whoisResult}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(whoisResult)}>📋 Copy</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(whoisResult)}>Copy</button>
           <pre class="dig-block">{whoisResult}</pre>
         </div>
       {/if}
@@ -195,10 +195,10 @@
           <button class="btn" onclick={doCert}>Check</button>
         </div>
       </div>
-      {#if certError}<div class="msg error">{certError}</div>{/if}
+      {#if certError}<div class="msg error block">{certError}</div>{/if}
       {#if certResult}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(certResult)}>📋 Copy</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(certResult)}>Copy</button>
           <pre class="dig-block">{certResult}</pre>
         </div>
       {/if}
@@ -207,35 +207,32 @@
 </div>
 
 <style>
-  .app { max-width: 800px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; margin-bottom: 16px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 800px; }
+  .block { margin-bottom: 16px; }
 
+  .result { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; }
+  .result .btn { align-self: flex-start; }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
-  .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
-  .field input:focus, .field select:focus { border-color: var(--primary); }
-  .field-row { display: flex; gap: 12px; align-items: flex-end; }
-  .field-row .field { flex: 1; }
+  .dns-table { width: 100%; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; }
+  .dns-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; }
+  .dns-row + .dns-row { border-top: 1px solid var(--border); }
+  .dns-value { flex: 1; font-family: var(--mono); font-size: 13px; color: var(--text); word-break: break-all; }
+  .dns-ttl { color: var(--text3); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+  .dns-meta { color: var(--text3); font-family: var(--mono); font-size: 12px; }
 
-  .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-  .btn:hover { background: var(--surface2); }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.xs { font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
+  .dig-block {
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
 
-  .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
-  .result-area { margin-top: 14px; }
-  .result-area .btn.xs { margin-bottom: 6px; }
-
-  .dns-table { background: var(--bg); border-radius: 8px; padding: 8px; }
-  .dns-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  .dns-row:last-child { border-bottom: none; }
-  .dns-type-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--primary); color: #fff; font-size: 11px; font-weight: 700; min-width: 40px; text-align: center; }
-  .dns-value { flex: 1; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; word-break: break-all; }
-  .dns-ttl { font-size: 11px; color: var(--text2); white-space: nowrap; }
-  .dns-query-time { font-size: 12px; color: var(--text2); margin-top: 8px; }
-
-  .dig-block { background: var(--bg); padding: 16px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  .field-row { margin-bottom: 16px; }
+  .field-row:last-child { margin-bottom: 0; }
 </style>

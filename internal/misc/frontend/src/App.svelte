@@ -98,11 +98,17 @@
   }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">misc</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>Misc Tools</h1>
+  <div class="page-head">
+    <h1>Misc tools</h1>
+    <p>JSON, UUID, timestamp, hash</p>
+  </div>
 
   <div class="tabs">
     <button class="tab" class:active={tab === 'json'} onclick={() => tab = 'json'}>JSON</button>
@@ -118,15 +124,15 @@
         <label for="json-input">Input</label>
         <textarea id="json-input" bind:value={jsonInput} rows="8" placeholder="Paste JSON here"></textarea>
       </div>
-      <div class="field-row btn-row">
+      <div class="row">
         <button class="btn" onclick={() => jsonOp('format')}>Format</button>
         <button class="btn" onclick={() => jsonOp('validate')}>Validate</button>
         <button class="btn" onclick={() => jsonOp('minify')}>Minify</button>
       </div>
-      {#if jsonError}<div class="msg error">{jsonError}</div>{/if}
+      {#if jsonError}<div class="msg error block">{jsonError}</div>{/if}
       {#if jsonOutput}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(jsonOutput)}>{copiedText === jsonOutput ? '✓ Copied' : '📋 Copy'}</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(jsonOutput)}>{copiedText === jsonOutput ? 'Copied' : 'Copy'}</button>
           <pre class="result-block">{jsonOutput}</pre>
         </div>
       {/if}
@@ -139,8 +145,8 @@
       </div>
       <button class="btn primary" onclick={genUuid}>Generate</button>
       {#if uuids.length > 0}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(uuids.join('\n'))}>{copiedText === uuids.join('\n') ? '✓ Copied' : '📋 Copy All'}</button>
+        <div class="result">
+          <button class="btn xs" onclick={() => copy(uuids.join('\n'))}>{copiedText === uuids.join('\n') ? 'Copied' : 'Copy all'}</button>
           <div class="uuid-list">{#each uuids as u}<div class="uuid-line">{u}</div>{/each}</div>
         </div>
       {/if}
@@ -152,24 +158,26 @@
         <input id="ts-input" type="text" bind:value={tsInput} placeholder="1700000000 or 2024-12-01" oninput={doTimestamp} />
       </div>
       {#if tsResult}
-        <div class="result-area">
+        <div class="result">
           <code class="result-text">{tsResult}</code>
-          <button class="btn xs" onclick={() => copy(tsResult)}>{copiedText === tsResult ? '✓ Copied' : '📋 Copy'}</button>
+          <button class="btn xs" onclick={() => copy(tsResult)}>{copiedText === tsResult ? 'Copied' : 'Copy'}</button>
         </div>
       {/if}
     </div>
   {:else if tab === 'trackers'}
     <div class="card">
-      <div class="field-row btn-row">
-        <button class="btn" onclick={() => loadTrackers(true)} disabled={trackersLoading}>⟳ Refresh</button>
+      <div class="row">
+        <button class="btn" onclick={() => loadTrackers(true)} disabled={trackersLoading}>Refresh</button>
       </div>
-      {#if trackersError}<div class="msg error">{trackersError}</div>{/if}
+      {#if trackersError}<div class="msg error block">{trackersError}</div>{/if}
       {#if trackersLoading}
-        <div class="msg">Loading trackers list…</div>
+        <div class="msg">Loading trackers list...</div>
       {:else if trackers}
-        <div class="result-area">
-          <button class="btn xs" onclick={() => copy(trackers)}>{copiedText === trackers ? '✓ Copied' : '📋 Copy All'}</button>
-          <a class="btn xs" href="https://github.com/ngosang/trackerslist" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        <div class="result">
+          <div class="row">
+            <button class="btn xs" onclick={() => copy(trackers)}>{copiedText === trackers ? 'Copied' : 'Copy all'}</button>
+            <a class="btn xs" href="https://github.com/ngosang/trackerslist" target="_blank" rel="noopener noreferrer">GitHub</a>
+          </div>
           <pre class="result-block">{trackers}</pre>
         </div>
       {/if}
@@ -185,11 +193,8 @@
             <option value="md5">MD5</option>
           </select>
         </div>
-        <div class="field" style="flex:0">
-          <div style="height:1.5em"></div>
-          <button class="btn xs" onclick={() => document.getElementById('hash-file').click()}>📂 Upload</button>
-          <input id="hash-file" type="file" accept=".txt,.md,.js,.go,.json,.yaml,.yml" onchange={loadHashFile} style="display:none" />
-        </div>
+        <button class="btn" onclick={() => document.getElementById('hash-file').click()}>Upload</button>
+        <input id="hash-file" class="hidden-file" type="file" accept=".txt,.md,.js,.go,.json,.yaml,.yml" onchange={loadHashFile} />
       </div>
       <div class="field">
         <label for="hash-input">Input text</label>
@@ -197,9 +202,9 @@
       </div>
       <button class="btn primary" onclick={doHash} disabled={!hashInput.trim()}>Hash</button>
       {#if hashResult}
-        <div class="result-area">
+        <div class="result">
           <code class="result-text result-mono">{hashResult}</code>
-          <button class="btn xs" onclick={() => copy(hashResult)}>{copiedText === hashResult ? '✓ Copied' : '📋 Copy'}</button>
+          <button class="btn xs" onclick={() => copy(hashResult)}>{copiedText === hashResult ? 'Copied' : 'Copy'}</button>
         </div>
       {/if}
     </div>
@@ -207,33 +212,27 @@
 </div>
 
 <style>
-  .app { max-width: 720px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; margin-bottom: 16px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 720px; }
+  .block { margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .hidden-file { display: none; }
 
+  .result { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 16px; }
+  .result-block {
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    font-size: 13px;
+    line-height: 1.55;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .result-text { color: var(--text); font-size: 14px; word-break: break-all; }
+  .result-mono { font-size: 13px; }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
-  .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
-  .field textarea { font-family: 'SF Mono', 'Fira Code', monospace; resize: vertical; }
-  .field-row { display: flex; gap: 12px; align-items: flex-end; }
-  .field-row .field { flex: 1; }
-  .btn-row { margin-bottom: 10px; }
-  .btn-row .btn { flex: 1; text-align: center; }
-
-  .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-  .btn:hover { background: var(--surface2); }
-  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; width: 100%; text-align: center; }
-  .btn.primary:hover { opacity: .85; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.xs { font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
-
-  .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
-  .result-area { margin-top: 14px; }
-  .result-area .btn.xs { margin-bottom: 6px; }
-  .result-block { background: var(--bg); padding: 14px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; margin: 0; }
-  .result-text { font-size: 14px; word-break: break-all; }
-  .result-mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
+  .uuid-list { width: 100%; display: flex; flex-direction: column; gap: 2px; }
+  .uuid-line { font-family: var(--mono); font-size: 13px; color: var(--text2); }
 </style>

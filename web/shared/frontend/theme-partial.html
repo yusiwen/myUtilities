@@ -1,53 +1,112 @@
   <style>
+    /* Tokens shared by every mu frontend. Values follow the gateway landing page:
+       one graphite ramp, three text roles, one accent used only for state. */
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --surface2: #0f3460;
+      --bg: #15151f;
+      --surface: #1a1b26;
+      --surface2: #23242f;
+      --raised: #23242f;
+      --text: #e9ebf2;
+      --text2: #a4aab8;
+      --text3: #8b91a1;
+      --border: rgba(233, 235, 242, 0.10);
+      --border2: rgba(233, 235, 242, 0.18);
       --primary: #e94560;
-      --text: #e0e0e0;
-      --text2: #a0a0b0;
-      --text3: #888888;
-      --border: #2a2a4a;
-      --border2: #0f3460;
-      --highlight: #2a2a20;
+      --accent: #e94560;
+      --danger: #e5484d;
+      --success: #4cc38a;
+      --warning: #d9a441;
+      --info: #6aa9ff;
+      --highlight: rgba(233, 69, 96, 0.10);
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+      --r-sm: 6px;
+      --r-md: 8px;
+      --r-lg: 14px;
+      --page-max: 960px;
+      --gap: 32px;
     }
     :root.light {
-      --bg: #f5f5f5;
+      --bg: #f5f6f8;
       --surface: #ffffff;
-      --surface2: #f0f0f0;
-      --primary: #e94560;
-      --text: #333333;
-      --text2: #555555;
-      --text3: #7f8c8d;
-      --border: #dddddd;
-      --border2: #eeeeee;
-      --highlight: #fffde7;
+      --surface2: #f0f2f5;
+      --raised: #f0f2f5;
+      --text: #14151c;
+      --text2: #4c5261;
+      --text3: #6b7180;
+      --border: rgba(20, 21, 28, 0.10);
+      --border2: rgba(20, 21, 28, 0.20);
+      --primary: #c22846;
+      --accent: #c22846;
+      --danger: #c62f36;
+      --success: #15803d;
+      --warning: #a16207;
+      --info: #1d4ed8;
+      --highlight: rgba(194, 40, 70, 0.08);
     }
+    html { color-scheme: dark; }
+    :root.light { color-scheme: light; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); }
-    .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
-    .toggle-btn:hover { border-color: var(--primary); color: var(--text); }
+    button, input, select, textarea { font-family: inherit; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+    }
+    ::selection { background: rgba(233, 69, 96, 0.28); }
+    a { color: inherit; text-decoration: none; }
+    code, kbd, pre, samp { font-family: var(--mono); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    /* On mobile the floating theme toggle sits at the bottom-right corner,
-       consistent across every module frontend. */
-    @media (max-width: 640px) {
-      .toggle-btn { top: auto; bottom: 12px; right: 12px; }
-      /* Prevent horizontal pan from pushing the fixed toggle off-screen when
-         any page's content is wider than the viewport. */
+    /* One theme toggle for every page: same icon button as the gateway, fixed top right. */
+    .toggle-btn {
+      position: fixed;
+      top: 12px;
+      right: calc(max(0px, (100vw - var(--page-max)) / 2) + var(--gap));
+      z-index: 100;
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: transparent;
+      color: var(--text3);
+      cursor: pointer;
+      transition: color 140ms var(--ease), background-color 140ms var(--ease), border-color 140ms var(--ease);
+    }
+    .toggle-btn:hover { color: var(--text); background: var(--raised); border-color: var(--border2); }
+    .toggle-btn svg { width: 16px; height: 16px; }
+    .toggle-btn .icon-moon { display: none; }
+    :root.light .toggle-btn .icon-sun { display: none; }
+    :root.light .toggle-btn .icon-moon { display: block; }
+
+    @media (max-width: 700px) {
+      :root { --gap: 16px; }
       html, body { overflow-x: hidden; }
     }
   </style>
   <script>
-    (function(){
-      var k = 'mu-theme', btn = document.getElementById('theme-btn');
+    (function () {
+      var k = 'mu-theme';
       function setTheme(t) {
         document.documentElement.className = t === 'light' ? 'light' : '';
-        localStorage.setItem(k, t);
-        if (btn) btn.textContent = t === 'light' ? '\u263E' : '\u2600';
+        try { localStorage.setItem(k, t); } catch (e) {}
       }
-      function toggleTheme() { setTheme(document.documentElement.className === 'light' ? 'dark' : 'light'); }
-      var saved = localStorage.getItem(k);
-      if (saved) setTheme(saved);
+      function toggleTheme() {
+        setTheme(document.documentElement.className === 'light' ? 'dark' : 'light');
+      }
+      var saved = null;
+      try { saved = localStorage.getItem(k); } catch (e) {}
+      if (saved === 'light') document.documentElement.className = 'light';
       window.toggleTheme = toggleTheme;
-    })()
+    })();
   </script>

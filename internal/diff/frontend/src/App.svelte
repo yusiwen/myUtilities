@@ -46,10 +46,15 @@
     })
 
     const monoTheme = EditorView.theme({
-      '& .cm-content': { fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace" },
-      '& .cm-gutter': { fontFamily: "'SF Mono', 'Fira Code', 'Consolas', monospace" },
-      '& .cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--text2)' },
-      '& .cm-activeLineGutter': { backgroundColor: 'var(--surface2)' },
+      '&': { color: 'var(--text)', backgroundColor: 'var(--bg)' },
+      '& .cm-content': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', caretColor: 'var(--accent)' },
+      '& .cm-line': { padding: '0 8px' },
+      '& .cm-gutter': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
+      '& .cm-gutters': { backgroundColor: 'var(--bg)', color: 'var(--text3)', borderColor: 'var(--border)' },
+      '& .cm-activeLine': { backgroundColor: 'rgba(233, 235, 242, 0.04)' },
+      '& .cm-activeLineGutter': { backgroundColor: 'var(--surface2)', color: 'var(--text2)' },
+      '& .cm-cursor': { borderLeftColor: 'var(--accent)' },
+      '& .cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(233, 69, 96, 0.28)' },
     })
 
     const saved = loadFromLS()
@@ -80,45 +85,51 @@
   }
 </script>
 
-<div class="app">
-  <div class="top-bar">
-    {#if inGateway}
-      <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-    {/if}
-    <h1>Diff Tool</h1>
+<div class="diff-app">
+  <header class="topbar">
+    <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+      <span class="mu">mu</span><span class="sep">/</span><span class="app-name">diff</span>
+    </a>
     <div class="spacer"></div>
-    {#if hasContent}
-      <button class="clear-btn" onclick={clearAll}>Clear</button>
-    {/if}
-    <label class="upload-btn">&#128194; A<input type="file" accept=".txt,.md,.js,.go,.py,.html,.css,.json,.yaml,.yml,.toml,.xml,.sh,.csv" onchange={loadFile('a')} /></label>
-    <label class="upload-btn">&#128194; B<input type="file" accept=".txt,.md,.js,.go,.py,.html,.css,.json,.yaml,.yml,.toml,.xml,.sh,.csv" onchange={loadFile('b')} /></label>
-  </div>
+    <div class="actions">
+      {#if hasContent}
+        <button class="btn xs" onclick={clearAll}>Clear</button>
+      {/if}
+      <label class="btn xs">
+        Upload A
+        <input type="file" accept=".txt,.md,.js,.go,.py,.html,.css,.json,.yaml,.yml,.toml,.xml,.sh,.csv" onchange={loadFile('a')} />
+      </label>
+      <label class="btn xs">
+        Upload B
+        <input type="file" accept=".txt,.md,.js,.go,.py,.html,.css,.json,.yaml,.yml,.toml,.xml,.sh,.csv" onchange={loadFile('b')} />
+      </label>
+    </div>
+  </header>
+
   <div class="merge-wrap" bind:this={mergeRef}></div>
 </div>
 
 <style>
-  :global(html) { height: 100%; }
-  :global(body) { margin: 0; overflow: hidden; height: 100%; }
-  .app { height: 100vh; display: flex; flex-direction: column; }
-  .top-bar { display: flex; align-items: center; gap: 12px; padding: 8px 60px 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .top-bar h1 { font-size: 16px; font-weight: 600; }
-  .spacer { flex: 1; }
+  :global(body) { --page-max: 100vw; }
+  :global(html), :global(body) { height: 100%; }
+  :global(body) { margin: 0; overflow: hidden; }
 
-  .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 4px; }
-  .home-link:hover { border-color: var(--primary); color: var(--text); }
+  .diff-app { height: 100vh; height: 100svh; display: flex; flex-direction: column; }
+  .merge-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+  .btn input { display: none; }
 
-  .clear-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 12px; }
-  .clear-btn:hover { border-color: var(--danger); color: var(--danger); }
-
-  .upload-btn { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 12px; }
-  .upload-btn:hover { border-color: var(--primary); color: var(--text); }
-  .upload-btn input { display: none; }
-
-  .merge-wrap { flex: 1; overflow: hidden; position: relative; }
   .merge-wrap :global(.cm-mergeView) { height: 100%; overflow: auto; }
   .merge-wrap :global(.cm-mergeViewEditors) { display: flex; height: 100%; }
   .merge-wrap :global(.cm-mergeViewEditor) { flex: 1; min-width: 0; display: flex; }
   .merge-wrap :global(.cm-mergeViewEditor .cm-editor) { flex: 1; }
   .merge-wrap :global(.cm-editor) { height: 100%; }
   .merge-wrap :global(.cm-editor.cm-focused) { outline: none; }
+  .merge-wrap :global(.cm-panel input) {
+    width: auto;
+    min-height: 26px;
+    height: 26px;
+    padding: 2px 8px;
+    border-radius: var(--r-sm);
+    background: var(--surface2);
+  }
 </style>

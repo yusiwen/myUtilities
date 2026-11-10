@@ -182,16 +182,12 @@
 
   function bootStatus(name) {
     const info = bootTimes[name]
-    if (!info || !info.events || info.events.length === 0) return '\u26AA'
+    if (!info || !info.events || info.events.length === 0) return { state: 'unknown', ago: '' }
     const latest = info.events[0]
     const ago = timeAgo(latest.timestamp)
-    if (latest.type === 'boot') {
-      return ago ? `\u{1F7E2} ${ago}` : '\u{1F7E2}'
-    }
-    if (latest.type === 'shutdown') {
-      return ago ? `\u{1F534} ${ago}` : '\u{1F534}'
-    }
-    return '\u26AA'
+    if (latest.type === 'boot') return { state: 'up', ago }
+    if (latest.type === 'shutdown') return { state: 'down', ago }
+    return { state: 'unknown', ago: '' }
   }
 
   // 启动倒计时（10秒）
@@ -283,631 +279,215 @@
   })
 </script>
 
-<main>
-  <h1>
-    {#if inGateway}
-      <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-    {/if}
-    <span>WOL Manager</span> <span class="version">{appVersion}</span>
-    <button class="btn-settings" onclick={openTokenModal}>
-      <span class="lock-icon">{token ? '\u{1F512}' : '\u{1F513}'}</span>
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">wol</span>
+  </a>
+  <div class="spacer"></div>
+  <div class="actions">
+    <button class="btn xs icon-btn" class:key-on={token} onclick={openTokenModal} aria-label="API token settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>
     </button>
-  </h1>
+  </div>
+</header>
+
+<div class="app">
+  <div class="page-head">
+    <h1>Wake-on-LAN</h1>
+    <p>Devices, magic packets, boot history</p>
+  </div>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="msg error block">{error}</div>
   {/if}
-
   {#if success}
-    <div class="success">{success}</div>
+    <div class="msg success block">{success}</div>
   {/if}
 
-  <section class="form-section">
-    <h2>{editingName ? 'Edit Alias' : 'Add Alias'}</h2>
+  <section class="card form-section">
+    <h2>{editingName ? 'Edit alias' : 'Add alias'}</h2>
     <form onsubmit={(e) => { e.preventDefault(); handleSubmit() }}>
-      <input
-        type="text"
-        placeholder="Hostname"
-        bind:value={formName}
-        disabled={editingName !== null}
-      />
-      <input
-        type="text"
-        placeholder="MAC Address (e.g. aa:bb:cc:dd:ee:ff)"
-        bind:value={formMac}
-      />
+      <div class="field-row">
+        <div class="field">
+          <label for="wol-name">Hostname</label>
+          <input id="wol-name" type="text" placeholder="nas" bind:value={formName} disabled={editingName !== null} />
+        </div>
+        <div class="field grow">
+          <label for="wol-mac">MAC address</label>
+          <input id="wol-mac" type="text" placeholder="aa:bb:cc:dd:ee:ff" bind:value={formMac} />
+        </div>
+      </div>
       <div class="form-actions">
-        <button type="submit">{editingName ? 'Update' : 'Add'}</button>
+        <button type="submit" class="btn primary">{editingName ? 'Update' : 'Add'}</button>
         {#if editingName}
-          <button type="button" onclick={cancelEdit}>Cancel</button>
+          <button type="button" class="btn" onclick={cancelEdit}>Cancel</button>
         {/if}
       </div>
     </form>
   </section>
 
-  <section class="list-section">
-    <h2>Aliases ({Object.keys(aliases).length})</h2>
+  <section class="card list-section">
+    <div class="list-head">
+      <h2>Aliases</h2>
+      <span class="count">{Object.keys(aliases).length}</span>
+    </div>
     {#if Object.keys(aliases).length === 0}
       <p class="empty">No aliases yet. Add one above.</p>
     {:else}
-      <table>
-        <thead>
-          <tr>
-            <th>Hostname</th>
-            <th>MAC Address</th>
-            <th>Boot Status
-              <button class="btn-refresh" onclick={refreshAllBootStatus} disabled={refreshing} title="Refresh all boot status">
-                <span class="refresh-icon" class:spinning={refreshing}>↻</span>
-              </button>
-            </th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each sortedEntries as [name, entry]}
-            <tr class={favorites.includes(name) ? 'favorite-row' : ''}>
-              <td class="host-cell">
-                <button class="btn-fav" onclick={() => toggleFavorite(name)}>
-                  {favorites.includes(name) ? '\u2B50' : '\u2606'}
-                </button>
-                {name}
-              </td>
-              <td class="mono">{entry.Mac}</td>
-              <td class="boot-cell"
-                onmouseenter={() => hoveredCell = name}
-                onmouseleave={() => hoveredCell = null}>
-                {bootStatus(name)}
-                {#if hoveredCell === name && bootTimes[name]?.events?.length}
-                  <div class="tooltip">
-                    <div class="tooltip-header">Recent Events</div>
-                    <ul class="tooltip-list">
-                      {#each bootTimes[name].events as event}
-                        <li>
-                          <span class="event-icon">{event.type === 'boot' ? '\u{1F7E2}' : '\u{1F534}'}</span>
-                          <span class="event-type">{event.type}</span>
-                          <span class="event-time">{timeAgo(event.timestamp)}</span>
-                        </li>
-                      {/each}
-                    </ul>
-                  </div>
-                {/if}
-              </td>
-              <td class="actions">
-                <button 
-                  class="btn-wol" 
-                  onclick={() => handleWol(name)} 
-                  title="Wake on LAN"
-                  disabled={wolCooldowns[name] > 0}
-                >
-                  {#if wolCooldowns[name] > 0}
-                    ⏳ WOL ({wolCooldowns[name]}s)
-                  {:else}
-                    ⚡ WOL
-                  {/if}
-                </button>
-                <button class="btn-edit" onclick={() => editAlias(name)}>✏️ Edit</button>
-                <button class="btn-delete" onclick={() => handleDelete(name)}>🗑️ Delete</button>
-              </td>
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Hostname</th>
+              <th>MAC address</th>
+              <th>
+                <span class="th-row">Boot status
+                  <button class="icon-btn refresh" onclick={refreshAllBootStatus} disabled={refreshing} aria-label="Refresh boot status">
+                    <svg class:spinning={refreshing} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+                  </button>
+                </span>
+              </th>
+              <th></th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {#each sortedEntries as [name, entry]}
+              {@const st = bootStatus(name)}
+              <tr class={favorites.includes(name) ? 'favorite-row' : ''}>
+                <td class="fav-cell">
+                  <button class="fav" class:on={favorites.includes(name)} onclick={() => toggleFavorite(name)} aria-label="Toggle favorite">
+                    <svg viewBox="0 0 24 24" fill={favorites.includes(name) ? 'currentColor' : 'none'} stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5 14.6 9l6 .9-4.3 4.2 1 6-5.3-2.8L6.7 20l1-6L3.4 9.9l6-.9z"/></svg>
+                  </button>
+                </td>
+                <td class="host-cell">{name}</td>
+                <td class="mono">{entry.Mac}</td>
+                <td class="boot-cell"
+                  onmouseenter={() => hoveredCell = name}
+                  onmouseleave={() => hoveredCell = null}>
+                  <span class="dot" class:up={st.state === 'up'} class:down={st.state === 'down'}></span>
+                  <span class="boot-text">{st.ago || (st.state === 'unknown' ? 'No events' : '')}</span>
+                  {#if hoveredCell === name && bootTimes[name]?.events?.length}
+                    <div class="tooltip">
+                      <div class="tooltip-header">Recent events</div>
+                      <ul class="tooltip-list">
+                        {#each bootTimes[name].events as event}
+                          <li>
+                            <span class="dot" class:up={event.type === 'boot'} class:down={event.type === 'shutdown'}></span>
+                            <span class="event-type">{event.type}</span>
+                            <span class="event-time">{timeAgo(event.timestamp)}</span>
+                          </li>
+                        {/each}
+                      </ul>
+                    </div>
+                  {/if}
+                </td>
+                <td class="actions">
+                  <button class="btn xs" onclick={() => handleWol(name)} disabled={wolCooldowns[name] > 0}>
+                    {wolCooldowns[name] > 0 ? `${wolCooldowns[name]}s` : 'Wake'}
+                  </button>
+                  <button class="btn xs" onclick={() => editAlias(name)}>Edit</button>
+                  <button class="btn xs danger" onclick={() => handleDelete(name)}>Delete</button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
     {/if}
   </section>
-</main>
+</div>
 
 {#if showTokenModal}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="modal-overlay" role="presentation" onclick={() => showTokenModal = false}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-      <h2>Settings</h2>
-      <label for="token-input">API Token</label>
-      <input
-        id="token-input"
-        type="text"
-        placeholder="Enter pre-shared token"
-        bind:value={tokenInput}
-      />
+      <h2>API token</h2>
+      <div class="field">
+        <label for="token-input">Pre-shared token</label>
+        <input id="token-input" type="text" placeholder="Enter pre-shared token" bind:value={tokenInput} />
+      </div>
       <div class="modal-actions">
-        <button onclick={saveToken}>Save</button>
-        <button class="btn-clear" onclick={clearToken}>Clear</button>
-        <button class="btn-cancel" onclick={() => showTokenModal = false}>Cancel</button>
+        <button class="btn primary" onclick={saveToken}>Save</button>
+        <button class="btn danger" onclick={clearToken}>Clear</button>
+        <button class="btn" onclick={() => showTokenModal = false}>Cancel</button>
       </div>
     </div>
   </div>
 {/if}
 
-<footer>
-  <p>Created by Siwen Yu (yusiwen@gmail.com)</p>
-  <p><a href="https://github.com/yusiwen/myUtilities">https://github.com/yusiwen/myUtilities</a></p>
-  <p class="footer-version">{appVersion}</p>
-</footer>
-
 <style>
-  :global(body) {
-    line-height: 1.6;
-  }
-
-  footer {
-    text-align: center;
-    color: var(--text3);
-    padding: 20px;
-    font-size: 0.85em;
-  }
-
-  /* Version shown in the footer on mobile only (hidden on desktop where it
-     already appears in the header). */
-  .footer-version {
-    display: none;
-    margin-top: 6px;
-    color: var(--text3);
-  }
-
-  footer a {
-    color: var(--text3);
-  }
-
-  footer a:hover {
-    color: var(--text2);
-  }
-
-  main {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 20px;
-  }
-
-  h1 {
-    font-size: 1.8em;
-    color: var(--text);
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-    margin-bottom: 20px;
-  }
-
-  h1 > span {
-    display: inline-flex;
-    align-items: flex-end;
-  }
-
-  h1 .version {
-    font-size: 0.5em;
-    color: var(--text2);
-    margin-right: auto;
-  }
-
-  h2 {
-    font-size: 1.2em;
-    margin-bottom: 12px;
-    color: var(--text);
-  }
-
-  .error {
-    background: #f8d7da;
-    color: #721c24;
-    padding: 10px 14px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 0.9em;
-  }
-
-  .form-section {
-    background: var(--surface);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-  }
-
-  form {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  input {
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.95em;
-    font-family: inherit;
-    background: var(--bg);
-    color: var(--text);
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  input:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
-  }
-
-  input:disabled {
-    background: var(--surface2);
-    color: var(--text2);
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9em;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  button[type="submit"] {
-    background: #3498db;
-    color: #fff;
-  }
-
-  button[type="submit"]:hover {
-    background: #2980b9;
-  }
-
-  button[type="button"] {
-    background: #95a5a6;
-    color: #fff;
-  }
-
-  button[type="button"]:hover {
-    background: #7f8c8d;
-  }
-
-  .list-section {
-    background: var(--surface);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-
-  .empty {
-    color: var(--text2);
-    font-style: italic;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-
-  th {
-    text-align: left;
-    padding: 10px 8px;
-    border-bottom: 2px solid var(--border2);
-    font-size: 0.85em;
-    text-transform: uppercase;
-    color: var(--text2);
-  }
-
-  td {
-    padding: 10px 8px;
-    border-bottom: 1px solid var(--border2);
-    font-size: 0.95em;
-  }
-
-  .favorite-row td {
-    background: var(--highlight);
-  }
-
-  .host-cell {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-  }
-
-  .btn-fav {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    font-size: 1em;
-    line-height: 1;
-    color: #f1c40f;
-  }
-
-  .btn-fav:hover {
-    transform: scale(1.2);
-  }
-
-  .btn-refresh {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0 2px;
-    color: var(--text2);
-    font-size: 1.1em;
-    vertical-align: middle;
-  }
-
-  .btn-refresh:hover {
-    color: var(--primary);
-  }
-
-  .btn-refresh:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .refresh-icon {
-    display: inline-block;
-    transition: transform 0.2s;
-  }
-
-  .refresh-icon.spinning {
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  .mono {
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.9em;
-  }
-
-  .boot-cell {
-    font-size: 0.85em;
-    color: var(--text2);
-    position: relative;
-    cursor: default;
-  }
-
-  .tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 6px;
-    background: #2c3e50;
-    color: #ecf0f1;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 0.85em;
-    white-space: nowrap;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
-    z-index: 50;
-  }
-
-  .tooltip-header {
-    font-weight: 600;
-    margin-bottom: 6px;
-    font-size: 0.9em;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .tooltip-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-
-  .tooltip-list li {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 0;
-  }
-
-  .event-type {
-    text-transform: capitalize;
-    min-width: 5em;
-  }
-
-  .event-time {
-    color: var(--text2);
-  }
-
-  .actions {
-    white-space: nowrap;
-  }
-
-  .actions button {
-    padding: 4px 8px;
-    font-size: 0.85em;
-    margin-right: 4px;
-  }
-
-  .btn-wol {
-    background: #27ae60;
-    color: #fff;
-  }
-
-  .btn-wol:hover {
-    background: #219a52;
-  }
-
-  .btn-edit {
-    background: #f39c12;
-    color: #fff;
-  }
-
-  .btn-edit:hover {
-    background: #e67e22;
-  }
-
-  .btn-delete {
-    background: #e74c3c;
-    color: #fff;
-  }
-
-  .btn-delete:hover {
-    background: #c0392b;
-  }
-
-  .success {
-    background: #d4edda;
-    color: #155724;
-    padding: 10px 14px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 0.9em;
-  }
-
-  .btn-wol:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .btn-settings {
-    background: none;
-    border: none;
-    font-size: 1.2em;
-    cursor: pointer;
-    padding: 4px;
-    line-height: 1;
-  }
-
-  .btn-settings:hover {
-    opacity: 0.7;
-  }
-
-  .lock-icon {
-    font-size: 1em;
-  }
-
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-
-  .modal {
-    background: var(--surface);
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    width: 360px;
-    max-width: 90vw;
-  }
-
-  .modal h2 {
-    margin-top: 0;
-    margin-bottom: 16px;
-  }
-
-  .modal label {
-    display: block;
-    font-size: 0.85em;
-    color: var(--text2);
-    margin-bottom: 6px;
-  }
-
-  .modal input {
-    width: 100%;
-    margin-bottom: 16px;
-  }
-
-  .modal-actions {
-    display: flex;
-    gap: 8px;
-  }
-
-  .btn-clear {
-    background: #e74c3c;
-    color: #fff;
-  }
-
-  .btn-clear:hover {
-    background: #c0392b;
-  }
-
-  .btn-cancel {
-    background: #95a5a6;
-    color: #fff;
-  }
-
-  .btn-cancel:hover {
-    background: #7f8c8d;
-  }
-
-  /* Mobile: turn the aliases table into stacked cards, keep it clean.
-     - Hide the Boot Status column on narrow screens.
-     - Action buttons sit side by side with comfortable tap targets. */
-  @media (max-width: 640px) {
-    main { padding: 12px; }
-    .form-section, .list-section { padding: 12px; }
-
-    /* Header: keep the title and Home link on one line; the long
-       git-describe version string is hidden on mobile to avoid crowding. */
-    h1 { flex-wrap: nowrap; gap: 8px; align-items: center; font-size: 1.2em; }
-    /* Let the title shrink/ellipsis so it never pushes the Home link or the
-       lock (settings) button off-screen on narrow phones. */
-    h1 > span { white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-    h1 .version { display: none; }
-    .footer-version { display: block; }   /* show version in the footer on mobile */
-    :global(.home-link) { white-space: nowrap; }
-    .btn-settings { margin-left: auto; }  /* push the lock settings button to the far right */
-
-    table, thead, tbody, th, td, tr { display: block; }
-    thead { display: none; }
-
-    tr {
-      position: relative;      /* anchor for the absolutely-positioned status */
+  :global(body) { --page-max: 960px; }
+  .block { margin-bottom: 16px; }
+
+  .form-section { margin-bottom: 16px; }
+  .form-section h2 { margin-bottom: 16px; }
+  form { display: flex; flex-direction: column; gap: 16px; }
+  .form-row, .form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .grow { flex: 2; }
+
+  .list-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  .count { color: var(--text3); font-family: var(--mono); font-size: 12px; }
+
+  .th-row { display: inline-flex; align-items: center; gap: 6px; }
+  .refresh svg { width: 13px; height: 13px; }
+  .spinning { animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .fav-cell { width: 32px; }
+  .fav { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; background: none; color: var(--text3); cursor: pointer; }
+  .fav svg { width: 15px; height: 15px; }
+  .fav:hover { color: var(--text2); }
+  .fav.on { color: var(--accent); }
+  .favorite-row td { background: var(--highlight); }
+
+  .host-cell { color: var(--text); font-weight: 500; }
+  .mono { color: var(--text2); font-family: var(--mono); font-size: 12px; }
+
+  .dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--text3); flex: none; }
+  .dot.up { background: var(--success); }
+  .dot.down { background: var(--danger); }
+  .boot-cell { position: relative; color: var(--text2); font-size: 12px; cursor: default; white-space: nowrap; }
+  .boot-text { vertical-align: 1px; }
+
+  .tooltip { position: absolute; bottom: 100%; left: 50%; z-index: 50; transform: translateX(-50%); margin-bottom: 6px; padding: 10px 12px; border: 1px solid var(--border2); border-radius: var(--r-md); background: var(--surface); white-space: nowrap; }
+  .tooltip-header { margin-bottom: 6px; color: var(--text3); font-size: 11px; font-weight: 500; }
+  .tooltip-list { margin: 0; padding: 0; list-style: none; }
+  .tooltip-list li { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; color: var(--text2); }
+  .event-type { min-width: 5em; text-transform: capitalize; }
+  .event-time { color: var(--text3); }
+
+  .actions { display: flex; gap: 6px; white-space: nowrap; text-align: right; }
+
+  .icon-btn { width: 32px; height: 32px; padding: 0; }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .key-on { color: var(--accent); border-color: rgba(233, 69, 96, 0.35); }
+
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, 0.55); }
+  .modal { width: 380px; max-width: 100%; padding: 24px; border: 1px solid var(--border2); border-radius: var(--r-lg); background: var(--surface); }
+  .modal h2 { margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+
+  @media (max-width: 700px) {
+    .table-wrap, .table-wrap table, .table-wrap thead, .table-wrap tbody,
+    .table-wrap th, .table-wrap td, .table-wrap tr { display: block; }
+    .table-wrap thead { display: none; }
+    .table-wrap tbody tr {
+      position: relative;
       margin-bottom: 12px;
       padding: 12px 14px;
-      background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 10px;
+      border-radius: 12px;
+      background: var(--surface);
     }
-    td { border: none; padding: 6px 0; background: transparent; }
-    tr.favorite-row { background: var(--highlight); }
+    .table-wrap td { border: 0; padding: 2px 0; background: transparent; }
     .favorite-row td { background: transparent; }
-
-    /* Boot status indicator sits in the card's top-right corner;
-       its hover history (tooltip) stays hidden on touch. */
-    .boot-cell {
-      position: absolute;
-      top: 12px;
-      right: 14px;
-      font-size: 0.9em;
-      white-space: nowrap;
-    }
+    .fav-cell { position: absolute; top: 12px; left: 12px; }
+    .host-cell { padding-left: 30px; font-size: 15px; }
+    .boot-cell { position: absolute; top: 12px; right: 14px; }
     .boot-cell .tooltip { display: none; }
-
-    .host-cell {
-      font-weight: 600;
-      font-size: 1.08em;
-      gap: 8px;
-      padding: 0 84px 8px 0;   /* reserve space on the right for the status */
-    }
-    .host-cell .btn-fav { font-size: 1.2em; padding: 6px; }
-    td.mono { font-size: 0.95em; color: var(--text2); }
-
-    .actions {
-      white-space: normal;
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 8px;
-      margin-top: 6px;
-    }
-    .actions button {
-      flex: 1 1 0;
-      min-width: 0;
-      min-height: 44px;
-      padding: 10px 6px;
-      margin: 0;
-      font-size: 0.82em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .actions { display: flex; gap: 8px; margin-top: 10px; }
+    .actions .btn { flex: 1; }
   }
 </style>

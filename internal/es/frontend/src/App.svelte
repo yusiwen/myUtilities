@@ -173,443 +173,140 @@
   })
 </script>
 
-<main>
-  <header>
-    <h1>
-      {#if inGateway}
-        <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-      {/if}
-      <span>ES Search</span> <span class="version">{appVersion}</span>
-    </h1>
-    <div class="conn-bar">
-      <span class="conn-dot" class:connected class:disconnected={!connected}></span>
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">es</span>
+  </a>
+  <div class="spacer"></div>
+  <div class="actions">
+    <button class="btn xs icon-btn" onclick={openSettings} aria-label="Connection settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="app">
+  <div class="page-head">
+    <h1>Elasticsearch</h1>
+    <p>Indices, documents, connections</p>
+    <p class="meta conn">
+      <span class="dot" class:on={connected} class:off={!connected}></span>
       {#if connected}
-        <span class="conn-info">{clusterName || 'Elasticsearch'} ({esVersion}) @ {esHost}</span>
+        <span class="conn-text">{clusterName || 'Elasticsearch'} {esVersion} · {esHost}</span>
       {:else if esHost}
-        <span class="conn-info">Disconnected @ {esHost} — {connectionError}</span>
+        <span class="conn-text">{esHost} · {connectionError}</span>
       {:else}
-        <span class="conn-info">Not configured</span>
+        <span class="conn-text">Not configured</span>
       {/if}
-      <button class="btn-settings" onclick={openSettings} title="Settings">&#9881;</button>
-    </div>
-  </header>
+    </p>
+  </div>
 
   {#if error}
-    <div class="error">{error}</div>
+    <div class="msg error block">{error}</div>
   {/if}
   {#if success}
-    <div class="success">{success}</div>
+    <div class="msg success block">{success}</div>
   {/if}
 
-  <section class="search-section">
-    <div class="search-controls">
-      <div class="field">
-        <label for="index-select">Index</label>
-        <div class="select-row">
-          <select id="index-select" bind:value={selectedIndex}>
-            <option value="">-- Select index --</option>
-            {#each indices as idx}
-              <option value={idx}>{idx}</option>
-            {/each}
-          </select>
-          <button class="btn-refresh" onclick={fetchIndices} title="Refresh indices">&#8635;</button>
-        </div>
+  <section class="card search">
+    <div class="field">
+      <label for="index-select">Index</label>
+      <div class="select-row">
+        <select id="index-select" bind:value={selectedIndex}>
+          <option value="">Select an index</option>
+          {#each indices as idx}
+            <option value={idx}>{idx}</option>
+          {/each}
+        </select>
+        <button class="btn" onclick={fetchIndices}>Refresh</button>
       </div>
     </div>
 
     <div class="field">
       <label for="query-input">Query (Elasticsearch Query DSL JSON)</label>
-      <textarea
-        id="query-input"
-        bind:value={queryText}
-        rows="8"
-        placeholder={placeholderText}
-      ></textarea>
+      <textarea id="query-input" bind:value={queryText} rows="8" placeholder={placeholderText}></textarea>
       {#if queryError}
-        <div class="field-error">{queryError}</div>
+        <div class="err">{queryError}</div>
       {/if}
     </div>
 
-    <button class="btn-search" onclick={handleSearch} disabled={searching || !connected}>
+    <button class="btn primary" onclick={handleSearch} disabled={searching || !connected}>
       {searching ? 'Searching...' : 'Search'}
     </button>
   </section>
 
   {#if results !== null}
-    <section class="results-section">
-      <h2>
-        Results
+    <section class="card results">
+      <h2>Results
         {#if results.hits}
-          <span class="hits-count">({results.hits.total?.value || results.hits.total || 0} hits)</span>
+          <span class="hits">{results.hits.total?.value || results.hits.total || 0} hits</span>
         {/if}
       </h2>
-      <pre class="results-json">{JSON.stringify(results, null, 2)}</pre>
+      <pre class="json">{JSON.stringify(results, null, 2)}</pre>
     </section>
   {/if}
-</main>
-
-<footer>
-  <p>Created by Siwen Yu (yusiwen@gmail.com)</p>
-  <p><a href="https://github.com/yusiwen/myUtilities">https://github.com/yusiwen/myUtilities</a></p>
-</footer>
+</div>
 
 {#if showSettings}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div class="modal-overlay" role="presentation" onclick={() => showSettings = false}>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <div class="modal" role="dialog" tabindex="-1" onclick={(e) => e.stopPropagation()}>
-      <h2>ES Connection Settings</h2>
-      <label for="settings-host">Host</label>
-      <input id="settings-host" type="text" placeholder="http://localhost:9200" bind:value={settingsHost} />
-      <label for="settings-user">Username</label>
-      <input id="settings-user" type="text" placeholder="elastic" bind:value={settingsUser} />
-      <label for="settings-pass">Password</label>
-      <input id="settings-pass" type="password" placeholder="password" bind:value={settingsPass} />
+      <h2>Connection settings</h2>
+      <div class="field">
+        <label for="settings-host">Host</label>
+        <input id="settings-host" type="text" placeholder="http://localhost:9200" bind:value={settingsHost} />
+      </div>
+      <div class="field">
+        <label for="settings-user">Username</label>
+        <input id="settings-user" type="text" placeholder="elastic" bind:value={settingsUser} />
+      </div>
+      <div class="field">
+        <label for="settings-pass">Password</label>
+        <input id="settings-pass" type="password" placeholder="password" bind:value={settingsPass} />
+      </div>
       <div class="modal-actions">
-        <button onclick={saveSettings}>Save</button>
-        <button class="btn-cancel" onclick={() => showSettings = false}>Cancel</button>
+        <button class="btn primary" onclick={saveSettings}>Save</button>
+        <button class="btn" onclick={() => showSettings = false}>Cancel</button>
       </div>
     </div>
   </div>
 {/if}
 
 <style>
-  :global(body) {
-    line-height: 1.6;
-  }
+  :global(body) { --page-max: 960px; }
+  .block { margin-bottom: 16px; }
 
-  main {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 20px;
-  }
+  .page-head .meta { margin-top: 10px; }
+  .conn { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .icon-btn { width: 32px; height: 32px; padding: 0; }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .conn-text { overflow: hidden; color: var(--text2); font-family: var(--mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--text3); }
+  .dot.on { background: var(--success); }
+  .dot.off { background: var(--danger); }
 
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
+  .search { margin-bottom: 16px; }
+  .select-row { display: flex; gap: 8px; }
+  .select-row select { flex: 1; }
+  .err { margin-top: 6px; color: var(--danger); font-size: 12px; }
 
-  h1 {
-    font-size: 1.6em;
-    color: var(--text);
-    display: flex;
-    align-items: flex-end;
-    gap: 4px;
-  }
-
-  h1 > span {
-    display: inline-flex;
-    align-items: flex-end;
-  }
-
-  h1 .version {
-    font-size: 0.5em;
-    color: var(--text2);
-  }
-
-  .conn-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface);
-    padding: 6px 14px;
-    border-radius: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-
-  .conn-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-
-  .conn-dot.connected {
-    background: #27ae60;
-  }
-
-  .conn-dot.disconnected {
-    background: #e74c3c;
-  }
-
-  .conn-info {
-    font-size: 0.85em;
-    color: var(--text2);
-  }
-
-  .btn-settings {
-    background: none;
-    border: none;
-    font-size: 1.3em;
-    cursor: pointer;
-    padding: 2px 4px;
-    color: var(--text2);
-  }
-
-  .btn-settings:hover {
-    color: var(--text);
-  }
-
-  .error {
-    background: #f8d7da;
-    color: #721c24;
-    padding: 10px 14px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 0.9em;
-  }
-
-  .success {
-    background: #d4edda;
-    color: #155724;
-    padding: 10px 14px;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 0.9em;
-  }
-
-  .search-section {
-    background: var(--surface);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    margin-bottom: 20px;
-  }
-
-  .search-controls {
-    margin-bottom: 16px;
-  }
-
-  .field {
-    margin-bottom: 16px;
-  }
-
-  .field label {
-    display: block;
-    font-size: 0.85em;
-    color: var(--text2);
-    margin-bottom: 6px;
-    font-weight: 500;
-  }
-
-  .select-row {
-    display: flex;
-    gap: 6px;
-  }
-
-  select {
-    flex: 1;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.95em;
-    outline: none;
-    background: var(--bg);
-    color: var(--text);
-    transition: border-color 0.2s;
-    cursor: pointer;
-  }
-  select option { background: var(--bg); color: var(--text); }
-
-  select:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
-  }
-
-  .btn-refresh {
-    background: #95a5a6;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    padding: 0 12px;
-    font-size: 1.1em;
-    cursor: pointer;
-  }
-
-  .btn-refresh:hover {
-    background: #7f8c8d;
-  }
-
-  textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 0.9em;
-    outline: none;
-    resize: vertical;
-    background: var(--bg);
-    color: var(--text);
-    transition: border-color 0.2s;
-  }
-
-  textarea:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
-  }
-
-  .field-error {
-    color: #e74c3c;
-    font-size: 0.85em;
-    margin-top: 4px;
-  }
-
-  .btn-search {
-    background: #3498db;
-    color: #fff;
-    border: none;
-    padding: 10px 24px;
-    border-radius: 6px;
-    font-size: 0.95em;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .btn-search:hover {
-    background: #2980b9;
-  }
-
-  .btn-search:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-
-  .results-section {
-    background: var(--surface);
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-
-  .results-section h2 {
-    font-size: 1.2em;
-    color: var(--text);
-    margin-bottom: 12px;
-  }
-
-  .hits-count {
-    font-size: 0.8em;
-    color: var(--text2);
-    font-weight: normal;
-  }
-
-  .results-json {
-    background: var(--surface2);
-    color: var(--text);
-    padding: 16px;
-    border-radius: 6px;
-    overflow-x: auto;
-    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-    font-size: 0.85em;
-    line-height: 1.5;
+  .results h2 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  .hits { color: var(--text3); font-family: var(--mono); font-size: 12px; font-weight: 400; }
+  .json {
     max-height: 600px;
-    overflow-y: auto;
-  }
-
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-  }
-
-  .modal {
-    background: var(--surface);
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    width: 420px;
-    max-width: 90vw;
-  }
-
-  .modal h2 {
-    margin-bottom: 16px;
-    font-size: 1.2em;
-    color: var(--text);
-  }
-
-  .modal label {
-    display: block;
-    font-size: 0.85em;
-    color: var(--text2);
-    margin-bottom: 4px;
-    margin-top: 10px;
-  }
-
-  .modal label:first-of-type {
-    margin-top: 0;
-  }
-
-  .modal input {
-    width: 100%;
-    padding: 8px 10px;
+    margin: 0;
+    padding: 14px 16px;
     border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.9em;
-    outline: none;
+    border-radius: var(--r-md);
+    background: var(--bg);
+    font-size: 12.5px;
+    line-height: 1.6;
+    overflow: auto;
   }
 
-  .modal input:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(233,69,96,0.1);
-  }
-
-  .modal-actions {
-    display: flex;
-    gap: 8px;
-    margin-top: 18px;
-  }
-
-  .modal-actions button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.9em;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
-  .modal-actions button:first-child {
-    background: #3498db;
-    color: #fff;
-  }
-
-  .modal-actions button:first-child:hover {
-    background: #2980b9;
-  }
-
-  .btn-cancel {
-    background: #95a5a6;
-    color: #fff;
-  }
-
-  .btn-cancel:hover {
-    background: #7f8c8d;
-  }
-
-  footer {
-    text-align: center;
-    color: var(--text3);
-    padding: 20px;
-    font-size: 0.85em;
-  }
-
-  footer a {
-    color: var(--text3);
-  }
-
-  footer a:hover {
-    color: var(--text2);
-  }
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, 0.55); }
+  .modal { width: 440px; max-width: 100%; padding: 24px; border: 1px solid var(--border2); border-radius: var(--r-lg); background: var(--surface); }
+  .modal h2 { margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 </style>

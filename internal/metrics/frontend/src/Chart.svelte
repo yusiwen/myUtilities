@@ -34,7 +34,7 @@
           label: l.label || '',
           data: toPlain(l.points || []),
           borderColor: l.color,
-          backgroundColor: (l.color || '#4a9eff') + '33',
+          backgroundColor: (l.color || '#e94560') + '2e',
           borderWidth: 1.5,
           pointRadius: 0,
           pointHitRadius: 8,
