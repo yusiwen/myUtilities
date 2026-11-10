@@ -6,7 +6,7 @@ PREFIX="${PREFIX:-/usr/local/bin}"
 # BASE_URL is overridable so the installer can be exercised against a local
 # mirror; scripts/install-smoke-test.sh relies on it.
 BASE_URL="${BASE_URL:-https://github.com/yusiwen/myUtilities/releases/download}"
-VERSION="v1.3.9"
+VERSION="v1.4.0"
 
 fail() {
     echo "Error: $*" >&2
