@@ -38,161 +38,199 @@ func SetVersion(v string) {
 	versionStr = v
 }
 
+// gatewayService is one route listed on the gateway landing page.
+type gatewayService struct {
+	Path string // route shown in the monospace column
+	Href string // link target
+	Name string
+	Desc string
+}
+
+// landingPage renders the gateway's own page: a route table for every
+// web-enabled module, in the order the modules are registered.
 func landingPage(hasMock bool) string {
-	mockCard := ""
-	if hasMock {
-		mockCard = `
-    <a href="/mock/__admin/" class="app-card">
-      <div class="app-icon">&#128521;</div>
-      <div class="app-name">Mock Server</div>
-      <div class="app-desc">Dynamic mock endpoints management</div>
-    </a>`
+	services := []gatewayService{
+		{Path: "/wol", Href: "/wol/", Name: "Wake-on-LAN", Desc: "Devices, magic packets, boot history"},
+		{Path: "/es", Href: "/es/", Name: "Elasticsearch", Desc: "Indices, documents, connections"},
+		{Path: "/qrcode", Href: "/qrcode/", Name: "QR Code", Desc: "Text to QR code"},
+		{Path: "/jarinfo", Href: "/jarinfo/", Name: "JAR Analyzer", Desc: "JAR structure and metadata"},
+		{Path: "/crypto", Href: "/crypto/", Name: "Crypto", Desc: "Encrypt, decrypt, passwords"},
+		{Path: "/diff", Href: "/diff/", Name: "Diff", Desc: "Side-by-side text and file diff"},
+		{Path: "/misc", Href: "/misc/", Name: "Misc", Desc: "JSON, UUID, timestamp, hash"},
+		{Path: "/network", Href: "/network/", Name: "Network", Desc: "DNS lookup and dig queries"},
+		{Path: "/k8s", Href: "/k8s/", Name: "K8s", Desc: "Secret YAML encode and decode"},
+		{Path: "/svcreg", Href: "/svcreg/", Name: "Service Registry", Desc: "Register and discover services"},
+		{Path: "/budget", Href: "/budget/", Name: "API Budget", Desc: "LLM API balance and usage"},
+		{Path: "/metrics", Href: "/metrics/", Name: "Metrics", Desc: "System time-series charts"},
 	}
+	if hasMock {
+		services = append(services, gatewayService{
+			Path: "/mock/__admin/", Href: "/mock/__admin/", Name: "Mock Server", Desc: "Mock endpoints and responses",
+		})
+	}
+
+	var rows strings.Builder
+	for _, s := range services {
+		fmt.Fprintf(&rows, `    <a class="route" href="%s">
+      <span class="path">%s</span>
+      <span class="name">%s</span>
+      <span class="desc">%s</span>
+      <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+    </a>
+`, s.Href, s.Path, s.Name, s.Desc)
+	}
+	count := fmt.Sprint(len(services))
+
 	return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>mu Gateway</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
+<title>mu gateway</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%2315151f'/><text x='32' y='40' font-family='ui-monospace,Menlo,monospace' font-size='25' font-weight='600' fill='%23e9ebf2' text-anchor='middle'>mu</text><rect x='21' y='47' width='22' height='4' rx='2' fill='%23e94560'/></svg>" />
 <style>
   :root {
-    --bg: #1a1a2e;
-    --surface: #16213e;
-    --surface2: #0f3460;
-    --text: #e0e0e0;
-    --text2: #a0a0b0;
-    --text-title: #ffffff;
-    --border: #0f3460;
-    --border-hover: #4a9eff;
+    --bg: #15151f;
+    --surface: #1a1b26;
+    --raised: #23242f;
+    --text: #e9ebf2;
+    --text2: #a4aab8;
+    --text3: #8b91a1;
+    --line: rgba(233, 235, 242, 0.09);
+    --line-strong: rgba(233, 235, 242, 0.18);
+    --accent: #e94560;
+    --primary: var(--accent);
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
   :root.light {
-    --bg: #f5f5f5;
+    --bg: #f5f6f8;
     --surface: #ffffff;
-    --surface2: #e0e0e0;
-    --text: #333333;
-    --text2: #888888;
-    --text-title: #222222;
-    --border: #dddddd;
-    --border-hover: #4a9eff;
+    --raised: #f0f2f5;
+    --text: #14151c;
+    --text2: #4c5261;
+    --text3: #6b7180;
+    --line: rgba(20, 21, 28, 0.10);
+    --line-strong: rgba(20, 21, 28, 0.20);
+    --accent: #c22846;
+    --primary: var(--accent);
   }
+  html { color-scheme: dark; }
+  :root.light { color-scheme: light; }
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; min-height: 100svh; display: flex; }
-  .container { text-align: center; padding: 2rem; position: relative; width: 100%; max-width: 820px; margin: auto; }
-  h1 { font-size: 2rem; margin-bottom: 0.5rem; color: var(--text-title); }
-  .subtitle { color: var(--text2); margin-bottom: 2rem; }
-  .subtitle .version { font-size: 0.75em; color: var(--text2); }
-  .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; max-width: 780px; margin: 0 auto; }
-  .app-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: 100%; text-decoration: none; color: var(--text); transition: transform 0.2s, border-color 0.2s; }
-  .app-card:hover { transform: translateY(-4px); border-color: var(--border-hover); }
-  .app-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-  .app-name { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-title); }
-  .app-desc { font-size: 0.85rem; color: var(--text2); }
-  .footer { margin-top: 2.5rem; font-size: 0.75rem; color: var(--text2); }
-  .footer a { color: var(--primary); text-decoration: none; }
-  .footer a:hover { text-decoration: underline; }
-  .toggle-btn { position: fixed; top: 16px; right: 16px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; z-index: 100; }
-  .toggle-btn:hover { border-color: var(--border-hover); color: var(--text); }
+  body { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  ::selection { background: rgba(233, 69, 96, 0.28); }
+  a { color: inherit; text-decoration: none; }
 
-  @media (max-width: 640px) {
-    html, body { overflow-x: hidden; }
-    .container { padding: 1.2rem 1rem; }
-    h1 { font-size: 1.6rem; }
-    .subtitle { margin-bottom: 1.2rem; }
-    .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; }
-    .app-card { padding: 1.25rem 0.9rem; }
-    .toggle-btn { top: auto; bottom: 12px; right: 12px; padding: 5px 10px; }
-    .footer { margin-top: 1.5rem; }
+  .top { flex: none; display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 1240px; margin: 0 auto; height: 56px; padding: 0 32px; }
+  .brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); line-height: 1; }
+  .brand .mu { padding-bottom: 2px; border-bottom: 2px solid var(--accent); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand .sep { font-size: 13px; color: var(--line-strong); }
+  .brand .app { font-size: 13px; color: var(--text3); }
+  .theme { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: transparent; color: var(--text3); cursor: pointer; transition: color 140ms var(--ease), background-color 140ms var(--ease), border-color 140ms var(--ease); }
+  .theme:hover { color: var(--text); background: var(--raised); border-color: var(--line-strong); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .theme svg { width: 16px; height: 16px; }
+  .icon-moon { display: none; }
+  :root.light .icon-sun { display: none; }
+  :root.light .icon-moon { display: block; }
+
+  main { flex: 1; width: 100%; max-width: 1240px; margin: 0 auto; padding: clamp(24px, 10vh, 88px) 32px 40px; display: grid; align-content: start; grid-template-columns: 340px minmax(0, 1fr); gap: 56px; }
+
+  .intro { display: flex; flex-direction: column; justify-content: center; }
+  h1 { font-size: 40px; font-weight: 500; line-height: 1.08; letter-spacing: -0.025em; text-wrap: balance; }
+  .lede { max-width: 32ch; margin-top: 16px; font-size: 15px; line-height: 1.55; color: var(--text2); }
+  .lede code { padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); font-family: var(--mono); font-size: 13px; color: var(--text); white-space: nowrap; }
+  .colophon { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 32px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
+  .colophon a { transition: color 140ms var(--ease); }
+  .colophon a:hover { color: var(--text); }
+  .colophon .sep { color: var(--line-strong); }
+
+  .routes { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+  .routes-head { display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 20px; border-bottom: 1px solid var(--line); font-family: var(--mono); font-size: 12px; font-weight: 400; color: var(--text3); }
+  .route { display: grid; grid-template-columns: 128px 168px minmax(0, 1fr) 16px; gap: 12px; align-items: center; height: 48px; padding: 0 20px; transition: background-color 140ms var(--ease), box-shadow 140ms var(--ease); }
+  .route + .route { border-top: 1px solid var(--line); }
+  .route:hover { background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+  .route:focus-visible { outline-offset: -2px; background: var(--raised); }
+  .route:hover .path, .route:focus-visible .path { color: var(--text); }
+  .path { font-family: var(--mono); font-size: 13px; color: var(--text2); transition: color 140ms var(--ease); }
+  .name { font-size: 15px; font-weight: 500; }
+  .desc { min-width: 0; font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chev { justify-self: end; color: var(--text3); transition: color 140ms var(--ease), transform 140ms var(--ease); }
+  .route:hover .chev, .route:focus-visible .chev { color: var(--accent); transform: translateX(2px); }
+
+  @media (max-width: 1079px) {
+    .top { max-width: 900px; }
+    main { max-width: 900px; grid-template-columns: minmax(0, 1fr); gap: 40px; padding: 40px 32px 48px; }
+    .intro { justify-content: flex-start; }
+    h1 { font-size: 34px; }
+    .lede { max-width: 46ch; }
   }
-  @media (max-width: 380px) {
-    .apps { grid-template-columns: 1fr; }
+
+  @media (max-width: 700px) {
+    .top { padding: 0 20px; }
+    main { gap: 32px; padding: 24px 20px 40px; }
+    h1 { font-size: 30px; }
+    .routes-head { padding: 0 16px; }
+    .route { grid-template-columns: 108px minmax(0, 1fr) 16px; grid-template-areas: "path name chev" ". desc ."; row-gap: 2px; height: auto; min-height: 56px; padding: 10px 16px; }
+    .path { grid-area: path; font-size: 12px; }
+    .name { grid-area: name; }
+    .desc { grid-area: desc; white-space: normal; line-height: 1.4; }
+    .chev { grid-area: chev; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
   }
 </style>
 <script>
-(function(){
-  var k = 'mu-theme', btn = document.getElementById('theme-btn');
-  function setTheme(t) {
-    document.documentElement.className = t === 'light' ? 'light' : '';
-    localStorage.setItem(k, t);
-    if (btn) btn.textContent = t === 'light' ? '\u263E' : '\u2600';
-  }
-  function toggleTheme() { setTheme(document.documentElement.className === 'light' ? 'dark' : 'light'); }
-  var saved = localStorage.getItem(k);
-  if (saved) setTheme(saved);
-  window.toggleTheme = toggleTheme;
-})()
+(function () {
+  if (localStorage.getItem('mu-theme') === 'light') document.documentElement.className = 'light';
+})();
 </script>
 </head>
 <body>
-<button class="toggle-btn" id="theme-btn" onclick="toggleTheme()">☀</button>
-<div class="container">
-  <h1>mu Gateway</h1>
-   <p class="subtitle">Unified access to all mu services</p>
-  <div class="apps">
-    <a href="/wol/" class="app-card">
-      <div class="app-icon">&#9200;</div>
-      <div class="app-name">Wake-on-LAN</div>
-      <div class="app-desc">Manage devices, send WOL magic packets, track boot events</div>
-    </a>
-		<a href="/es/" class="app-card">
-      <div class="app-icon">&#128269;</div>
-      <div class="app-name">Elasticsearch</div>
-      <div class="app-desc">Query indices, browse documents, manage ES connections</div>
-    </a>
-    <a href="/qrcode/" class="app-card">
-      <div class="app-icon">&#128208;</div>
-      <div class="app-name">QR Code</div>
-      <div class="app-desc">Generate QR codes from text</div>
-    </a>
-    <a href="/jarinfo/" class="app-card">
-      <div class="app-icon">&#128230;</div>
-      <div class="app-name">JAR Analyzer</div>
-      <div class="app-desc">Analyze JAR file structure and metadata</div>
-    </a>
-    <a href="/crypto/" class="app-card">
-      <div class="app-icon">&#128274;</div>
-      <div class="app-name">Crypto</div>
-      <div class="app-desc">Encrypt, decrypt, and generate passwords</div>
-    </a>
-    <a href="/diff/" class="app-card">
-      <div class="app-icon">&#128196;</div>
-      <div class="app-name">Diff</div>
-      <div class="app-desc">Compare text and files side by side</div>
-    </a>
-    <a href="/misc/" class="app-card">
-      <div class="app-icon">&#128377;</div>
-      <div class="app-name">Misc</div>
-      <div class="app-desc">JSON, UUID, timestamp, hash tools</div>
-    </a>
-    <a href="/network/" class="app-card">
-      <div class="app-icon">&#127760;</div>
-      <div class="app-name">Network</div>
-      <div class="app-desc">DNS lookup and dig query tools</div>
-    </a>
-    <a href="/k8s/" class="app-card">
-      <div class="app-icon">&#128736;</div>
-      <div class="app-name">K8s</div>
-      <div class="app-desc">Kubernetes Secret YAML generator and decoder</div>
-    </a>
-    <a href="/svcreg/" class="app-card">
-      <div class="app-icon">&#128295;</div>
-      <div class="app-name">Service Registry</div>
-      <div class="app-desc">Register and discover microservices</div>
-    </a>
-    <a href="/budget/" class="app-card">
-      <div class="app-icon">&#128176;</div>
-      <div class="app-name">API Budget</div>
-      <div class="app-desc">Track LLM API balance and usage</div>
-    </a>
-    <a href="/metrics/" class="app-card">
-      <div class="app-icon">&#128200;</div>
-      <div class="app-name">Metrics</div>
-      <div class="app-desc">System monitoring time-series charts</div>
-    </a>` + mockCard + `
-  </div>
-  <p class="footer"><span class="version">` + versionStr + `</span> &mdash; mu &copy; <span id="copyright-year"></span> <a href="https://github.com/yusiwen/myUtilities">Siwen Yu</a></p>
-</div>
-<script>document.getElementById('copyright-year').textContent=new Date().getFullYear()</script>
+<header class="top">
+  <div class="brand"><span class="mu">mu</span><span class="sep">/</span><span class="app">gateway</span></div>
+  <button class="theme" id="theme-btn" type="button" aria-label="Switch to light theme">
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+  </button>
+</header>
+<main>
+  <section class="intro">
+    <h1>One port for the whole toolbox</h1>
+    <p class="lede">Each tool below has a web UI, served by the same <code>mu gateway</code> process.</p>
+    <div class="colophon">
+      <span>` + versionStr + `</span>
+      <span><a href="https://github.com/yusiwen/myUtilities">GitHub</a><span class="sep"> / </span>&copy; <span id="copyright-year">2026</span> Siwen Yu</span>
+    </div>
+  </section>
+  <section class="routes" aria-labelledby="routes-title">
+    <h2 class="routes-head" id="routes-title"><span>Routes</span><span>` + count + `</span></h2>
+` + rows.String() + `  </section>
+</main>
+<script>
+(function () {
+  var key = 'mu-theme';
+  var root = document.documentElement;
+  var btn = document.getElementById('theme-btn');
+  function label() {
+    btn.setAttribute('aria-label', root.className === 'light' ? 'Switch to dark theme' : 'Switch to light theme');
+  }
+  function apply(theme) {
+    root.className = theme === 'light' ? 'light' : '';
+    localStorage.setItem(key, theme);
+    label();
+  }
+  btn.addEventListener('click', function () {
+    apply(root.className === 'light' ? 'dark' : 'light');
+  });
+  label();
+})();
+</script>
+<script>document.getElementById('copyright-year').textContent = new Date().getFullYear();</script>
 </body>
 </html>`
 }
