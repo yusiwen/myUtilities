@@ -38,6 +38,7 @@ default:
 inject-shared:
 	@for dir in $(FRONTEND_DIRS); do \
 	  html="$$dir/frontend/index.html"; \
+	  cp "$$html" "$$html.inject-backup"; \
 	  THEME_PARTIAL=$(THEME_PARTIAL) perl -0pi -e 'BEGIN{local $$/; open my $$fh,"<","$$ENV{THEME_PARTIAL}" or die $$!; $$c=<$$fh>;} s{^[ \t]*<!-- inject:theme -->[ \t]*$$}{$$c}mg' "$$html"; \
 	  COMMON_PARTIAL=$(COMMON_PARTIAL) perl -0pi -e 'BEGIN{local $$/; open my $$fh,"<","$$ENV{COMMON_PARTIAL}" or die $$!; $$c=<$$fh>;} s{^[ \t]*<!-- inject:common -->[ \t]*$$}{$$c}mg' "$$html"; \
 	done
@@ -80,7 +81,7 @@ frontend: inject-shared
 	@echo "Building Metrics Svelte frontend..."
 	cd $(METRICS_FRONTEND_DIR) && npm install --silent && npm run build
 	@for dir in $(FRONTEND_DIRS); do \
-	  git checkout -- "$$dir/frontend/index.html" 2>/dev/null || true; \
+	  if [ -f "$$dir/frontend/index.html.inject-backup" ]; then mv "$$dir/frontend/index.html.inject-backup" "$$dir/frontend/index.html"; fi; \
 	done
 	@echo "Frontend index.html restored"
 
