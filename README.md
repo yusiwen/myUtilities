@@ -9,7 +9,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | Command | Type | Description | Web UI |
 |---|---|---|---|
 | [ask](docs/ask.md) | AI | Ask an LLM questions (optional web search) | – |
-| [budget](docs/budget.md) | AI | Track LLM API usage/balance across providers | ✓ |
+| [budget](docs/budget.md) | AI | Track LLM API usage/balance, check DeepSeek service status | ✓ |
 | [completion](docs/completion.md) | Dev | Generate bash/zsh completion scripts | – |
 | [crypto](docs/crypto.md) | Utils | Encrypt/decrypt, passwords, JWT, encode/decode | ✓ |
 | [diff](docs/diff.md) | Dev | Side-by-side text/file comparison | ✓ |

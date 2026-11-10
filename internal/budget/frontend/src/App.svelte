@@ -1,7 +1,14 @@
 <script>
+  import { onMount } from 'svelte'
+
   let balances = $state([])
   let loading = $state(true)
   let error = $state('')
+
+  let status = $state(null)
+  let statusError = $state('')
+  let statusLoading = $state(true)
+  let pollAfter = $state(30)
 
   const inGateway = typeof window !== 'undefined' && window.__MU_GATEWAY__
 
@@ -23,7 +30,46 @@
     }
   }
 
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/budget/status')
+      const data = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(data?.error || `HTTP ${res.status}`)
+      }
+      status = data
+      statusError = ''
+      pollAfter = data?.health?.poll_after_seconds || 30
+    } catch (e) {
+      statusError = e.message
+    } finally {
+      statusLoading = false
+    }
+  }
+
+  function refreshAll() {
+    fetchBalances()
+    fetchStatus()
+  }
+
   $effect(() => { fetchBalances() })
+
+  // Poll on the interval the status widget itself recommends.
+  onMount(() => {
+    let cancelled = false
+    let timer
+    const tick = async () => {
+      await fetchStatus()
+      if (cancelled) return
+      const wait = Math.min(Math.max(pollAfter || 30, 15), 300)
+      timer = setTimeout(tick, wait * 1000)
+    }
+    tick()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  })
 
   function currencyLabel(code) {
     switch (code) {
@@ -31,6 +77,28 @@
       case 'USD': return '$'
       default: return ''
     }
+  }
+
+  function fmtAge(seconds) {
+    if (seconds === null || seconds === undefined || seconds < 0) return ''
+    if (seconds < 60) return `${Math.round(seconds)}s`
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`
+    if (seconds < 86400) return `${Math.round(seconds / 3600)}h`
+    return `${Math.floor(seconds / 86400)}d ${Math.round((seconds % 86400) / 3600)}h`
+  }
+
+  function fmtTime(iso) {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  }
+
+  function maintenanceWindow(m) {
+    const start = m.scheduled_start_at || m.starts_at
+    const end = m.scheduled_end_at || m.ends_at
+    if (!start && !end) return ''
+    return `${start ? fmtTime(start) : '?'} → ${end ? fmtTime(end) : '?'}`
   }
 </script>
 
@@ -44,14 +112,104 @@
   <div class="page-head row">
     <div>
       <h1>API Budget</h1>
-      <p>LLM API balance and usage</p>
+      <p>LLM API balance, usage and service status</p>
     </div>
-    <button class="btn" onclick={fetchBalances} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
+    <button class="btn" onclick={refreshAll} disabled={loading}>{loading ? 'Refreshing...' : 'Refresh'}</button>
   </div>
 
   {#if error}
     <div class="msg error block">{error}</div>
   {/if}
+
+  <div class="card status-card">
+    {#if status?.health}
+      {@const h = status.health}
+      <div class="status-head">
+        <span class="dot {h.level}" aria-hidden="true"></span>
+        <span class="status-title">DeepSeek service</span>
+        <span class="status-badge {h.level}">{h.overall_status || 'unknown'}</span>
+        <span class="status-checked">
+          checked {fmtTime(h.checked_at)}{status.cached ? ' · cached' : ''}
+        </span>
+      </div>
+      <p class="status-headline">{h.headline}</p>
+      <p class="status-detail">{h.detail}</p>
+
+      {#if h.incident_count > 0 && status.summary?.ongoing_incidents?.length}
+        <ul class="events">
+          {#each status.summary.ongoing_incidents as inc}
+            <li class="event">
+              <div class="event-head">
+                <span class="event-title">{inc.name || 'Unnamed incident'}</span>
+                <span class="event-tags">
+                  {[inc.impact, inc.phase].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              {#if inc.last_update?.message}
+                <p class="event-msg">{inc.last_update.message}</p>
+              {/if}
+              {#if inc.affected_components?.length}
+                <p class="event-meta">
+                  Affected: {inc.affected_components.map((c) => c.name || c.id).filter(Boolean).join(', ')}
+                </p>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      {#if status.summary?.in_progress_maintenances?.length}
+        <ul class="events">
+          {#each status.summary.in_progress_maintenances as m}
+            <li class="event">
+              <div class="event-head">
+                <span class="event-title">{m.name || 'Unnamed maintenance'}</span>
+                <span class="event-tags">in progress</span>
+              </div>
+              {#if maintenanceWindow(m)}<p class="event-meta">{maintenanceWindow(m)}</p>{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      {#if status.summary?.scheduled_maintenances?.length}
+        <ul class="events">
+          {#each status.summary.scheduled_maintenances as m}
+            <li class="event">
+              <div class="event-head">
+                <span class="event-title">{m.name || 'Unnamed maintenance'}</span>
+                <span class="event-tags">scheduled</span>
+              </div>
+              {#if maintenanceWindow(m)}<p class="event-meta">{maintenanceWindow(m)}</p>{/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      <div class="status-foot">
+        <span>snapshot {fmtTime(h.generated_at)}</span>
+        {#if h.data_age_seconds >= 0}
+          <span>{fmtAge(h.data_age_seconds)} old</span>
+        {/if}
+        {#if h.stale}
+          <span class="stale">older than the {h.max_stale_seconds}s freshness window — upstream may not have refreshed</span>
+        {/if}
+      </div>
+    {:else if statusError}
+      <div class="status-head">
+        <span class="dot unknown" aria-hidden="true"></span>
+        <span class="status-title">DeepSeek service</span>
+        <span class="status-checked">unavailable</span>
+      </div>
+      <p class="status-detail">Status check failed: {statusError}</p>
+    {:else}
+      <div class="status-head">
+        <span class="dot unknown" aria-hidden="true"></span>
+        <span class="status-title">DeepSeek service</span>
+        <span class="status-checked">{statusLoading ? 'checking…' : 'no data'}</span>
+      </div>
+    {/if}
+  </div>
 
   {#if loading && balances.length === 0}
     <p class="muted">Loading balances...</p>
@@ -131,6 +289,32 @@
   .hint { margin-top: 8px; color: var(--text3); font-size: 13px; }
   .hint code { padding: 2px 6px; border-radius: 4px; background: var(--surface2); word-break: break-all; }
 
+  .status-card { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; }
+  .status-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
+  .dot.healthy { background: var(--success); }
+  .dot.degraded { background: var(--warning); }
+  .dot.outage { background: var(--danger); }
+  .dot.maintenance { background: var(--info); }
+  .status-title { font-size: 14px; font-weight: 500; }
+  .status-badge { padding: 0 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--text2); font-family: var(--mono); font-size: 11px; }
+  .status-badge.healthy { color: var(--success); }
+  .status-badge.degraded, .status-badge.maintenance { color: var(--warning); }
+  .status-badge.outage { color: var(--danger); }
+  .status-checked { margin-left: auto; color: var(--text3); font-family: var(--mono); font-size: 11px; }
+  .status-headline { font-size: 15px; }
+  .status-detail { color: var(--text2); font-size: 13px; }
+
+  .events { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); list-style: none; }
+  .event-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .event-title { font-size: 13px; font-weight: 500; }
+  .event-tags { color: var(--text3); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+  .event-msg { color: var(--text2); font-size: 12px; }
+  .event-meta { color: var(--text3); font-size: 11px; }
+
+  .status-foot { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--text3); font-family: var(--mono); font-size: 11px; }
+  .status-foot .stale { color: var(--warning); }
+
   .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
   .balance-card { display: flex; flex-direction: column; gap: 10px; }
 
@@ -156,5 +340,6 @@
   @media (max-width: 700px) {
     .page-head.row { flex-wrap: wrap; align-items: flex-start; }
     .page-head.row .btn { width: 100%; }
+    .status-checked { margin-left: 0; }
   }
 </style>
