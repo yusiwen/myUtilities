@@ -60,7 +60,7 @@ func landingPage(hasMock bool) string {
 		{Path: "/network", Href: "/network/", Name: "Network", Desc: "DNS lookup and dig queries"},
 		{Path: "/k8s", Href: "/k8s/", Name: "K8s", Desc: "Secret YAML encode and decode"},
 		{Path: "/svcreg", Href: "/svcreg/", Name: "Service Registry", Desc: "Register and discover services"},
-		{Path: "/budget", Href: "/budget/", Name: "API Budget", Desc: "LLM API balance and usage"},
+		{Path: "/budget", Href: "/budget/", Name: "API Budget", Desc: "LLM API balance and DeepSeek service status"},
 		{Path: "/metrics", Href: "/metrics/", Name: "Metrics", Desc: "System time-series charts"},
 	}
 	if hasMock {
@@ -407,7 +407,7 @@ func (o *Options) Run() error {
 	mux.Handle("/svcreg/", http.StripPrefix("/svcreg", withGateway(svcreg.FrontendHandler())))
 	log.Printf("Gateway:   /svcreg/* -> Service Registry frontend (backend: %s)", o.SvcregServer)
 
-	budget.RegisterHandlers(mux, o.configPath("budget-config.json"))
+	budget.RegisterHandlers(mux, o.configPath("budget-config.json"), "")
 	mux.Handle("/budget/", http.StripPrefix("/budget", withGateway(budget.FrontendHandler())))
 	log.Printf("Gateway:   /budget/* -> API Budget frontend")
 
