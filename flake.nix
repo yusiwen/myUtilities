@@ -39,6 +39,13 @@
               # A host toolchain manager (mise) exports GOROOT globally, so drop it
               # rather than re-point it -- every `go` binary then self-locates.
               unset GOROOT GOBIN
+              # Unsetting once is not enough: mise's per-prompt hook re-exports
+              # GOROOT/GOBIN from its own Go after this hook ran, so `go` stays the
+              # Nix one while GOROOT points at the other install. Disable mise's Go
+              # (its supported mechanism) so each prompt unsets them instead.
+              export MISE_DISABLE_TOOLS="''${MISE_DISABLE_TOOLS:+$MISE_DISABLE_TOOLS,}go"
+              # Use the Nix toolchain as-is; never auto-download another one.
+              export GOTOOLCHAIN=local
               echo "mu dev shell: go $(go version | sed 's/go version //') | node $(node --version) | make $(make --version | head -1 | sed 's/.* //')"
             '';
           };
