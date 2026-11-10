@@ -19,14 +19,20 @@
 
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">qrcode</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>QR Code Generator</h1>
+  <div class="page-head">
+    <h1>QR Code</h1>
+    <p>Text to QR code</p>
+  </div>
 
   {#if error}
-    <div class="msg error">{error}</div>
+    <div class="msg error block">{error}</div>
   {/if}
 
   <div class="card">
@@ -51,31 +57,21 @@
 
   {#if qrUrl}
     <div class="qr-section">
-      <div class="qr-frame">
-        <img src={qrUrl} alt="QR Code" />
-      </div>
+      <div class="qr-frame"><img src={qrUrl} alt="QR code" /></div>
       <a href={qrUrl} download="qrcode.png" class="btn">Download PNG</a>
     </div>
   {/if}
 </div>
 
 <style>
-  .app { max-width: 640px; margin: 0 auto; padding: 40px 16px; text-align: center; }
-  h1 { font-size: 24px; margin-bottom: 24px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 640px; }
+  .block { margin-bottom: 16px; }
 
-  .card { text-align: left; }
-  .field { margin-bottom: 16px; }
-  .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
-  .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; resize: vertical; }
-  .field textarea:focus { border-color: var(--primary); }
-  .field select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; outline: none; }
-  .field select:focus { border-color: var(--primary); }
+  .qr-section { display: flex; align-items: flex-end; gap: 16px; margin-top: 24px; }
+  .qr-frame { padding: 16px; border: 1px solid var(--border); border-radius: var(--r-lg); background: #fff; }
+  .qr-frame img { display: block; width: 224px; height: 224px; image-rendering: pixelated; }
 
-  .btn { text-decoration: none; }
-  .btn.primary { width: 100%; text-align: center; }
-
-  .qr-section { margin-top: 24px; }
-  .qr-frame { display: inline-block; background: #fff; padding: 16px; border-radius: 12px; margin-bottom: 16px; }
-  .qr-frame img { display: block; width: 256px; height: 256px; image-rendering: pixelated; }
+  @media (max-width: 700px) {
+    .qr-section { flex-direction: column; align-items: flex-start; }
+  }
 </style>

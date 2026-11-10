@@ -51,10 +51,9 @@
 </div>
 
 <style>
-  .editor-wrapper { position: relative; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .editor-wrapper { position: relative; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; background: var(--bg); }
   .editor { min-height: 180px; }
   .editor { font-size: 13px; }
-  .editor { background: #0d1117; }
-  .fmt-btn { position: absolute; top: 6px; right: 6px; font-size: 11px; padding: 3px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface2); color: var(--text); cursor: pointer; z-index: 10; }
-  .fmt-btn:hover { background: var(--primary); }
+  .fmt-btn { position: absolute; top: 8px; right: 8px; padding: 3px 10px; border: 1px solid var(--border2); border-radius: var(--r-sm); background: var(--surface2); color: var(--text2); font-size: 11px; cursor: pointer; z-index: 10; }
+  .fmt-btn:hover { color: var(--text); border-color: var(--border2); }
 </style>

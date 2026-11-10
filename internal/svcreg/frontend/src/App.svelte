@@ -134,18 +134,23 @@
   }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">svcreg</span>
+  </a>
+</header>
+
 <div class="app">
-  <div class="top-bar">
-    <div class="top-left">
-      {#if inGateway}
-        <a href="/" class="home-link">&larr; Home</a>
-      {/if}
+  <div class="page-head row">
+    <div>
       <h1>Service Registry</h1>
+      <p>Register and discover services</p>
     </div>
+    <button class="btn" onclick={loadData} disabled={loading}>Refresh</button>
   </div>
 
   {#if error}
-    <button class="msg error" onclick={() => error = ''}>{error}</button>
+    <button class="msg error block" onclick={() => error = ''}>{error}</button>
   {/if}
 
   <div class="tabs">
@@ -156,14 +161,13 @@
   </div>
 
   {#if loading}
-    <div class="loading">Loading...</div>
+    <p class="muted">Loading...</p>
   {:else}
 
     {#if tab === 'dashboard'}
-      <div class="refresh-bar"><button class="btn xs" onclick={loadData}>↻</button></div>
       <div class="stats">
         {#each statCards as stat}
-          <div class="card stat-card">
+          <div class="card stat">
             <div class="stat-label">{stat.label}</div>
             <div class="stat-value">{stat.value}</div>
           </div>
@@ -173,16 +177,13 @@
 
     {#if tab === 'services'}
       <div class="toolbar">
-        <div class="field">
-          <select bind:value={envFilter}>
-            <option value="">All Environments</option>
-            {#each envs as env}
-              <option value={env}>{env}</option>
-            {/each}
-          </select>
-        </div>
-        <span class="count">{filteredServices.length} service(s)</span>
-        <button class="btn xs" onclick={loadData}>↻</button>
+        <select bind:value={envFilter} aria-label="Environment filter">
+          <option value="">All environments</option>
+          {#each envs as env}
+            <option value={env}>{env}</option>
+          {/each}
+        </select>
+        <span class="count">{filteredServices.length} services</span>
       </div>
       <div class="table-wrap">
         <table class="table">
@@ -201,41 +202,43 @@
           <tbody>
             {#each filteredServices as svc}
               <tr>
-                <td><button class="expand-btn" onclick={() => toggleExpand(svc.serviceId)}>{expandedId === svc.serviceId ? '▾' : '▸'}</button></td>
+                <td>
+                  <button class="expand" class:open={expandedId === svc.serviceId} onclick={() => toggleExpand(svc.serviceId)} aria-label="Toggle instances">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                  </button>
+                </td>
                 <td class="mono">{svc.serviceId ? svc.serviceId.slice(0, 12) + '...' : '-'}</td>
                 <td>{svc.appId || '-'}</td>
-                <td><strong>{svc.serviceName}</strong></td>
+                <td class="strong">{svc.serviceName}</td>
                 <td>{svc.version}</td>
-                <td><span class="env-tag">{svc.environment || '-'}</span></td>
-                <td><span class="status-dot" class:up={svc.status === 'UP'} class:down={svc.status !== 'UP'}></span>{svc.status || '-'}</td>
-                <td><button class="btn xs" onclick={() => deleteService(svc.serviceId)}>del</button></td>
+                <td>{svc.environment || '-'}</td>
+                <td><span class="dot" class:up={svc.status === 'UP'}></span>{svc.status || '-'}</td>
+                <td><button class="btn xs danger" onclick={() => deleteService(svc.serviceId)}>Delete</button></td>
               </tr>
               {#if expandedId === svc.serviceId}
                 <tr class="detail-row">
                   <td colspan="8">
                     <div class="detail">
-                      <div class="detail-section">
-                        <div class="section-title">Instances</div>
-                        {#if expandedLoading}
-                          <div class="loading-mini">loading...</div>
-                        {:else if expandedData.instances.length === 0}
-                          <div class="text2">No instances</div>
-                        {:else}
-                          <table class="table mini">
-                            <thead><tr><th>Instance ID</th><th>Host</th><th>Status</th><th>Endpoints</th></tr></thead>
-                            <tbody>
-                              {#each expandedData.instances as inst}
-                                <tr>
-                                  <td class="mono">{inst.instanceId ? inst.instanceId.slice(0, 12) + '...' : '-'}</td>
-                                  <td>{inst.hostName || '-'}</td>
-                                  <td><span class="status-dot" class:up={inst.status === 'UP'} class:down={inst.status !== 'UP'}></span>{inst.status || '-'}</td>
-                                  <td class="mono">{(inst.endpoints || []).join(', ') || '-'}</td>
-                                </tr>
-                              {/each}
-                            </tbody>
-                          </table>
-                        {/if}
-                      </div>
+                      <div class="field-label">Instances</div>
+                      {#if expandedLoading}
+                        <p class="muted">Loading...</p>
+                      {:else if expandedData.instances.length === 0}
+                        <p class="muted">No instances</p>
+                      {:else}
+                        <table class="table mini">
+                          <thead><tr><th>Instance ID</th><th>Host</th><th>Status</th><th>Endpoints</th></tr></thead>
+                          <tbody>
+                            {#each expandedData.instances as inst}
+                              <tr>
+                                <td class="mono">{inst.instanceId ? inst.instanceId.slice(0, 12) + '...' : '-'}</td>
+                                <td>{inst.hostName || '-'}</td>
+                                <td><span class="dot" class:up={inst.status === 'UP'}></span>{inst.status || '-'}</td>
+                                <td class="mono">{(inst.endpoints || []).join(', ') || '-'}</td>
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      {/if}
                     </div>
                   </td>
                 </tr>
@@ -248,8 +251,7 @@
 
     {#if tab === 'instances'}
       <div class="toolbar">
-        <span class="count">{instances.length} instance(s)</span>
-        <button class="btn xs" onclick={loadData}>↻</button>
+        <span class="count">{instances.length} instances</span>
       </div>
       <div class="table-wrap">
         <table class="table">
@@ -269,10 +271,10 @@
               <tr>
                 <td>{inst.serviceName || '-'}</td>
                 <td>{inst.version || '-'}</td>
-                <td><span class="env-tag">{inst.environment || '-'}</span></td>
+                <td>{inst.environment || '-'}</td>
                 <td class="mono">{inst.instanceId ? inst.instanceId.slice(0, 12) + '...' : '-'}</td>
                 <td>{inst.hostName || '-'}</td>
-                <td><span class="status-dot" class:up={inst.status === 'UP'} class:down={inst.status !== 'UP'}></span>{inst.status || '-'}</td>
+                <td><span class="dot" class:up={inst.status === 'UP'}></span>{inst.status || '-'}</td>
                 <td class="mono">{(inst.endpoints || []).join(', ') || '-'}</td>
               </tr>
             {/each}
@@ -282,8 +284,8 @@
     {/if}
 
     {#if tab === 'admin'}
-      <div class="card admin-card">
-        <div class="section-title">Server Configuration</div>
+      <div class="card">
+        <h2>Server configuration</h2>
 
         <div class="field">
           <label for="admin-port">Port</label>
@@ -294,28 +296,26 @@
           <input id="admin-host" type="text" bind:value={adminHost} disabled={adminStatus.running} />
         </div>
         <div class="field">
-          <label for="admin-db">Database Path</label>
+          <label for="admin-db">Database path</label>
           <input id="admin-db" type="text" bind:value={adminDB} disabled={adminStatus.running} />
         </div>
 
-        <div class="field checkbox-field">
-          <label>
-            <input type="checkbox" bind:checked={adminIndependent} disabled={adminStatus.running} />
-            Independent process group
-          </label>
-        </div>
+        <label class="check">
+          <input type="checkbox" bind:checked={adminIndependent} disabled={adminStatus.running} />
+          <span>Independent process group</span>
+        </label>
 
         <div class="admin-actions">
           {#if adminStatus.running}
-            <button class="btn" onclick={stopServer} disabled={adminBusy}>⏹ Stop</button>
-            <span class="admin-status running">● Running (PID: {adminStatus.pid})</span>
+            <button class="btn" onclick={stopServer} disabled={adminBusy}>Stop</button>
+            <span class="admin-state"><span class="dot up"></span>Running (PID {adminStatus.pid})</span>
           {:else}
-            <button class="btn primary" onclick={startServer} disabled={adminBusy}>▶ Start</button>
-            <span class="admin-status stopped">○ Stopped</span>
+            <button class="btn primary" onclick={startServer} disabled={adminBusy}>Start</button>
+            <span class="admin-state"><span class="dot"></span>Stopped</span>
           {/if}
         </div>
 
-        <div class="section-title" style="margin-top:20px">Logs</div>
+        <h2 class="logs-title">Logs</h2>
         <div class="log-box">
           {#each adminStatus.logs as line}
             <div class="log-line">{line}</div>
@@ -323,7 +323,7 @@
             <div class="log-line muted">No logs yet</div>
           {/each}
         </div>
-        <button class="btn xs" onclick={() => { adminStatus.logs = [] }}>Clear Logs</button>
+        <button class="btn xs" onclick={() => { adminStatus.logs = [] }}>Clear logs</button>
       </div>
     {/if}
 
@@ -331,66 +331,45 @@
 </div>
 
 <style>
-  .app { max-width: 960px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; display: inline; }
-  .top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-  .top-left { display: flex; align-items: center; gap: 10px; }
-  .home-link { float: none; }
+  :global(body) { --page-max: 960px; }
+  .block { margin-bottom: 16px; }
+  .count { color: var(--text3); font-family: var(--mono); font-size: 12px; }
 
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .stat { padding: 16px 20px; }
+  .stat-label { margin-bottom: 6px; color: var(--text2); font-size: 12px; }
+  .stat-value { color: var(--text); font-family: var(--mono); font-size: 20px; font-variant-numeric: tabular-nums; }
 
-  .loading { text-align: center; padding: 60px 0; color: var(--text2); font-size: 16px; }
-  .loading-mini { color: var(--text3); font-size: 13px; padding: 4px 0; }
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .toolbar select { width: auto; min-width: 180px; }
 
-  .refresh-bar { text-align: right; margin-bottom: 8px; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
-  .stat-card { padding: 24px; }
-  .stat-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 8px; }
-  .stat-value { font-size: 20px; font-weight: 600; color: var(--text); }
-
-  .toolbar { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .toolbar .field { margin: 0; width: auto; }
-  .toolbar .field select { width: auto; min-width: 180px; }
-  .count { font-size: 13px; color: var(--text3); }
-
-  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
-  .table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .table th { text-align: left; padding: 10px 12px; background: var(--surface); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
-  .table tr:last-child td { border-bottom: none; }
+  .table-wrap { border: 1px solid var(--border); border-radius: var(--r-md); overflow: auto; }
+  .table td { white-space: nowrap; }
+  .table .strong { color: var(--text); font-weight: 500; }
+  .table .mono { color: var(--text2); font-size: 12px; }
   .table.mini { font-size: 12px; }
-  .table.mini td { padding: 4px 8px; }
-  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
-  .text2 { color: var(--text2); font-size: 13px; }
+  .table.mini th, .table.mini td { padding: 6px 10px; }
 
-  .expand-btn { background: none; border: none; color: var(--text2); cursor: pointer; padding: 0 4px; font-size: 14px; }
-  .expand-btn:hover { color: var(--text); }
+  .expand { display: grid; place-items: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--text3); cursor: pointer; transition: transform 140ms var(--ease), color 140ms var(--ease); }
+  .expand svg { width: 14px; height: 14px; }
+  .expand:hover { color: var(--text); }
+  .expand.open { transform: rotate(90deg); }
 
-  .detail-row td { padding: 0 !important; background: var(--highlight); }
-  .detail { padding: 16px 24px 16px 40px; }
-  .detail-section { margin-bottom: 16px; }
-  .detail-section:last-child { margin-bottom: 0; }
-  .section-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .detail-row td { padding: 0; background: var(--highlight); }
+  .detail { padding: 12px 20px 12px 40px; }
+  .field-label { margin-bottom: 8px; color: var(--text2); font-size: 12px; font-weight: 500; }
 
-  .env-tag { font-size: 11px; color: var(--text2); }
+  .dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--text3); }
+  .dot.up { background: var(--success); }
 
-  .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--text3); }
-  .status-dot.up { background: #4caf50; }
-  .status-dot.down { background: #e94560; }
+  .check { display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--text); font-size: 13px; cursor: pointer; }
+  .check input { width: 14px; height: 14px; margin: 0; accent-color: var(--text); }
 
-  .admin-card .field { margin-bottom: 12px; }
-  .admin-card .field label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
-  .admin-card .field input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
-  .admin-card .field input:disabled { opacity: .5; }
-  .admin-card .field input:focus { border-color: var(--primary); }
-  .admin-card .checkbox-field label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--text); }
-  .admin-card .checkbox-field input { width: auto; }
+  .admin-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; }
+  .admin-state { display: inline-flex; align-items: center; color: var(--text2); font-size: 13px; }
 
-  .admin-actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
-  .admin-status { font-size: 13px; }
-  .admin-status.running { color: #4caf50; }
-  .admin-status.stopped { color: var(--text3); }
-
-  .log-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px; max-height: 240px; overflow-y: auto; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; margin-bottom: 8px; }
-  .log-line { color: var(--text2); padding: 1px 0; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
-  .log-line.muted { color: var(--text3); font-style: italic; }
+  .logs-title { margin-top: 24px; }
+  .log-box { max-height: 220px; margin: 12px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); overflow-y: auto; }
+  .log-line { color: var(--text2); font-family: var(--mono); font-size: 11px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+  .log-line.muted { color: var(--text3); }
 </style>

@@ -1,42 +1,195 @@
   <style>
-    .home-link { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 6px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); color: var(--text2); text-decoration: none; font-size: 12px; margin-right: 10px; }
-    .home-link:hover { border-color: var(--primary); color: var(--text); }
+    /* Shared app chrome and components. Injected into every frontend at build time,
+       so a module only styles what is specific to it. Values match the gateway page. */
 
-    .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
+    .app {
+      width: 100%;
+      max-width: var(--page-max);
+      margin: 0 auto;
+      padding: 24px var(--gap) 48px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      height: 56px;
+      padding-left: calc(max(0px, (100vw - var(--page-max)) / 2) + var(--gap));
+      padding-right: calc(max(0px, (100vw - var(--page-max)) / 2) + var(--gap) + 40px);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .brand { display: flex; align-items: baseline; gap: 8px; font-family: var(--mono); line-height: 1; }
+    .brand .mu { padding-bottom: 2px; border-bottom: 2px solid var(--accent); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+    .brand .sep { font-size: 13px; color: var(--border2); }
+    .brand .app-name { font-size: 13px; color: var(--text3); }
+    a.brand:hover .app-name { color: var(--text); }
+    .topbar .spacer { flex: 1; }
+    .topbar .actions { display: flex; align-items: center; gap: 8px; }
+
+    .page-head { padding: 32px 0 24px; }
+    .page-head h1 { font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; }
+    .page-head p { margin-top: 8px; max-width: 60ch; color: var(--text2); font-size: 14px; }
+    .page-head .meta { margin-top: 8px; font-family: var(--mono); font-size: 12px; color: var(--text3); }
+    .page-head.row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+    .page-head.row > div:first-child { min-width: 0; }
+    .page-head.row p { margin-bottom: 0; }
+
+    h1 { font-size: 28px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; }
+    h2 { font-size: 18px; font-weight: 500; line-height: 1.25; }
+    h3 { font-size: 15px; font-weight: 500; line-height: 1.3; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      padding: 20px 24px;
+    }
+    .card + .card { margin-top: 16px; }
+    .card h2 + * { margin-top: 16px; }
+
+    .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label { font-size: 12px; font-weight: 500; color: var(--text2); }
+    .field-row { display: flex; align-items: flex-end; gap: 12px; }
+    .field-row .field { flex: 1; margin-bottom: 0; }
+
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]),
+    select,
+    textarea {
+      width: 100%;
+      min-height: 36px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):focus,
+    select:focus,
+    textarea:focus { border-color: var(--accent); }
+    textarea { font-family: var(--mono); font-size: 13px; line-height: 1.55; resize: vertical; }
+    input::placeholder, textarea::placeholder { color: var(--text3); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--border2);
+      border-radius: var(--r-md);
+      background: transparent;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: background-color 140ms var(--ease), border-color 140ms var(--ease), color 140ms var(--ease);
+    }
     .btn:hover { background: var(--surface2); }
-    .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
-    .btn.primary:hover { opacity: .85; }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
-    .btn.xs { font-size: 11px; padding: 2px 8px; }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--text); border-color: var(--text); color: var(--bg); }
+    .btn.primary:hover { background: var(--text); opacity: 0.9; }
+    .btn.xs { height: 26px; padding: 0 10px; border-radius: var(--r-sm); font-size: 12px; }
+    .btn.danger { color: var(--danger); border-color: rgba(229, 72, 77, 0.35); }
+    .btn.danger:hover { background: rgba(229, 72, 77, 0.10); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn:disabled:hover { background: transparent; }
+    .btn.primary:disabled:hover { background: var(--text); }
+    .btn svg { width: 14px; height: 14px; flex: none; }
+    .btn.xs svg { width: 12px; height: 12px; }
 
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
-
-    /* Shared tab bar — used by crypto, network, misc, mock, k8s and svcreg.
-       Kept global (not per-module) so every module gets identical tabs and the
-       same mobile behavior; new modules just use .tabs / .tab. */
-    .tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
-    .tab { padding: 10px 20px; border: none; background: none; color: var(--text2); cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .tab.active { color: var(--text); border-bottom-color: var(--primary); }
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      padding: 8px 12px 10px;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      background: none;
+      color: var(--text2);
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+    }
     .tab:hover { color: var(--text); }
+    .tab.active { color: var(--text); border-bottom-color: var(--accent); }
 
-    .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
-    .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; }
+    .msg {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--surface2);
+      color: var(--text2);
+      font-size: 13px;
+    }
+    .msg + .msg { margin-top: 8px; }
+    .msg.error { border-color: rgba(229, 72, 77, 0.35); background: rgba(229, 72, 77, 0.10); color: var(--danger); }
+    .msg.success { border-color: rgba(76, 195, 138, 0.30); background: rgba(76, 195, 138, 0.08); color: var(--success); }
 
-    /* Mobile baseline — injected into all module frontends via make inject-shared.
-       Additive, non-conflicting utilities only. Per-module layout overrides belong
-       in each App.svelte <style>. */
-    *, *::before, *::after { -webkit-tap-highlight-color: transparent; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 6px;
+      border: 1px solid var(--border2);
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text2);
+    }
+    .badge.ok { color: var(--success); border-color: rgba(76, 195, 138, 0.35); }
+    .badge.err { color: var(--danger); border-color: rgba(229, 72, 77, 0.35); }
 
-    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text3);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      text-align: left;
+    }
+    .table td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .table tr:last-child td { border-bottom: 0; }
 
-    @media (max-width: 640px) {
-      .btn { padding: 12px 20px; }
-      .card { padding: 16px; }
+    .empty { padding: 16px; text-align: center; color: var(--text3); font-size: 13px; }
+    .mono { font-family: var(--mono); }
+    .muted { color: var(--text2); }
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-      /* Scrollable tab bar: keep labels on one line and let the bar scroll
-         horizontally instead of wrapping labels / clipping the last tab. */
-      .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-      .tabs::-webkit-scrollbar { display: none; }
-      .tab { flex: 0 0 auto; white-space: nowrap; padding: 10px 14px; }
+    @media (max-width: 700px) {
+      .app { padding: 16px var(--gap) 32px; }
+      .page-head { padding: 24px 0 20px; }
+      .page-head h1, h1 { font-size: 24px; }
+      .card { padding: 16px; border-radius: 12px; }
+      .btn { height: 36px; }
+      .btn.xs { height: 28px; }
+      .field-row { flex-direction: column; align-items: stretch; }
+      .field-row .field { width: 100%; }
+      .page-head.row { flex-wrap: wrap; align-items: flex-start; }
+      .page-head.row .btn { width: 100%; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
     }
   </style>

@@ -220,11 +220,17 @@
   function entries(o) { return Object.entries(o || {}) }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">k8s</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>Kubernetes Tools</h1>
+  <div class="page-head">
+    <h1>K8s</h1>
+    <p>Secret YAML encode and decode</p>
+  </div>
 
   <div class="tabs">
     <button class="tab" class:active={tab === 'secret'} onclick={() => tab = 'secret'}>Secret</button>
@@ -233,46 +239,61 @@
 
   {#if tab === 'secret'}
     <div class="card">
-      <div class="mode-switch">
-        <button class="mode-btn" class:active={secretMode === 'encode'} onclick={() => secretMode = 'encode'}>Encode</button>
-        <button class="mode-btn" class:active={secretMode === 'decode'} onclick={() => secretMode = 'decode'}>Decode</button>
+      <div class="segment">
+        <button class="segment-btn" class:active={secretMode === 'encode'} onclick={() => secretMode = 'encode'}>Encode</button>
+        <button class="segment-btn" class:active={secretMode === 'decode'} onclick={() => secretMode = 'decode'}>Decode</button>
       </div>
 
       {#if secretMode === 'encode'}
         <div class="field">
-          <label for="secret-name">Secret Name</label>
+          <label for="secret-name">Secret name</label>
           <input id="secret-name" type="text" bind:value={secretName} placeholder="my-app" />
         </div>
         <div class="field">
-          <label>Key-Value Pairs <button class="btn xs upload-inline" onclick={() => document.getElementById('env-file').click()}>📂 Load .env</button></label>
+          <div class="label-row">
+            <span class="field-label">Key-value pairs</span>
+            <button class="btn xs" onclick={() => document.getElementById('env-file').click()}>Load .env</button>
+          </div>
           <input id="env-file" type="file" accept=".env,.txt" onchange={loadEnvFile} style="display:none" />
-          <div class="kv-table">
+          <div class="kv-list">
             {#each secretRows as r, i (i)}
-              <div class="kv-row"><input type="text" bind:value={r.key} placeholder="Key" /><input type="text" bind:value={r.value} placeholder="Value" /><button class="btn xs" onclick={() => removeRow(i)} disabled={secretRows.length === 1}>x</button></div>
+              <div class="kv-row">
+                <input type="text" bind:value={r.key} placeholder="Key" />
+                <input type="text" bind:value={r.value} placeholder="Value" />
+                <button class="btn xs icon-btn" onclick={() => removeRow(i)} disabled={secretRows.length === 1} aria-label="Remove row">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>
+              </div>
             {/each}
-            <button class="btn xs" onclick={addRow}>+ Add Row</button>
+            <button class="btn xs add-row" onclick={addRow}>Add row</button>
           </div>
         </div>
         <button class="btn primary" onclick={doEncode} disabled={secretLoading}>{secretLoading ? 'Generating...' : 'Generate YAML'}</button>
-        {#if secretError}<div class="msg error">{secretError}</div>{/if}
+        {#if secretError}<div class="msg error block">{secretError}</div>{/if}
         {#if yamlResult}
-          <div class="result-area">
-            <div class="result-actions"><button class="btn xs" onclick={() => copy(yamlResult)}>📋 Copy</button><button class="btn xs" onclick={() => download(secretName + '-secret.yaml', yamlResult)}>💾 Download</button></div>
-            <pre class="yaml-block">{yamlResult}</pre>
+          <div class="result">
+            <div class="result-actions">
+              <button class="btn xs" onclick={() => copy(yamlResult)}>Copy</button>
+              <button class="btn xs" onclick={() => download(secretName + '-secret.yaml', yamlResult)}>Download</button>
+            </div>
+            <pre class="code-block">{yamlResult}</pre>
           </div>
         {/if}
       {:else}
         <div class="field">
-          <label>Secret YAML <button class="btn xs upload-inline" onclick={() => document.getElementById('yaml-file').click()}>📂 Upload .yaml</button></label>
+          <div class="label-row">
+            <span class="field-label">Secret YAML</span>
+            <button class="btn xs" onclick={() => document.getElementById('yaml-file').click()}>Upload .yaml</button>
+          </div>
           <input id="yaml-file" type="file" accept=".yaml,.yml" onchange={loadYamlFile} style="display:none" />
           <textarea bind:value={decodeInput} rows="12" placeholder="Paste Secret YAML here"></textarea>
         </div>
         <button class="btn primary" onclick={doDecode}>Decode</button>
-        {#if secretError}<div class="msg error">{secretError}</div>{/if}
+        {#if secretError}<div class="msg error block">{secretError}</div>{/if}
         {#if decodedData}
-          <div class="result-area">
-            <button class="btn xs" onclick={() => copy(entries(decodedData).map(([k,v]) => k+'='+v).join('\n'))}>📋 Copy All</button>
-            <div class="decode-table">
+          <div class="result">
+            <button class="btn xs" onclick={() => copy(entries(decodedData).map(([k,v]) => k+'='+v).join('\n'))}>Copy all</button>
+            <div class="decode-list">
               {#each entries(decodedData) as [k, v]}
                 <div class="decode-row"><span class="decode-key">{k}</span><span class="decode-val">{v}</span></div>
               {/each}
@@ -284,22 +305,24 @@
   {:else}
     {#if !kcActive}
       <div class="card">
-        <h2 class="section-title">Configure Kubeconfig</h2>
+        <h2>Configure kubeconfig</h2>
 
         {#if entries(kcSaved).length > 0}
           <div class="field">
-            <div class="field-label">Saved Configs</div>
-            {#each entries(kcSaved) as [name, _]}
-              <div class="saved-row">
-                <span class="saved-name">{name}</span>
-                <div class="saved-actions">
-                  <button class="btn xs" onclick={() => activateConfig(name)}>Connect</button>
-                  <button class="btn xs" onclick={() => deleteConfig(name)}>Delete</button>
+            <div class="field-label">Saved configs</div>
+            <div class="saved-list">
+              {#each entries(kcSaved) as [name, _]}
+                <div class="saved-row">
+                  <span class="saved-name">{name}</span>
+                  <div class="saved-actions">
+                    <button class="btn xs" onclick={() => activateConfig(name)}>Connect</button>
+                    <button class="btn xs danger" onclick={() => deleteConfig(name)}>Delete</button>
+                  </div>
                 </div>
-              </div>
-            {/each}
+              {/each}
+            </div>
           </div>
-          <div class="divider"><span>or add a new one</span></div>
+          <div class="divider">or add a new one</div>
         {/if}
 
         <div class="field">
@@ -307,12 +330,15 @@
           <input id="new-name" type="text" bind:value={newName} placeholder="my-cluster" />
         </div>
         <div class="field">
-          <label>Kubeconfig Content <button class="btn xs upload-inline" onclick={() => document.getElementById('kc-file2').click()}>📂 Upload</button></label>
+          <div class="label-row">
+            <span class="field-label">Kubeconfig content</span>
+            <button class="btn xs" onclick={() => document.getElementById('kc-file2').click()}>Upload</button>
+          </div>
           <input id="kc-file2" type="file" accept=".yaml,.yml,.kubeconfig" onchange={loadNewKcFile} style="display:none" />
           <textarea bind:value={newKc} rows="8" placeholder="Paste your kubeconfig YAML here"></textarea>
         </div>
         <button class="btn primary" onclick={uploadKubeconfig} disabled={!newKc.trim()}>Connect</button>
-        {#if resError}<div class="msg error">{resError}</div>{/if}
+        {#if resError}<div class="msg error block">{resError}</div>{/if}
       </div>
     {:else}
       <div class="card">
@@ -323,7 +349,7 @@
               <option value={ctx}>{ctx}</option>
             {/each}
           </select>
-          <span class="spacer"></span>
+          <span class="flex1"></span>
           <button class="btn xs" onclick={disconnect}>Disconnect</button>
         </div>
 
@@ -352,20 +378,18 @@
               {/each}
             </select>
           </div>
-          <div class="field" style="flex:0">
-            <div style="height:1.5em"></div>
-            <button class="btn" onclick={doQuery} disabled={resLoading}>{resLoading ? 'Querying...' : 'Query'}</button>
-          </div>
+          <button class="btn" onclick={doQuery} disabled={resLoading}>{resLoading ? 'Querying...' : 'Query'}</button>
         </div>
-        <label class="metrics-toggle">
+
+        <label class="check metrics-toggle">
           <input type="checkbox" bind:checked={resMetrics} />
           <span>Show metrics</span>
         </label>
 
-        {#if resError}<div class="msg error">{resError}</div>{/if}
+        {#if resError}<div class="msg error block">{resError}</div>{/if}
         {#if resCols.length > 0}
-          <div class="res-table-wrap">
-            <table class="res-table">
+          <div class="table-wrap">
+            <table class="table res-table">
               <thead><tr>{#each resCols as col}<th>{col}</th>{/each}</tr></thead>
               <tbody>
                 {#each resRows as row}
@@ -395,11 +419,13 @@
     <div class="modal" onclick={(e) => e.stopPropagation()}>
       <div class="modal-header">
         <h3>{descTitle}</h3>
-        <button class="btn xs" onclick={() => { descText = ''; descLoading = false }}>✕</button>
+        <button class="btn xs icon-btn" onclick={() => { descText = ''; descLoading = false }} aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <div class="modal-body">
         {#if descLoading}
-          <p>Loading...</p>
+          <p class="muted">Loading...</p>
         {:else}
           <pre class="desc-text">{descText}</pre>
         {/if}
@@ -409,76 +435,56 @@
 {/if}
 
 <style>
-  .app { max-width: 960px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; margin-bottom: 16px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 960px; }
+  .block { margin: 12px 0; }
+  .flex1 { flex: 1; }
 
+  .segment { display: inline-flex; padding: 2px; margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+  .segment-btn { height: 28px; padding: 0 12px; border: 0; border-radius: var(--r-sm); background: transparent; color: var(--text2); font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .segment-btn:hover { color: var(--text); }
+  .segment-btn.active { background: var(--surface2); color: var(--text); }
 
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
-  .field { margin-bottom: 14px; }
-  .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; font-weight: 500; }
-  .field input, .field select, .field textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; font-family: inherit; outline: none; }
-  .field select:disabled { opacity: .4; cursor: not-allowed; }
-  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--primary); }
-  .field textarea { font-family: 'SF Mono', 'Fira Code', monospace; resize: vertical; }
-  .field-row { display: flex; gap: 12px; align-items: flex-end; }
-  .field-row .field { flex: 1; }
+  .label-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .field-label { color: var(--text2); font-size: 12px; font-weight: 500; }
 
-  .mode-switch { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-  .mode-btn { flex: 1; padding: 8px; border: none; background: var(--surface); color: var(--text2); cursor: pointer; font-size: 14px; }
-  .mode-btn.active { background: var(--primary); color: #fff; }
-  .mode-btn:hover:not(.active) { background: var(--surface2); }
+  .kv-list { display: flex; flex-direction: column; gap: 6px; }
+  .kv-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 6px; align-items: center; }
+  .kv-row input { min-height: 32px; padding: 6px 10px; font-family: var(--mono); font-size: 13px; }
+  .icon-btn { width: 26px; padding: 0; }
+  .add-row { align-self: flex-start; margin-top: 2px; }
 
-  .upload-inline { float: right; }
-  .kv-table { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
-  .kv-row { display: flex; gap: 6px; align-items: center; }
-  .kv-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font-size: 13px; }
+  .result { margin-top: 16px; }
+  .result-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+  .code-block { margin: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); font-size: 13px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
 
-  .btn { display: inline-block; padding: 10px 24px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; font-size: 14px; }
-  .btn:hover { background: var(--surface2); }
-  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; width: 100%; text-align: center; }
-  .btn.primary:hover { opacity: .85; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .btn.xs { font-size: 11px; padding: 2px 8px; display: inline-flex; align-items: center; gap: 4px; }
+  .decode-list { display: flex; flex-direction: column; gap: 1px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; background: var(--border); }
+  .decode-row { display: flex; gap: 12px; padding: 8px 12px; background: var(--bg); }
+  .decode-key { min-width: 140px; color: var(--text2); font-family: var(--mono); font-size: 13px; }
+  .decode-val { color: var(--text); font-family: var(--mono); font-size: 13px; word-break: break-all; }
 
-  .msg.error { background: #3d1f2a; border: 1px solid #e94560; color: #e94560; padding: 10px 14px; border-radius: 6px; margin-bottom: 10px; font-size: 14px; }
-  .result-area { margin-top: 14px; }
-  .result-actions { display: flex; gap: 6px; margin-bottom: 6px; }
-  .yaml-block { background: var(--bg); padding: 14px; border-radius: 8px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; margin: 0; }
-  .decode-table { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-  .decode-row { display: flex; gap: 8px; align-items: center; background: var(--bg); padding: 8px 12px; border-radius: 6px; }
-  .decode-key { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; color: var(--primary); min-width: 140px; }
-  .decode-val { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; color: var(--text); word-break: break-all; }
-
-  .section-title { font-size: 18px; margin-bottom: 8px; }
-
-  .saved-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: 6px; margin-bottom: 6px; }
-  .saved-name { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; font-weight: 600; }
+  .saved-list { display: flex; flex-direction: column; gap: 6px; }
+  .saved-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+  .saved-name { color: var(--text); font-family: var(--mono); font-size: 13px; }
   .saved-actions { display: flex; gap: 6px; }
 
-  .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text2); font-size: 12px; }
+  .divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--text3); font-size: 12px; }
   .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 
-  .metrics-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text2); cursor: pointer; margin-bottom: 14px; }
-  .metrics-toggle input { width: auto; }
-  .conn-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: var(--bg); border-radius: 8px; margin-bottom: 16px; }
-  .conn-dot { width: 10px; height: 10px; border-radius: 50%; background: #4caf50; flex-shrink: 0; }
-  .conn-ctx { font-size: 12px; padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); max-width: 300px; }
-  .spacer { flex: 1; }
+  .metrics-toggle { margin: 16px 0; color: var(--text2); }
+  .conn-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg); }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+  .conn-ctx { width: auto; max-width: 320px; min-height: 28px; padding: 2px 8px; font-family: var(--mono); font-size: 12px; }
 
-  .res-table-wrap { overflow-x: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; }
-  .res-table { width: 100%; border-collapse: collapse; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; }
-  .res-table th { text-align: left; padding: 10px 12px; background: var(--surface); color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-  .res-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
-  .res-table tr:last-child td { border-bottom: none; }
+  .table-wrap { margin-top: 12px; border: 1px solid var(--border); border-radius: var(--r-md); overflow: auto; }
+  .res-table { font-family: var(--mono); font-size: 12.5px; }
+  .res-table th { font-family: var(--mono); font-size: 11px; }
+  .res-table td { padding: 8px 12px; white-space: nowrap; }
+  .name-link { padding: 0; border: 0; background: none; color: var(--text); font-family: inherit; font-size: inherit; text-decoration: underline; text-decoration-color: var(--border2); text-underline-offset: 3px; cursor: pointer; }
+  .name-link:hover { color: var(--accent); text-decoration-color: var(--accent); }
 
-  .name-link { background: none; border: none; color: var(--primary); cursor: pointer; font-family: inherit; font-size: inherit; padding: 0; text-decoration: underline; text-underline-offset: 2px; }
-  .name-link:hover { color: var(--text); }
-
-  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; }
-  .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 700px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column; }
-  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-  .modal-header h3 { font-size: 16px; }
-  .modal-body { padding: 20px; overflow-y: auto; flex: 1; }
-  .desc-text { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; margin: 0; }
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(0, 0, 0, 0.55); }
+  .modal { display: flex; flex-direction: column; width: 720px; max-width: 100%; max-height: 80vh; border: 1px solid var(--border2); border-radius: var(--r-lg); background: var(--surface); }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--border); }
+  .modal-body { flex: 1; padding: 20px; overflow-y: auto; }
+  .desc-text { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
 </style>

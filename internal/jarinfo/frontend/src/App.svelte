@@ -59,20 +59,32 @@
   }
 </script>
 
+<header class="topbar">
+  <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
+    <span class="mu">mu</span><span class="sep">/</span><span class="app-name">jarinfo</span>
+  </a>
+</header>
+
 <div class="app">
-  {#if inGateway}
-    <a href="/" class="home-link" title="Back to Home">&larr; Home</a>
-  {/if}
-  <h1>JAR Analyzer</h1>
+  <div class="page-head">
+    <h1>JAR Analyzer</h1>
+    <p>JAR structure and metadata</p>
+  </div>
 
   {#if error}
-    <div class="msg error">{error}</div>
+    <div class="msg error block">{error}</div>
   {/if}
 
   <div class="card">
     <div class="field">
-      <label for="file-input">Select a JAR file</label>
-      <input id="file-input" type="file" accept=".jar" onchange={onFileSelect} />
+      <span class="field-label">JAR file</span>
+      <div class="file-row">
+        <label class="btn">
+          Choose file
+          <input type="file" accept=".jar" onchange={onFileSelect} />
+        </label>
+        <span class="file-name">{selectedFile ? selectedFile.name : 'No file selected'}</span>
+      </div>
     </div>
     <button class="btn primary" onclick={analyze} disabled={loading || !selectedFile}>
       {loading ? 'Analyzing...' : 'Analyze'}
@@ -87,15 +99,13 @@
         <div class="meta-item"><span class="label">Total entries</span><span class="value">{info.totalEntries}</span></div>
         <div class="meta-item">
           <span class="label">Compressed</span>
-          <span class="value">{fmtSize(info.compressedSize)} &rarr; {fmtSize(info.uncompressedSize)}
-            ({info.uncompressedSize ? (info.compressedSize * 100 / info.uncompressedSize).toFixed(0) : 0}%)
-          </span>
+          <span class="value">{fmtSize(info.compressedSize)} &rarr; {fmtSize(info.uncompressedSize)} ({info.uncompressedSize ? (info.compressedSize * 100 / info.uncompressedSize).toFixed(0) : 0}%)</span>
         </div>
       </div>
 
       {#if info.manifest}
         <h2>Manifest</h2>
-        <table>
+        <table class="table">
           <tbody>
             <tr><td>Main-Class</td><td>{info.manifest.mainClass || '-'}</td></tr>
             <tr><td>Created-By</td><td>{info.manifest.createdBy || '-'}</td></tr>
@@ -107,24 +117,20 @@
       {/if}
 
       {#if info.maven}
-        <h2>Maven
-          <button class="btn xs" onclick={copyMaven} title="Copy coordinates">Copy</button>
-        </h2>
+        <h2>Maven <button class="btn xs" onclick={copyMaven} title="Copy coordinates">Copy</button></h2>
         <div class="maven">{info.maven.groupId}:{info.maven.artifactId}:{info.maven.version}</div>
       {/if}
 
       <div class="tags">
-        <span class="tag" class:tag-green={info.signed} class:tag-gray={!info.signed}>
-          {info.signed ? 'Signed' : 'Unsigned'}
-        </span>
+        <span class="badge" class:ok={info.signed} class:err={!info.signed}>{info.signed ? 'Signed' : 'Unsigned'}</span>
         {#if info.versionedClasses && entries(info.versionedClasses).length}
-          <span class="tag tag-blue">Multi-release</span>
+          <span class="badge">Multi-release</span>
         {/if}
       </div>
 
       {#if info.versionedClasses && entries(info.versionedClasses).length}
         <h2>Multi-release</h2>
-        <table>
+        <table class="table">
           <tbody>
             {#each entries(info.versionedClasses) as [v, c]}
               <tr><td>JDK {v}</td><td>{c} classes</td></tr>
@@ -135,7 +141,7 @@
 
       {#if info.versionHistogram}
         <h2>Version breakdown</h2>
-        <table>
+        <table class="table">
           <thead><tr><th>JDK</th><th>Major</th><th>Classes</th></tr></thead>
           <tbody>
             {#each entries(info.versionHistogram) as [major, count]}
@@ -149,36 +155,39 @@
 </div>
 
 <style>
-  .app { max-width: 640px; margin: 0 auto; padding: 40px 16px; }
-  h1 { font-size: 24px; margin-bottom: 24px; }
-  .home-link { float: left; }
+  :global(body) { --page-max: 640px; }
+  .block { margin-bottom: 16px; }
+  .field-label { display: block; margin-bottom: 6px; color: var(--text2); font-size: 12px; font-weight: 500; }
+  .file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .file-row .btn input { display: none; }
+  .file-name { min-width: 0; overflow: hidden; color: var(--text3); font-family: var(--mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 
-  .card { margin-bottom: 16px; }
-  .field { margin-bottom: 16px; }
-  .field label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
-  .field input { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 14px; outline: none; }
-  .field input:focus { border-color: var(--primary); }
+  .result h2 { display: flex; align-items: center; gap: 12px; margin: 24px 0 12px; }
+  .result h2:first-of-type { margin-top: 24px; }
 
-  .btn.primary { width: 100%; text-align: center; }
+  .meta {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--border);
+  }
+  .meta-item { background: var(--surface); padding: 12px 14px; }
+  .meta-item .label { display: block; margin-bottom: 4px; color: var(--text2); font-size: 12px; }
+  .meta-item .value { color: var(--text); font-family: var(--mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 
-  .result h2 { font-size: 16px; margin: 20px 0 10px; display: flex; align-items: center; gap: 8px; }
-  .result h2:first-of-type { margin-top: 0; }
+  .maven {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--bg);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 13px;
+    word-break: break-all;
+  }
 
-  .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .meta-item { background: var(--bg); padding: 12px; border-radius: 8px; }
-  .meta-item .label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--text2); margin-bottom: 4px; }
-  .meta-item .value { font-size: 16px; font-weight: 600; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  td, th { padding: 6px 4px; border-bottom: 1px solid var(--border); text-align: left; }
-  th { font-size: 12px; text-transform: uppercase; color: var(--text2); letter-spacing: .5px; }
-  td:last-child, th:last-child { text-align: right; }
-
-  .maven { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 13px; background: var(--bg); padding: 10px; border-radius: 6px; }
-
-  .tags { display: flex; gap: 8px; margin: 16px 0; }
-  .tag { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-  .tag-green { background: #1a3d2a; color: #4caf50; border: 1px solid #4caf50; }
-  .tag-blue { background: #1a2a3d; color: #61affe; border: 1px solid #61affe; }
-  .tag-gray { background: #2a2a3a; color: #888; border: 1px solid #555; }
+  .tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 </style>
