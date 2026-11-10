@@ -2,7 +2,7 @@
 
 A multi-purpose CLI tool with subcommands for common development and operations tasks.
 
-![mu Gateway](docs/mu-gateway-screenshot.png)
+![mu gateway landing page shown in dark and light themes](docs/mu-gateway-screenshot.png)
 
 ## Features
 
