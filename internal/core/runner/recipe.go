@@ -213,6 +213,24 @@ func renderTemplate(s string, vars map[string]string) (string, error) {
 	return buf.String(), nil
 }
 
+// renderEnv expands {{.key}} references in environment values, with the same
+// rules as renderTemplate for commands and workdir: an unknown variable is an
+// error, so a typo'd key fails the run instead of exporting a literal "{{.x}}".
+func renderEnv(env map[string]string, vars map[string]string) (map[string]string, error) {
+	if len(env) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(env))
+	for k, v := range env {
+		rv, err := renderTemplate(v, vars)
+		if err != nil {
+			return nil, fmt.Errorf("env %s: %w", k, err)
+		}
+		out[k] = rv
+	}
+	return out, nil
+}
+
 // envSlice converts an environment map into a deterministic KEY=VALUE slice.
 func envSlice(env map[string]string) []string {
 	keys := make([]string, 0, len(env))
