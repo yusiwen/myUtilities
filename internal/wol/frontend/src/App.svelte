@@ -1,4 +1,6 @@
 <script>
+  import { tick } from 'svelte'
+
   let inGateway = $state(typeof window !== 'undefined' && window.__MU_GATEWAY__)
   let aliases = $state({})
   let formName = $state('')
@@ -16,6 +18,7 @@
   let tokenInput = $state('')
   let showTokenModal = $state(false)
   let token = $state(localStorage.getItem('wol-token') || '')
+  let formOpen = $state(false)
 
   function loadFavorites() {
     try {
@@ -99,6 +102,7 @@
         formMac = ''
         editingName = null
         await fetchAliases()
+        await collapseForm()
       } else {
         const data = await res.json()
         error = data.error || 'Failed to save alias'
@@ -148,17 +152,36 @@
     }
   }
 
-  function editAlias(name) {
+  // The form is a disclosure: folded by default, so the alias table stays on the
+  // first screen. Any collapse hands focus back to the header toggle, otherwise it
+  // lands on <body> when the panel becomes inert.
+  function toggleForm() {
+    formOpen = !formOpen
+  }
+
+  async function collapseForm() {
+    formOpen = false
+    await tick()
+    document.getElementById('alias-form-toggle')?.focus()
+  }
+
+  async function editAlias(name) {
     const entry = aliases[name]
     formName = name
     formMac = entry.Mac
     editingName = name
+    formOpen = true
+    await tick()
+    // Only the MAC is editable here, and the card may be scrolled out of view
+    // above the table: focusing the field both reveals and readies it.
+    document.getElementById('wol-mac')?.focus()
   }
 
   function cancelEdit() {
     formName = ''
     formMac = ''
     editingName = null
+    collapseForm()
   }
 
   function toggleFavorite(name) {
@@ -304,26 +327,41 @@
     <div class="msg success block">{success}</div>
   {/if}
 
-  <section class="card form-section">
-    <h2>{editingName ? 'Edit alias' : 'Add alias'}</h2>
-    <form onsubmit={(e) => { e.preventDefault(); handleSubmit() }}>
-      <div class="field-row">
-        <div class="field">
-          <label for="wol-name">Hostname</label>
-          <input id="wol-name" type="text" placeholder="nas" bind:value={formName} disabled={editingName !== null} />
-        </div>
-        <div class="field grow">
-          <label for="wol-mac">MAC address</label>
-          <input id="wol-mac" type="text" placeholder="aa:bb:cc:dd:ee:ff" bind:value={formMac} />
-        </div>
+  <section class="card form-section" class:open={formOpen}>
+    <h2>
+      <button
+        id="alias-form-toggle"
+        type="button"
+        class="form-head"
+        onclick={toggleForm}
+        aria-expanded={formOpen}
+        aria-controls="alias-form-panel">
+        <span>{editingName ? 'Edit alias' : 'Add alias'}</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+      </button>
+    </h2>
+    <div class="form-panel" id="alias-form-panel" inert={!formOpen || undefined}>
+      <div class="form-clip">
+        <form onsubmit={(e) => { e.preventDefault(); handleSubmit() }}>
+          <div class="field-row">
+            <div class="field">
+              <label for="wol-name">Hostname</label>
+              <input id="wol-name" type="text" placeholder="nas" bind:value={formName} disabled={editingName !== null} />
+            </div>
+            <div class="field grow">
+              <label for="wol-mac">MAC address</label>
+              <input id="wol-mac" type="text" placeholder="aa:bb:cc:dd:ee:ff" bind:value={formMac} />
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn primary">{editingName ? 'Update' : 'Add'}</button>
+            {#if editingName}
+              <button type="button" class="btn" onclick={cancelEdit}>Cancel</button>
+            {/if}
+          </div>
+        </form>
       </div>
-      <div class="form-actions">
-        <button type="submit" class="btn primary">{editingName ? 'Update' : 'Add'}</button>
-        {#if editingName}
-          <button type="button" class="btn" onclick={cancelEdit}>Cancel</button>
-        {/if}
-      </div>
-    </form>
+    </div>
   </section>
 
   <section class="card list-section">
@@ -332,7 +370,7 @@
       <span class="count">{Object.keys(aliases).length}</span>
     </div>
     {#if Object.keys(aliases).length === 0}
-      <p class="empty">No aliases yet. Add one above.</p>
+      <p class="empty">No aliases yet — expand “Add alias” above to add one.</p>
     {:else}
       <div class="table-wrap">
         <table class="table">
@@ -426,10 +464,39 @@
   :global(body) { --page-max: 960px; }
   .block { margin-bottom: 16px; }
 
+  .card.form-section { padding: 0; }
   .form-section { margin-bottom: 16px; }
-  .form-section h2 { margin-bottom: 16px; }
-  form { display: flex; flex-direction: column; gap: 16px; }
-  .form-row, .form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  .form-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 18px 24px;
+    border: 0;
+    border-radius: calc(var(--r-lg) - 1px);
+    background: none;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 140ms var(--ease);
+  }
+  .form-head:hover { background: var(--surface2); }
+  .form-section.open .form-head { border-radius: calc(var(--r-lg) - 1px) calc(var(--r-lg) - 1px) 0 0; }
+  .chev { flex: none; width: 16px; height: 16px; margin-left: auto; color: var(--text3); transition: transform 180ms var(--ease), color 140ms var(--ease); }
+  .form-head:hover .chev { color: var(--text2); }
+  .form-section.open .chev { transform: rotate(90deg); }
+
+  .form-panel { display: grid; grid-template-rows: 0fr; margin-top: 0; transition: grid-template-rows 200ms var(--ease); }
+  .form-section.open .form-panel { grid-template-rows: 1fr; }
+  .form-clip { min-height: 0; overflow: hidden; }
+
+  form { display: flex; flex-direction: column; gap: 16px; padding: 6px 24px 20px; }
+  .form-actions { display: flex; flex-wrap: wrap; gap: 8px; }
   .grow { flex: 2; }
 
   .list-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
@@ -478,6 +545,9 @@
   .modal-actions { display: flex; gap: 8px; margin-top: 20px; }
 
   @media (max-width: 700px) {
+    .form-head { padding: 15px 16px; }
+    form { padding: 4px 16px 16px; }
+
     .table-wrap table, .table-wrap thead, .table-wrap tbody { display: block; }
     .table-wrap thead { display: none; }
     .table-wrap tbody tr {
