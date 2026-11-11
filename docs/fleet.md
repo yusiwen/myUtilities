@@ -71,7 +71,8 @@ mu fleet run --hosts h1,h2 --file deploy.yaml \
    `GET /api/fleet/agents/<name>/runs/<id>/files/app.tar.gz`, verifying the sha256.
 3. The agent creates a job work directory, places the file in it, and **auto-extracts
    `.tar.gz`** (`.zip` works the same way).
-4. The agent runs `deploy.yaml` with that work directory as the recipe workdir, so
+4. The agent runs `deploy.yaml` with that work directory as the recipe workdir
+   (format: [Task YAML: the recipe schema](#task-yaml-the-recipe-schema)), so
    relative paths naturally resolve inside the task directory:
 
    ```yaml
@@ -98,7 +99,9 @@ mu fleet run --hosts prod-web-1,prod-web-2,prod-db-1 --file rollout.yaml \
 2. Template variables like `{{.version}}` and `{{.registry}}` are resolved on **each
    agent** (reusing `core/runner`'s recipe templating).
 3. If one host fails, **that host** stops per the recipe's failure policy (default
-   stop; `continue_on_error` / `--keep-going` excepted) while the other hosts continue.
+   stop; a task with `continue_on_error: true` excepted) while the other hosts
+   continue. `mu fleet run` has no `--keep-going` flag — that switch belongs to
+   `mu run`.
 4. The dispatcher records each run's state; with `--watch` the summary lists per-host
    results and highlights the partial failure.
 
@@ -118,6 +121,90 @@ mu fleet hosts            # online agents (offline after heartbeat timeout)
 mu fleet status <job-id>  # per-host status and output (including history)
 mu fleet jobs             # recent jobs
 ```
+
+## Task YAML: the recipe schema
+
+`mu fleet run --file <recipe.yaml>` defines no YAML dialect of its own: the file is
+shipped as text and parsed on each agent by the same engine as `mu run --file`, so a
+fleet job *is* a recipe (see [run.md](run.md)). Fleet adds only job-level context:
+`targets` (from `--hosts`), `vars` (repeated `--var key=value`), and uploaded files
+(`--files`).
+
+```yaml
+name: deploy-app                  # optional, informational
+description: Roll out v2          # optional, informational
+vars:                             # optional; referenced as {{.key}}
+  version: "2.0"
+  registry: "ghcr.io/me/app"
+env:                              # optional; applied to every task
+  DEPLOY_ENV: prod
+tasks:                            # required, at least one task
+  install:
+    command: cp app /usr/local/bin/app
+  restart:
+    depends: [install]            # runs after `install`
+    command: systemctl restart app
+    timeout: "30s"
+    retry: 2                      # up to two extra attempts
+    continue_on_error: false
+```
+
+Top-level fields:
+
+| Field | Type | Required | Meaning |
+|---|---|---|---|
+| `name` | string | no | Recipe name. |
+| `description` | string | no | Free-form description. |
+| `vars` | map of string | no | Template variables; `--var` overrides a key. |
+| `env` | map of string | no | Environment variables for every task. |
+| `tasks` | map of task | **yes** | Named tasks, at least one. |
+
+Task fields:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `command` | string | One `bash -c` command line. |
+| `commands` | list of string | Several command lines, run in order as one step. |
+| `depends` | list of string | Task names that must finish first; cycles are rejected. |
+| `env` | map of string | Extra environment variables for this task, merged over the recipe-level `env`. |
+| `workdir` | string | Working directory; a relative path resolves against the job's staging directory. |
+| `timeout` | string | Go duration such as `"30s"` or `"2m"`; the task is killed when it expires. |
+| `retry` | integer ≥ 0 | Extra attempts after a failure. |
+| `continue_on_error` | boolean | Keep running later tasks when this one fails. |
+| `description` | string | Free-form description. |
+
+Exactly one of `command` and `commands` must be present, and unknown keys anywhere in
+the file are rejected.
+
+The loader checks the following before anything executes on the host:
+
+- unknown keys at any level (`field bogus not found in type runner.RecipeTask`);
+- `command` together with `commands`, or neither of them;
+- a `depends` entry naming no task, or a dependency cycle;
+- a `timeout` that is not a Go duration, or a negative `retry`;
+- an interactive command (a `!` prefix) — agents run headless, with no TTY.
+
+Variables: `vars` is merged with `--var key=value` (the flag wins, and a key need not be
+declared first). `{{.key}}` is expanded in `command`, `commands`, and `workdir`; an
+undefined variable is an error (`missingkey=error`), never an empty string. `env` values
+are exported verbatim, so a `{{.key}}` there stays literal
+([#88](https://github.com/yusiwen/myUtilities/issues/88)).
+
+Validation happens on the agent, not at submit time: the controller only reads the file,
+and the dispatcher only requires `recipe` (or `command`) to be non-empty. A malformed
+recipe therefore fails **per host** — the parse error is recorded on that host's run and
+appears in `mu fleet status <job-id>` and in `--watch` output, while unaffected hosts
+still run.
+
+Editor support: `mu run --schema` prints the JSON Schema
+(`docs/schema/recipe-schema.json`, embedded in the binary). Add this header to a recipe
+to get completion and inline errors from editors backed by the YAML Language Server:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/yusiwen/myUtilities/main/docs/schema/recipe-schema.json
+```
+
+Breaking format changes bump the schema's `x-recipe-version`.
 
 ## Architecture
 
