@@ -81,8 +81,10 @@ Recipe semantics:
 
 - **Dependency order** — tasks are scheduled topologically; a task runs after
   all of its `depends`. Cycles are rejected at load time.
-- **Variables** — `{{.key}}` is templated with `vars` merged with `--var`
-  overrides; a reference to an undefined variable is an error.
+- **Variables** — `{{.key}}` is templated in `command`, `commands`, `workdir`, and
+  `env` values (recipe-level and task-level) with `vars` merged with `--var`
+  overrides; a reference to an undefined variable is an error, so a literal `{{`
+  must be written as `{{"{{"}}`.
 - **Timeout** — a task exceeding `timeout` is killed and reported as
   `timed out`.
 - **Retry** — a failed task is retried up to `retry` more times (each attempt

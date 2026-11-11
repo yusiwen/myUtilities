@@ -67,6 +67,11 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 		vars[k] = v
 	}
 
+	recipeEnv, err := renderEnv(recipe.Env, vars)
+	if err != nil {
+		return nil, fmt.Errorf("recipe env: %w", err)
+	}
+
 	type prepared struct {
 		name    string
 		cmds    []Command
@@ -100,7 +105,11 @@ func (r *CommandRunner) runRecipe(recipe *Recipe, opts RecipeRunOptions) ([]Task
 				dir = workdir
 			}
 		}
-		env := append(envSlice(recipe.Env), envSlice(task.Env)...)
+		taskEnv, err := renderEnv(task.Env, vars)
+		if err != nil {
+			return nil, fmt.Errorf("task %q: %w", name, err)
+		}
+		env := append(envSlice(recipeEnv), envSlice(taskEnv)...)
 		cmdList := make([]Command, 0, len(cmds))
 		for _, c := range cmds {
 			cmdList = append(cmdList, Command{Name: name, CmdLine: c, Env: env, Dir: dir, Timeout: timeout})

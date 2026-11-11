@@ -185,10 +185,10 @@ The loader checks the following before anything executes on the host:
 - an interactive command (a `!` prefix) — agents run headless, with no TTY.
 
 Variables: `vars` is merged with `--var key=value` (the flag wins, and a key need not be
-declared first). `{{.key}}` is expanded in `command`, `commands`, and `workdir`; an
-undefined variable is an error (`missingkey=error`), never an empty string. `env` values
-are exported verbatim, so a `{{.key}}` there stays literal
-([#88](https://github.com/yusiwen/myUtilities/issues/88)).
+declared first). `{{.key}}` is expanded in `command`, `commands`, `workdir`, and `env`
+values, at both recipe and task level; an undefined variable is an error
+(`missingkey=error`), never an empty string. A literal `{{` therefore has to be written
+as `{{"{{"}}`, exactly as in a command.
 
 Validation happens on the agent, not at submit time: the controller only reads the file,
 and the dispatcher only requires `recipe` (or `command`) to be non-empty. A malformed

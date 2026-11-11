@@ -184,6 +184,78 @@ func TestRunRecipeEnvAndVars(t *testing.T) {
 	}
 }
 
+func TestRunRecipeEnvTemplate(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "log.txt")
+	r := &Recipe{
+		Vars: map[string]string{"version": "1.2.3"},
+		Env: map[string]string{
+			"RELEASE": "v{{.version}}",
+			"TAG":     "recipe",
+		},
+		Tasks: map[string]RecipeTask{
+			"a": {
+				Command: "echo \"$RELEASE $TAG\" >> " + log,
+				Env:     map[string]string{"TAG": "{{.version}}"},
+			},
+		},
+	}
+	if _, err := NewCommandRunner(nil).RunRecipe(r, RecipeRunOptions{}); err != nil {
+		t.Fatalf("RunRecipe: %v", err)
+	}
+	// RELEASE proves recipe-level templating; TAG proves task-level templating
+	// and that a task value still overrides the recipe value.
+	if got := readLog(t, log); got != "v1.2.3 1.2.3\n" {
+		t.Fatalf("env templates not expanded, got %q", got)
+	}
+}
+
+func TestRunRecipeEnvTemplateUnknownVar(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "log.txt")
+	r := &Recipe{
+		Tasks: map[string]RecipeTask{
+			"a": {
+				Command: "echo ran >> " + log,
+				Env:     map[string]string{"TAG": "{{.missing}}"},
+			},
+		},
+	}
+	_, err := NewCommandRunner(nil).RunRecipe(r, RecipeRunOptions{})
+	if err == nil {
+		t.Fatal("expected an error for an undefined env variable")
+	}
+	for _, want := range []string{`task "a"`, "env TAG", "missing"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
+		}
+	}
+	if _, statErr := os.Stat(log); !os.IsNotExist(statErr) {
+		t.Fatal("task ran despite the env template error")
+	}
+}
+
+func TestRunRecipeRecipeEnvTemplateUnknownVar(t *testing.T) {
+	dir := t.TempDir()
+	log := filepath.Join(dir, "log.txt")
+	r := &Recipe{
+		Env: map[string]string{"RELEASE": "v{{.missing}}"},
+		Tasks: map[string]RecipeTask{
+			"a": {Command: "echo ran >> " + log},
+		},
+	}
+	_, err := NewCommandRunner(nil).RunRecipe(r, RecipeRunOptions{})
+	if err == nil {
+		t.Fatal("expected an error for an undefined recipe env variable")
+	}
+	if !strings.Contains(err.Error(), "recipe env") || !strings.Contains(err.Error(), "RELEASE") {
+		t.Fatalf("error %q does not name the recipe env variable", err)
+	}
+	if _, statErr := os.Stat(log); !os.IsNotExist(statErr) {
+		t.Fatal("task ran despite the env template error")
+	}
+}
+
 func TestRunRecipeVarOverride(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "log.txt")

@@ -128,6 +128,27 @@ func TestRenderTemplate(t *testing.T) {
 	}
 }
 
+func TestRenderEnv(t *testing.T) {
+	got, err := renderEnv(
+		map[string]string{"A": "{{.x}}", "B": "plain"},
+		map[string]string{"x": "1"},
+	)
+	if err != nil {
+		t.Fatalf("renderEnv: %v", err)
+	}
+	if got["A"] != "1" || got["B"] != "plain" {
+		t.Fatalf("renderEnv = %v, want A=1 B=plain", got)
+	}
+	if _, err := renderEnv(nil, map[string]string{"x": "1"}); err != nil {
+		t.Fatalf("renderEnv(nil): %v", err)
+	}
+	if _, err := renderEnv(map[string]string{"A": "{{.missing}}"}, nil); err == nil {
+		t.Fatal("expected error for unknown variable")
+	} else if !strings.Contains(err.Error(), "env A") {
+		t.Fatalf("error %q does not name the variable", err)
+	}
+}
+
 func TestEnvSliceDeterministic(t *testing.T) {
 	got := envSlice(map[string]string{"B": "2", "A": "1", "C": "3"})
 	want := []string{"A=1", "B=2", "C=3"}
