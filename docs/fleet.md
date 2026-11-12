@@ -261,7 +261,9 @@ otherwise `pending`/`running`.
   `fleet-config.json` is created with `0600` permissions.
 - **The dispatcher binds `127.0.0.1` by default.** Pass `--host 0.0.0.0` (or a
   specific address) to let agents on other hosts reach it — the token is then the
-  only thing between the network and job execution.
+  only thing between the network and job execution. The
+  [systemd deployment](#running-under-systemd) below relies on that default to
+  keep a single-host dispatcher off the network.
 - `--allow-anonymous` serves without authentication for throwaway local testing.
   It cannot be combined with a configured token (so a token is never silently
   ignored), it logs a warning at start-up, and it should stay on loopback.
@@ -275,3 +277,148 @@ otherwise `pending`/`running`.
 `~/.config/mu/fleet-config.json` (server, token, hostname, groups, poll_interval,
 port, db_path, data_dir); `--config` overrides the path. Design details:
 [plan/fleet-module-plan.md](plan/fleet-module-plan.md).
+
+## Running under systemd
+
+The dispatcher and an agent are independent processes, so a single host can run
+both: the agent registers with the dispatcher over loopback, and because
+`mu fleet serve` binds `127.0.0.1` by default, nothing outside the host can reach
+the controller. The two units below implement that layout.
+
+Assumptions (adapt the paths to your install):
+
+- `mu` lives at `/root/.local/share/mise/shims/mu`, a mise shim. Replace the
+  `ExecStart` path with `/usr/local/bin/mu` or wherever your binary is installed.
+- The services run as root (system units default to root, so `User=` is omitted);
+  **jobs therefore execute as root**.
+- Both roles read one config file, `/etc/mu/fleet-config.json`: `serve` uses
+  `token`/`port`/`db_path`/`data_dir`, `agent` uses
+  `token`/`server`/`hostname`/`poll_interval`. Keeping the token in a single file
+  is what guarantees the two roles agree.
+
+`/etc/mu/fleet-config.json` (mode `0600`):
+
+```json
+{
+  "server": "http://127.0.0.1:8890",
+  "token": "<openssl rand -hex 32>",
+  "hostname": "<uname -n>",
+  "poll_interval": 5,
+  "port": 8890,
+  "db_path": "/root/.cache/mu/fleet/fleet.db",
+  "data_dir": "/root/.cache/mu/fleet"
+}
+```
+
+`/etc/systemd/system/mu-fleet-serve.service`:
+
+```ini
+[Unit]
+Description=mu Fleet Dispatcher
+Documentation=https://github.com/yusiwen/myUtilities
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# mise shims and the "~" paths in fleet-config.json both resolve through HOME.
+Environment=HOME=/root
+Environment=PATH=/root/.local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Token, port, db_path and data_dir live here; the agent unit reads the same file.
+ExecStart=/root/.local/share/mise/shims/mu fleet serve --config /etc/mu/fleet-config.json
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=2
+StartLimitIntervalSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`/etc/systemd/system/mu-fleet-agent.service`:
+
+```ini
+[Unit]
+Description=mu Fleet Agent
+Documentation=https://github.com/yusiwen/myUtilities
+After=network-online.target mu-fleet-serve.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# mise shims and the "~" paths in fleet-config.json both resolve through HOME.
+Environment=HOME=/root
+# Jobs inherit this PATH; keep the mise shims first so tasks see the same tools.
+Environment=PATH=/root/.local/share/mise/shims:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Same config file as the dispatcher: the token must match in both roles.
+ExecStart=/root/.local/share/mise/shims/mu fleet agent --config /etc/mu/fleet-config.json
+# The dispatcher may be down for a while (reboot, upgrade); never give up.
+Restart=always
+RestartSec=5s
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Create the config, save the two units under `/etc/systemd/system/`, then start
+both:
+
+```bash
+install -d -m 0755 /etc/mu
+TOKEN=$(openssl rand -hex 32)
+
+cat > /etc/mu/fleet-config.json <<EOF
+{
+  "server": "http://127.0.0.1:8890",
+  "token": "$TOKEN",
+  "hostname": "$(hostname)",
+  "poll_interval": 5,
+  "port": 8890,
+  "db_path": "/root/.cache/mu/fleet/fleet.db",
+  "data_dir": "/root/.cache/mu/fleet"
+}
+EOF
+chmod 0600 /etc/mu/fleet-config.json
+
+systemd-analyze verify /etc/systemd/system/mu-fleet-serve.service \
+  /etc/systemd/system/mu-fleet-agent.service
+systemctl daemon-reload
+systemctl enable --now mu-fleet-serve.service
+systemctl enable --now mu-fleet-agent.service
+
+systemctl --no-pager status mu-fleet-serve mu-fleet-agent
+journalctl -u mu-fleet-agent -n 20 --no-pager
+```
+
+Smoke test both roles from the same host:
+
+```bash
+/root/.local/share/mise/shims/mu fleet hosts --config /etc/mu/fleet-config.json
+/root/.local/share/mise/shims/mu fleet run --config /etc/mu/fleet-config.json \
+  --hosts "$(hostname)" --command 'uname -a' --watch
+```
+
+`hosts` should list `online <hostname>`, and `run` should print `succeeded`.
+
+Notes:
+
+- **`Environment=HOME=/root` is required, not decorative.** System services start
+  without `HOME`; the mise shim needs it to find its data directory, and the `~`
+  in `db_path`/`data_dir` expands through it. Drop the `PATH` line when `mu` is
+  installed under `/usr/local/bin`.
+- **The restart policy is deliberately asymmetric.** The dispatcher uses
+  `on-failure` with rate limiting, so a broken config (for example a missing
+  token, which makes `serve` refuse to start) does not restart forever; the agent
+  uses `always` with rate limiting disabled, so a dispatcher restart or upgrade
+  does not take it out of service for good.
+- **`hostname` must match the `--hosts` value** used to target this machine; it
+  defaults to `uname -n` when omitted.
+- **One dispatcher per database.** BoltDB's file lock has no timeout, so a second
+  `mu fleet serve` pointed at the same `db_path` blocks silently instead of
+  failing. Stop the unit before running a dispatcher by hand.
+- **`systemctl stop` kills the job.** The default `KillMode=control-group` takes
+  the agent and the process tree of a running job down together.
+- To reach agents on other hosts, start the dispatcher with `--host 0.0.0.0`
+  (plus a firewall) and point `server` at this host's address instead of
+  loopback.
