@@ -38,7 +38,7 @@ type MyUtilities struct {
 	Installer  installer.Options           `cmd:"" name:"install" help:"Install binary from GitHub release."`
 	Mocker     mock.Options                `cmd:"" name:"mock" help:"Mockers."`
 	Qrcode     qrcode.Options              `cmd:"" name:"qrcode" help:"Generate QR codes."`
-	Serve      serve.Options               `cmd:"" name:"serve" help:"Start a static file server."`
+	Serve      serve.Options               `cmd:"" name:"serve" help:"Serve a directory, or share a single file over LAN with a QR code."`
 	Svcreg     svcreg.Options              `cmd:"" name:"svcreg" help:"Service registry server (ServiceCenter-compatible)."`
 	Proxy      proxy.Options               `cmd:"" name:"proxy" help:"Proxies."`
 	Runner     runner.CommandRunnerOptions `cmd:"" name:"run" help:"Run commands."`
