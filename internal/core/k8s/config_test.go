@@ -44,3 +44,24 @@ func TestSaveIndexUsesRestrictivePermissions(t *testing.T) {
 		t.Fatalf("mode after rewrite = %o, want 600", got)
 	}
 }
+
+// TestSetConfigDirExpandsTilde covers the literal "~" directory: the gateway
+// passes its --config-dir default ("~/.config/mu") unchanged, and the
+// unexpanded value used to make indexPath create "./~/.config/mu".
+func TestSetConfigDirExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	SetConfigDir("~/.config/mu")
+	t.Cleanup(func() { SetConfigDir("") })
+
+	idx := &ConfigIndex{Active: "a", Configs: map[string]string{"a": "apiVersion: v1\n"}}
+	if err := SaveIndex(idx); err != nil {
+		t.Fatal(err)
+	}
+
+	want := filepath.Join(home, ".config", "mu", "kubeconfigs.yaml")
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("kubeconfig index was not written to %s: %v", want, err)
+	}
+}

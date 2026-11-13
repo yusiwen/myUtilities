@@ -3,6 +3,7 @@ package svcreg
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -155,5 +156,50 @@ func TestLogPathStaysInDataRoot(t *testing.T) {
 	got := m.logPath()
 	if filepath.Dir(got) != root {
 		t.Fatalf("logPath() = %q, want it directly under %s", got, root)
+	}
+}
+
+// TestRestoreStateExpandsTilde covers the literal "~" directory: the gateway
+// hands RestoreState its --config-dir default ("~/.config/mu") unchanged, and
+// the unexpanded value used to make MkdirAll create "./~/.config/mu" in the
+// caller's working directory.
+func TestRestoreStateExpandsTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	cwd := t.TempDir()
+	oldWD, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldWD); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	})
+
+	old := stateDir
+	t.Cleanup(func() { stateDir = old })
+	stateDir = ""
+
+	RestoreState("~/.config/mu")
+
+	if _, err := os.Stat(filepath.Join(cwd, "~")); !os.IsNotExist(err) {
+		t.Fatalf("RestoreState created a literal ~ directory in %s", cwd)
+	}
+	want := filepath.Join(home, ".config", "mu")
+	fi, err := os.Stat(want)
+	if err != nil {
+		t.Fatalf("state directory %s was not created: %v", want, err)
+	}
+	if !fi.IsDir() {
+		t.Fatalf("%s is not a directory", want)
+	}
+	if stateDir != want {
+		t.Fatalf("stateDir = %q, want %q", stateDir, want)
 	}
 }

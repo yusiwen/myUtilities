@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 	"k8s.io/client-go/kubernetes"
@@ -13,9 +14,24 @@ import (
 
 var kubeconfigDir string
 
-// SetConfigDir overrides the base directory for stored kubeconfigs.
+// expandTilde expands a leading "~/" to the current user's home directory.
+// Paths without that prefix are returned unchanged.
+func expandTilde(p string) string {
+	if !strings.HasPrefix(p, "~/") {
+		return p
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return p
+	}
+	return filepath.Join(home, p[2:])
+}
+
+// SetConfigDir overrides the base directory for stored kubeconfigs. A leading
+// "~/" is expanded so a shell-style default ("~/.config/mu") never creates a
+// literal "./~" directory in the working directory.
 func SetConfigDir(dir string) {
-	kubeconfigDir = dir
+	kubeconfigDir = expandTilde(dir)
 }
 
 func indexPath() string {

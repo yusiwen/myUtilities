@@ -90,7 +90,10 @@ func NewServerManager() *ServerManager {
 // RestoreState restores a previously running server from its state file.
 func RestoreState(configDir string) {
 	if configDir != "" {
-		stateDir = configDir
+		// Callers may pass a shell-style path (the gateway's --config-dir
+		// default is "~/.config/mu"); write under the home directory rather
+		// than creating a literal "./~" in the working directory.
+		stateDir = expandTilde(configDir)
 	}
 	os.MkdirAll(stateDir, 0700)
 	mgr.pidFile = adminStatePath()

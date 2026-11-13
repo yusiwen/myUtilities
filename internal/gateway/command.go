@@ -285,6 +285,11 @@ func (o *Options) configPath(name string) string {
 }
 
 func (o *Options) Run() error {
+	// Kong fills ConfigDir with the literal default "~/.config/mu"; resolve it
+	// once here so no consumer can receive the unexpanded value and create a
+	// "./~" directory in the caller's working directory.
+	o.ConfigDir = o.configDir()
+
 	wolCfg, err := corewol.LoadConfig(o.configPath("wol-config.json"))
 	if err != nil {
 		return fmt.Errorf("gateway: failed to load WOL config: %v", err)
