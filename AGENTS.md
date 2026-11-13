@@ -189,6 +189,13 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/core/httpserver/` - Shared HTTP server defaults
   - `New(addr, handler)` / `NewWith(addr, handler, Options)` / `ListenAndServe(addr, handler)`: every `serve` subcommand builds its server here instead of calling `http.ListenAndServe`, so `ReadHeaderTimeout` (10s), `ReadTimeout`/`WriteTimeout` (5m) and `IdleTimeout` (2m) are always set. A bare `http.ListenAndServe` has no timeouts and lets a slow-header client pin a connection and goroutine indefinitely.
   - Request bodies are bounded at the handlers that buffer them: `maxMockBodyBytes` (dynamic mock router, 413), `maxRegistryBodyBytes` (svcreg API), `maxJobUploadBytes` (fleet job submission), `maxPasswordLength` + a 64 KiB body cap (`mu crypto serve`).
+- `internal/core/serve/` - Building blocks for `mu serve`
+  - `FileHandler` / `NewFileHandler(path)` — serves one regular file at `/` and `/<name>` through `http.ServeContent`, so `Content-Length`, `Range` (resumable downloads), `HEAD` and `Content-Disposition` (RFC 2231 for non-ASCII names) come for free; `Token` gates every path behind a constant-time-compared first segment, `ExpiresAt` answers `410 Gone`, and `OnComplete` fires only when a `GET` delivered the whole file (never for `HEAD`, a partial `Range`, or a client that disconnected)
+  - `NewToken()` / `ValidateToken(token)` — 96-bit URL-safe tokens and the unreserved-character rule the CLI enforces
+  - `OutboundIP()` / `LocalIPv4s()` / `Advertise(iface)` — the outbound address comes from a UDP route probe (no packets sent), then physical addresses are ordered before container/VPN ones; `Advertise` returns them best-first for the QR code and `alt:` lines
+  - `NewDownloadServer(addr, handler)` — keeps `ReadHeaderTimeout` and `IdleTimeout` but leaves `ReadTimeout`/`WriteTimeout` at zero, because the shared 5-minute write budget truncates a large download
+- `internal/core/qr/` - QR rendering
+  - `Terminal(text, level)` → `Rendered{Art, Width, Height}` — draws each module as two spaces painted with an explicit black or white ANSI background, so a code scans on both light and dark terminal themes; the 4-module quiet zone is drawn too, and colour runs are collapsed into one escape per run
 - `internal/core/scip/` - SCIP semantic code intelligence
   - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `internal/core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
