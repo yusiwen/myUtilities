@@ -72,6 +72,13 @@
 │   │   │   ├── stats.go       #  stats atomics + Snapshot/Progress + speedWindow
 │   │   │   ├── size.go        #  ParseSize (8M/1MiB) / FormatSize
 │   │   │   └── client.go      #  NewClient(Options): proxy, TLS, HTTP/1.1 forcing, headers/auth
+│   │   ├── serve/             # `mu serve` building blocks
+│   │   │   ├── file.go        #  FileHandler: one file at `/` and `/<name>` via ServeContent (Range, HEAD, attachment); token gate, expiry (410), whole-file OnComplete
+│   │   │   ├── token.go       #  NewToken (96-bit URL-safe) / ValidateToken (unreserved characters only)
+│   │   │   ├── lanip.go       #  OutboundIP (UDP route probe), LocalIPv4s, Advertise ordering (physical before virtual)
+│   │   │   └── server.go      #  NewDownloadServer: header/idle timeouts only, so transfers are never cut off
+│   │   ├── qr/                # QR rendering for terminals
+│   │   │   └── render.go      #  Terminal(): forced black/white ANSI canvas, run-length colour runs, returns width/height
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
@@ -127,6 +134,8 @@
 │   │   └── embed.go           #  Embeds frontend/dist/* Svelte app
 │   ├── ask/  budget/  completion/  crypto/  diff/  gateway/  git/  jarinfo/
 │   ├── k8s/  log/  metrics/  misc/  qrcode/  scip/  serve/  svcreg/  termshot/  watch/
+│   ├── serve/                 # mu serve — directory server, or one file shared over LAN
+│   │   └── command.go         #  Path dispatch (dir/file), LAN URL announcement, QR printing, CORS/logging
 │   ├── network/               # mu network — DNS, DIG, WHOIS, HTTP client, download, port scan
 │   │   ├── command.go         #  DNS/DIG/WHOIS/Cert commands + HTTPClientOptions (mu network http) + subcommand routing
 │   │   ├── download.go        #  DownloadOptions (mu network download): flags, signal handling (exit 130), summary/JSON report

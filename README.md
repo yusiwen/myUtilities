@@ -29,7 +29,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [qrcode](docs/qrcode.md) | Utils | Generate QR codes (terminal, PNG, web UI) | ✓ |
 | [run](docs/run.md) | DevOps | Command runner with live display + YAML recipe orchestration | – |
 | [scip](docs/git.md#scip-semantic-code-intelligence) | Dev | SCIP semantic code intelligence (indexers + index) | – |
-| [serve](docs/serve.md) | DevOps | Static file server with CORS and logging | – |
+| [serve](docs/serve.md) | DevOps | Static file server, or share a single file over LAN with a QR code | – |
 | [set](docs/set.md) | Ops | Unified module configuration | – |
 | [svcreg](docs/svcreg.md) | Ops | Service registry server (ServiceCenter-compatible) + dashboard | ✓ |
 | [termshot](docs/termshot.md) | Utils | Render terminal command output as a terminal-window screenshot (PNG) | – |
