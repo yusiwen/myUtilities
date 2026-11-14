@@ -30,6 +30,7 @@ type Options struct {
 	Text  TextOptions  `cmd:"" name:"text" aliases:"t" help:"Compare two text strings."`
 	Serve ServeOptions `cmd:"" name:"serve" help:"Start diff tool HTTP server."`
 	Merge MergeOptions `cmd:"" name:"merge" help:"Three-way merge of text files."`
+	Patch PatchOptions `cmd:"" name:"patch" help:"Render a unified diff from stdin."`
 }
 
 type FileOptions struct {
