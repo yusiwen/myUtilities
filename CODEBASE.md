@@ -81,6 +81,8 @@
 │   │   │   └── render.go      #  Terminal(): forced black/white ANSI canvas, run-length colour runs, returns width/height
 │   │   ├── browser/           # Default-browser launcher
 │   │   │   └── browser.go     #  Open(url): start the platform launcher (open/xdg-open/rundll32), do not wait
+│   │   ├── merge/             # Line-based three-way merge
+│   │   │   └── merge.go       #  Merge(base, ours, theirs, Options) → Result; diff3 chunking, conflict markers
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
