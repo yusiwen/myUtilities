@@ -14,6 +14,55 @@ mu diff serve
 
 # Compare two files in the browser: opens the default browser
 mu diff serve a.txt b.txt
+
+# Three-way merge of text files
+mu diff merge --base base.txt --ours local.txt --theirs remote.txt
+```
+
+## Three-way merge
+
+`mu diff merge` combines a common ancestor with two edited versions and writes the
+result to standard output. It is git-agnostic: the inputs are three files (or one
+`-` for stdin), and none of the inputs are modified.
+
+```bash
+mu diff merge --base base.txt --ours local.txt --theirs remote.txt
+mu diff merge --base base.txt --ours local.txt --theirs remote.txt --style diff3
+mu diff merge --base base.txt --ours local.txt --theirs remote.txt --check
+```
+
+```
+$ mu diff merge --base base.txt --ours ours.txt --theirs theirs.txt
+A
+<<<<<<< ours.txt
+X
+=======
+Y
+>>>>>>> theirs.txt
+C
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--base` / `--ours` / `--theirs` | required | the three inputs; `-` reads stdin (only one may) |
+| `--style` | `merge` | `merge` (two-sided markers) or `diff3` (also shows the ancestor) |
+| `--ours-label` / `--base-label` / `--theirs-label` | file name | text written after the marker |
+| `--marker-size` | `7` | marker width in characters |
+| `--check` | `false` | write nothing; only report whether there are conflicts |
+
+Exit codes follow `git merge-file`: `0` clean, `1` conflicts, `2` unreadable input
+or usage error. Output is plain text with no ANSI escapes, so it can be redirected
+into a file. Edits on abutting lines are treated as one conflict, matching diff3
+and `git merge-file`. Binary inputs (a NUL byte) and inputs over 10 MiB are
+rejected with a message naming the file.
+
+To resolve a git conflict without teaching `mu` about git:
+
+```bash
+git show :1:path > /tmp/base
+git show :2:path > /tmp/ours
+git show :3:path > /tmp/theirs
+mu diff merge --base /tmp/base --ours /tmp/ours --theirs /tmp/theirs --style diff3 > path
 ```
 
 ## Browser comparison

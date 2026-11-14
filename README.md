@@ -12,7 +12,7 @@ A multi-purpose CLI tool with subcommands for common development and operations 
 | [budget](docs/budget.md) | AI | Track LLM API usage/balance, check DeepSeek service status | ✓ |
 | [completion](docs/completion.md) | Dev | Generate bash/zsh completion scripts | – |
 | [crypto](docs/crypto.md) | Utils | Encrypt/decrypt, passwords, JWT, encode/decode | ✓ |
-| [diff](docs/diff.md) | Dev | Side-by-side text/file comparison | ✓ |
+| [diff](docs/diff.md) | Dev | Side-by-side text/file comparison, three-way merge | ✓ |
 | [es](docs/es.md) | Data | Elasticsearch query tool (status, indices, search) | ✓ |
 | [fleet](docs/fleet.md) | DevOps | Remote batch execution: dispatcher + agents, file transfer | – |
 | [gateway](docs/gateway.md) | Ops | Unified portal serving all web-enabled modules | ✓ |
