@@ -5,6 +5,9 @@
   let mergeRef
   let mv
   let hasContent = $state(false)
+  // source is the file pair preloaded by `mu diff serve file1 file2`.
+  let source = $state(null)
+  let sourceError = $state('')
 
   const LS_KEY = 'mu-diff'
 
@@ -33,10 +36,31 @@
     hasContent = false
   }
 
+  // loadSource returns the server-side file pair, or null when the page was not
+  // started with files (204) — the gateway always answers 204.
+  async function loadSource() {
+    try {
+      const res = await fetch('/api/diff/source', { cache: 'no-store' })
+      if (res.status === 204) return null
+      if (!res.ok) {
+        sourceError = (await res.text()).trim() || `HTTP ${res.status}`
+        return null
+      }
+      const data = await res.json()
+      if (!data || (!data.text1 && !data.text2)) return null
+      return data
+    } catch (err) {
+      sourceError = String(err)
+      return null
+    }
+  }
+
   onMount(async () => {
     const { basicSetup, EditorView } = await import('codemirror')
     const { MergeView } = await import('@codemirror/merge')
-    const { EditorState } = await import('@codemirror/state')
+    const saved = loadFromLS()
+    const preloaded = await loadSource()
+    source = preloaded
 
     const saveExt = EditorView.updateListener.of(update => {
       if (update.docChanged) {
@@ -57,14 +81,16 @@
       '& .cm-selectionBackground, &.cm-focused .cm-selectionBackground': { backgroundColor: 'rgba(233, 69, 96, 0.28)' },
     })
 
-    const saved = loadFromLS()
+    // A preloaded pair wins over localStorage: the command named these files.
+    const docA = preloaded ? preloaded.text1 : (saved?.a || '')
+    const docB = preloaded ? preloaded.text2 : (saved?.b || '')
 
     mv = new MergeView({
-      a: { doc: saved?.a || '', extensions: [basicSetup, monoTheme, saveExt] },
-      b: { doc: saved?.b || '', extensions: [basicSetup, monoTheme, saveExt] },
+      a: { doc: docA, extensions: [basicSetup, monoTheme, saveExt] },
+      b: { doc: docB, extensions: [basicSetup, monoTheme, saveExt] },
       parent: mergeRef,
     })
-    if (saved?.a || saved?.b) hasContent = true
+    if (docA || docB) hasContent = true
   })
 
   onDestroy(() => {
@@ -90,6 +116,13 @@
     <a class="brand" href={inGateway ? '/' : undefined} aria-label="mu gateway">
       <span class="mu">mu</span><span class="sep">/</span><span class="app-name">diff</span>
     </a>
+    {#if source}
+      <span class="src" title="{source.file1} ↔ {source.file2}">
+        <span class="name">{source.file1}</span>
+        <span class="arrow">↔</span>
+        <span class="name">{source.file2}</span>
+      </span>
+    {/if}
     <div class="spacer"></div>
     <div class="actions">
       {#if hasContent}
@@ -106,6 +139,10 @@
     </div>
   </header>
 
+  {#if sourceError}
+    <div class="banner" role="alert">Cannot load the compared files: {sourceError}</div>
+  {/if}
+
   <div class="merge-wrap" bind:this={mergeRef}></div>
 </div>
 
@@ -117,6 +154,31 @@
   .diff-app { height: 100vh; height: 100svh; display: flex; flex-direction: column; }
   .merge-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }
   .btn input { display: none; }
+
+  .src {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    max-width: 46vw;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    background: var(--surface2);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .src .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .src .arrow { flex: none; color: var(--text3); }
+
+  .banner {
+    padding: 6px var(--gap);
+    border-bottom: 1px solid var(--border);
+    background: rgba(233, 69, 96, 0.12);
+    color: var(--text);
+    font-size: 12px;
+  }
 
   .merge-wrap :global(.cm-mergeView) { height: 100%; overflow: auto; }
   .merge-wrap :global(.cm-mergeViewEditors) { display: flex; height: 100%; }
