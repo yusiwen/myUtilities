@@ -58,6 +58,35 @@ with `input does not look like a unified diff`; binary input (a NUL byte) and
 patches over 50 MiB are refused. Combined diffs (`@@@`, `diff --cc`) are not
 supported.
 
+
+## Interactive viewer
+
+`mu diff patch --tui` opens a full-screen viewer: the changed files on the left,
+the selected file's diff on the right.
+
+```bash
+mu diff patch --tui change.patch
+git diff | mu diff patch --tui
+```
+
+| Key | Action |
+|---|---|
+| `tab`, `shift+tab`, left/right | switch focus between the file list and the diff |
+| `j`/`k`, up/down | move the file selection, or scroll the diff |
+| `g`/`G` | first/last file, top/bottom of the diff |
+| `ctrl+d`/`ctrl+u`, PgDn/PgUp | page through the list or the diff |
+| `enter` | jump from the list into the diff |
+| `q`, `esc`, `ctrl+c` | quit |
+
+The focused pane's title and the header's `focus:` label show which side is
+active. File rows carry a status letter (`A` added, `D` deleted, `M` modified,
+`R` renamed, `C` copied, `B` binary), and the right title shows `+adds -deletes`.
+
+`--tui` requires a terminal on stdout; redirecting it exits 2. When the patch
+arrives on stdin the viewer reads keys from the controlling terminal, so
+`git diff | mu diff patch --tui` works. `--no-line-numbers` applies to the
+viewer too; colour is always on inside the TUI.
+
 ## Three-way merge
 
 `mu diff merge` combines a common ancestor with two edited versions and writes the
