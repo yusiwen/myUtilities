@@ -196,6 +196,8 @@ The `internal/core/` directory contains reusable business logic:
   - `NewDownloadServer(addr, handler)` — keeps `ReadHeaderTimeout` and `IdleTimeout` but leaves `ReadTimeout`/`WriteTimeout` at zero, because the shared 5-minute write budget truncates a large download
 - `internal/core/qr/` - QR rendering
   - `Terminal(text, level)` → `Rendered{Art, Width, Height}` — draws each module as two spaces painted with an explicit black or white ANSI background, so a code scans on both light and dark terminal themes; the 4-module quiet zone is drawn too, and colour runs are collapsed into one escape per run
+- `internal/core/browser/` - Default-browser launcher
+  - `Open(url)` starts the platform launcher (`open` on macOS, `rundll32 url.dll,FileProtocolHandler` on Windows, `xdg-open`/`gio open`/`wslview`/`sensible-browser` elsewhere) and returns once it is started; `mu diff serve a b` uses it so the comparison appears without copying a URL. It does not wait for the browser or fail a command when no launcher exists — the caller prints a warning and keeps the URL.
 - `internal/core/scip/` - SCIP semantic code intelligence
   - `EnsureIndex(opts)` — detects repo languages, auto-downloads indexer binaries (reusing `internal/core/installer`), generates commit-cached SCIP indexes, returns a loaded `IndexSet`
   - `IndexSet` query API: `FindDefinition(path, line)`, `FindReferences(path, line)`, `SymbolsInRange`, `SymbolInfoAt`, `IndexFor(path)`
@@ -217,6 +219,10 @@ The `internal/core/` directory contains reusable business logic:
   - Supports asset selection by OS/arch
   - `templates/install.sh.tmpl` - Shell script template
   - `internal/core/installer` also exposes `AssetByURL` (resolve an asset by exact name + its SHA256 companion checksum, used by `internal/core/scip` for OS/arch-less launchers)
+
+- `internal/diff/` - Text comparison (`mu diff`)
+  - `file` / `text` print a terminal diff via `go-diff`
+  - `serve` starts the CodeMirror merge view. With two file arguments it preloads them (`GET /api/diff/source`), binds loopback by default (`--host` overrides), and opens the default browser (`--no-open`) once the listener is bound. `RegisterHandlersWithSource` lets the gateway keep serving an empty editor, and `RegisterHandlers` answers `204` for `/api/diff/source`.
 
 - `internal/mock/` - Mock servers for development/testing
   - `mock-server` - HTTP mock server with CSV data or random generated data
