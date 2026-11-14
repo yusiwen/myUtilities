@@ -17,7 +17,46 @@ mu diff serve a.txt b.txt
 
 # Three-way merge of text files
 mu diff merge --base base.txt --ours local.txt --theirs remote.txt
+
+# Render a unified diff produced by git or diff -u
+git diff | mu diff patch
 ```
+
+
+## Patch rendering
+
+`mu diff patch` renders a unified diff that another tool produced. It reads a
+file or stdin, so it works with `git diff`, `git show`, `git format-patch` and
+plain `diff -u`:
+
+```bash
+git diff | mu diff patch
+git show HEAD~1 | mu diff patch --no-line-numbers
+diff -u old.txt new.txt | mu diff patch --color=always
+mu diff patch change.patch
+```
+
+The output keeps the original headers, adds an old/new line-number gutter, and
+colours additions, deletions, context and hunk headers:
+
+```
+@@ -1,3 +1,3 @@
+1 1 |  one
+2   | -old
+  2 | +new
+3 3 |  two
+```
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--color` | `auto` | `auto` (colour only on a terminal), `always`, `never` |
+| `--[no-]line-numbers` | on | show the old/new line-number gutter |
+
+Plain mode has no ANSI escapes, so it can be redirected. A patch that cannot be
+parsed exits 2 with the offending line number; text that is not a diff exits 2
+with `input does not look like a unified diff`; binary input (a NUL byte) and
+patches over 50 MiB are refused. Combined diffs (`@@@`, `diff --cc`) are not
+supported.
 
 ## Three-way merge
 

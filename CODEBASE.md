@@ -83,6 +83,9 @@
 │   │   │   └── browser.go     #  Open(url): start the platform launcher (open/xdg-open/rundll32), do not wait
 │   │   ├── merge/             # Line-based three-way merge
 │   │   │   └── merge.go       #  Merge(base, ours, theirs, Options) → Result; diff3 chunking, conflict markers
+│   │   ├── patch/             # Unified diff parsing and rendering
+│   │   │   ├── patch.go       #  Parse(): git diff / diff -u → []File with hunks
+│   │   │   └── render.go      #  Render(): line-number gutter, colour or plain
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
