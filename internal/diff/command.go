@@ -29,6 +29,7 @@ type Options struct {
 	File  FileOptions  `cmd:"" name:"file" aliases:"f" help:"Compare two files."`
 	Text  TextOptions  `cmd:"" name:"text" aliases:"t" help:"Compare two text strings."`
 	Serve ServeOptions `cmd:"" name:"serve" help:"Start diff tool HTTP server."`
+	Merge MergeOptions `cmd:"" name:"merge" help:"Three-way merge of text files."`
 }
 
 type FileOptions struct {
