@@ -85,6 +85,7 @@
 │   │   │   └── merge.go       #  Merge(base, ours, theirs, Options) → Result; diff3 chunking, conflict markers
 │   │   ├── patch/             # Unified diff parsing and rendering
 │   │   │   ├── patch.go       #  Parse(): git diff / diff -u → []File with hunks
+│   │   │   ├── lines.go       #  Lines(): per-file display lines shared with the TUI
 │   │   │   └── render.go      #  Render(): line-number gutter, colour or plain
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
