@@ -20,10 +20,29 @@ type PatchOptions struct {
 	File        string `arg:"" optional:"" name:"file" help:"Unified diff file to render (default: stdin)."`
 	Color       string `help:"Color output: auto, always, never." enum:"auto,always,never" default:"auto"`
 	LineNumbers bool   `negatable:"" default:"true" help:"Show old and new line numbers."`
+	TUI         bool   `help:"Open an interactive file list and diff viewer (requires a terminal)."`
 }
 
-// Run renders the patch to stdout. A read or parse error exits 2.
+// Run renders the patch to stdout, or opens the interactive viewer with --tui.
+// A read or parse error exits 2.
 func (o *PatchOptions) Run() error {
+	files, err := o.parseInput(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	if o.TUI {
+		if err := runTUI(files, patch.Options{LineNumbers: o.LineNumbers}, os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		return nil
+	}
+
 	color := false
 	switch o.Color {
 	case "always":
@@ -33,33 +52,43 @@ func (o *PatchOptions) Run() error {
 	default: // auto
 		color = term.IsTerminal(int(os.Stdout.Fd()))
 	}
-
-	if err := o.render(os.Stdin, os.Stdout, color); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := patch.Render(os.Stdout, files, patch.Options{Color: color, LineNumbers: o.LineNumbers}); err != nil {
+		fmt.Fprintf(os.Stderr, "write output: %v\n", err)
 		os.Exit(2)
 	}
 	return nil
 }
 
-// render injects stdin and the output writer so the behaviour is testable.
+// render injects stdin and the output writer so the plain path is testable.
 func (o *PatchOptions) render(stdin io.Reader, w io.Writer, color bool) error {
-	data, err := o.readInput(stdin)
+	files, err := o.parseInput(stdin)
 	if err != nil {
 		return err
 	}
+	if len(files) == 0 {
+		return nil
+	}
+	return patch.Render(w, files, patch.Options{Color: color, LineNumbers: o.LineNumbers})
+}
 
+// parseInput reads and parses the patch. Empty input yields no files and no
+// error; text that is not a diff is rejected.
+func (o *PatchOptions) parseInput(stdin io.Reader) ([]patch.File, error) {
+	data, err := o.readInput(stdin)
+	if err != nil {
+		return nil, err
+	}
 	files, err := patch.Parse(data)
 	if err != nil {
-		return fmt.Errorf("parse patch: %w", err)
+		return nil, fmt.Errorf("parse patch: %w", err)
 	}
 	if len(files) == 0 {
 		if len(bytes.TrimSpace(data)) == 0 {
-			return nil
+			return nil, nil
 		}
-		return errors.New("input does not look like a unified diff")
+		return nil, errors.New("input does not look like a unified diff")
 	}
-
-	return patch.Render(w, files, patch.Options{Color: color, LineNumbers: o.LineNumbers})
+	return files, nil
 }
 
 func (o *PatchOptions) readInput(stdin io.Reader) ([]byte, error) {
