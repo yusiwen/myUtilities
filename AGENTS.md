@@ -200,6 +200,7 @@ The `internal/core/` directory contains reusable business logic:
   - `Parse(data)` → `[]File` with headers, paths, hunks and line kinds; accepts `git diff` and `diff -u`, ignores mail/commit preambles, and rejects combined diffs and malformed hunk counts with the offending line number
   - `Render(w, files, Options)` — old/new line-number gutter and colour or plain output; `mu diff patch` decides colour from `--color` and whether stdout is a terminal
   - `Lines(f, Options)` → `[]DisplayLine` — per-file lines with gutter and kind; shared by the plain renderer and the `--tui` viewer so the two cannot drift
+  - `Theme`/`Nord*` — `ThemeDefault` (16-colour) and `ThemeNord` (24-bit ANSI from the official Nord palette); `Paint(theme, kind, text)` is shared with `mu diff file`/`text`, and the TUI builds its lipgloss styles from the same `Nord*` constants
 - `internal/core/merge/` - Line-based three-way merge
   - `Merge(base, ours, theirs, Options)` → `Result{Text, Conflicts}` — diff3 over line chunks; changes that overlap *or abut* form one conflict region (the same rule as `git merge-file`), identical changes are written once, and `StyleMerge`/`StyleDiff3`, labels and marker width are configurable. Binary and size checks live in the `mu diff merge` wrapper, not in the engine.
 - `internal/core/browser/` - Default-browser launcher
@@ -229,7 +230,7 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/diff/` - Text comparison (`mu diff`)
   - `file` / `text` print a terminal diff via `go-diff`
   - `merge` runs the generic three-way merge (`--base/--ours/--theirs`, stdout, `git merge-file`-compatible exit codes), implemented by `internal/core/merge`; it has no git coupling.
-  - `patch` renders a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
+  - `patch` renders a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`, `--theme default|nord`) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
   - `serve` starts the CodeMirror merge view. With two file arguments it preloads them (`GET /api/diff/source`), binds loopback by default (`--host` overrides), and opens the default browser (`--no-open`) once the listener is bound. `RegisterHandlersWithSource` lets the gateway keep serving an empty editor, and `RegisterHandlers` answers `204` for `/api/diff/source`.
 
 - `internal/mock/` - Mock servers for development/testing

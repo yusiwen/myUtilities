@@ -51,6 +51,7 @@ colours additions, deletions, context and hunk headers:
 |---|---|---|
 | `--color` | `auto` | `auto` (colour only on a terminal), `always`, `never` |
 | `--[no-]line-numbers` | on | show the old/new line-number gutter |
+| `--theme` | `default` | `default` (16-colour) or `nord` (24-bit Nord palette) |
 
 Plain mode has no ANSI escapes, so it can be redirected. A patch that cannot be
 parsed exits 2 with the offending line number; text that is not a diff exits 2
@@ -86,6 +87,26 @@ active. File rows carry a status letter (`A` added, `D` deleted, `M` modified,
 arrives on stdin the viewer reads keys from the controlling terminal, so
 `git diff | mu diff patch --tui` works. `--no-line-numbers` applies to the
 viewer too; colour is always on inside the TUI.
+
+
+## Themes
+
+`mu diff file`, `mu diff text` and `mu diff patch` accept `--theme default|nord`.
+`nord` uses the [Nord](https://www.nordtheme.com) palette:
+
+| Diff element | Nord colour |
+|---|---|
+| additions, `+++` path | nord14 `#A3BE8C` |
+| deletions, `---` path | nord11 `#BF616A` |
+| hunk header, focused pane title | nord8 `#88C0D0` |
+| binary notice, modified status | nord13 `#EBCB8B` |
+| metadata, gutter | nord3 `#4C566A` |
+| context | nord4 `#D8DEE9`, dimmed |
+
+Plain output uses 24-bit ANSI colour, so a terminal without truecolor support
+will approximate the palette. The TUI resolves the same values through lipgloss
+and follows the terminal's colour profile; `--theme nord --tui` themes the file
+list, status letters, selection and diff pane together.
 
 ## Three-way merge
 
