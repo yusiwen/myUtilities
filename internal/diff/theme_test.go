@@ -32,6 +32,9 @@ func TestPatchThemeMapping(t *testing.T) {
 	if patchTheme("default") != patch.ThemeDefault {
 		t.Error("patchTheme(default) did not select the default theme")
 	}
+	if patchTheme("") != patch.ThemeNord {
+		t.Error("an empty theme should resolve to Nord")
+	}
 }
 
 func TestFileAndTextThemeFlags(t *testing.T) {
@@ -48,22 +51,22 @@ func TestFileAndTextThemeFlags(t *testing.T) {
 	if _, err := parser.Parse(fileArgs); err != nil {
 		t.Fatalf("parse file: %v", err)
 	}
-	if root.File.Theme != "default" {
-		t.Errorf("file Theme = %q, want default", root.File.Theme)
-	}
-
-	if _, err := parser.Parse([]string{"file", "a", "b", "--theme", "nord"}); err != nil {
-		t.Fatalf("parse file --theme nord: %v", err)
-	}
 	if root.File.Theme != "nord" {
 		t.Errorf("file Theme = %q, want nord", root.File.Theme)
 	}
 
-	if _, err := parser.Parse([]string{"text", "a", "b", "--theme", "nord"}); err != nil {
-		t.Fatalf("parse text --theme nord: %v", err)
+	if _, err := parser.Parse([]string{"file", "a", "b", "--theme", "default"}); err != nil {
+		t.Fatalf("parse file --theme default: %v", err)
 	}
-	if root.Text.Theme != "nord" {
-		t.Errorf("text Theme = %q, want nord", root.Text.Theme)
+	if root.File.Theme != "default" {
+		t.Errorf("file Theme = %q, want default", root.File.Theme)
+	}
+
+	if _, err := parser.Parse([]string{"text", "a", "b", "--theme", "default"}); err != nil {
+		t.Fatalf("parse text --theme default: %v", err)
+	}
+	if root.Text.Theme != "default" {
+		t.Errorf("text Theme = %q, want default", root.Text.Theme)
 	}
 
 	if _, err := parser.Parse([]string{"file", "a", "b", "--theme", "solarized"}); err == nil {
@@ -72,7 +75,15 @@ func TestFileAndTextThemeFlags(t *testing.T) {
 }
 
 func TestPatchThemeFlag(t *testing.T) {
-	o, err := parsePatch(t, "--theme", "nord")
+	o, err := parsePatch(t)
+	if err != nil {
+		t.Fatalf("parse default: %v", err)
+	}
+	if o.Theme != "nord" {
+		t.Errorf("default Theme = %q, want nord", o.Theme)
+	}
+
+	o, err = parsePatch(t, "--theme", "nord")
 	if err != nil {
 		t.Fatalf("parse --theme nord: %v", err)
 	}

@@ -230,7 +230,7 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/diff/` - Text comparison (`mu diff`)
   - `file` / `text` print a terminal diff via `go-diff`
   - `merge` runs the generic three-way merge (`--base/--ours/--theirs`, stdout, `git merge-file`-compatible exit codes), implemented by `internal/core/merge`; it has no git coupling.
-  - `patch` renders a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`, `--theme default|nord`) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
+  - `patch` renders a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`, `--theme nord|default` (default `nord`)) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
   - `serve` starts the CodeMirror merge view. With two file arguments it preloads them (`GET /api/diff/source`), binds loopback by default (`--host` overrides), and opens the default browser (`--no-open`) once the listener is bound. `RegisterHandlersWithSource` lets the gateway keep serving an empty editor, and `RegisterHandlers` answers `204` for `/api/diff/source`.
 
 - `internal/mock/` - Mock servers for development/testing

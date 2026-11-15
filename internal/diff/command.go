@@ -37,13 +37,13 @@ type Options struct {
 type FileOptions struct {
 	File1 string `arg:"" name:"file1" help:"First file."`
 	File2 string `arg:"" name:"file2" help:"Second file."`
-	Theme string `help:"Color theme." enum:"default,nord" default:"default"`
+	Theme string `help:"Color theme." enum:"default,nord" default:"nord"`
 }
 
 type TextOptions struct {
 	Text1 string `arg:"" name:"text1" help:"First text."`
 	Text2 string `arg:"" optional:"" name:"text2" help:"Second text (omit for stdin)."`
-	Theme string `help:"Color theme." enum:"default,nord" default:"default"`
+	Theme string `help:"Color theme." enum:"default,nord" default:"nord"`
 }
 
 type ServeOptions struct {
@@ -336,8 +336,8 @@ func diffText(a, b string, theme patch.Theme) string {
 
 // patchTheme maps the --theme flag to the palette used by the renderers.
 func patchTheme(name string) patch.Theme {
-	if name == "nord" {
-		return patch.ThemeNord
+	if name == "default" {
+		return patch.ThemeDefault
 	}
-	return patch.ThemeDefault
+	return patch.ThemeNord
 }
