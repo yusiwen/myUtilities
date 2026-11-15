@@ -21,6 +21,7 @@ type PatchOptions struct {
 	Color       string `help:"Color output: auto, always, never." enum:"auto,always,never" default:"auto"`
 	LineNumbers bool   `negatable:"" default:"true" help:"Show old and new line numbers."`
 	TUI         bool   `help:"Open an interactive file list and diff viewer (requires a terminal)."`
+	Theme       string `help:"Color theme." enum:"default,nord" default:"default"`
 }
 
 // Run renders the patch to stdout, or opens the interactive viewer with --tui.
@@ -36,7 +37,8 @@ func (o *PatchOptions) Run() error {
 	}
 
 	if o.TUI {
-		if err := runTUI(files, patch.Options{LineNumbers: o.LineNumbers}, os.Stdin, os.Stdout); err != nil {
+		opts := patch.Options{LineNumbers: o.LineNumbers, Theme: patchTheme(o.Theme)}
+		if err := runTUI(files, opts, os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(2)
 		}
@@ -52,7 +54,7 @@ func (o *PatchOptions) Run() error {
 	default: // auto
 		color = term.IsTerminal(int(os.Stdout.Fd()))
 	}
-	if err := patch.Render(os.Stdout, files, patch.Options{Color: color, LineNumbers: o.LineNumbers}); err != nil {
+	if err := patch.Render(os.Stdout, files, patch.Options{Color: color, LineNumbers: o.LineNumbers, Theme: patchTheme(o.Theme)}); err != nil {
 		fmt.Fprintf(os.Stderr, "write output: %v\n", err)
 		os.Exit(2)
 	}
@@ -68,7 +70,7 @@ func (o *PatchOptions) render(stdin io.Reader, w io.Writer, color bool) error {
 	if len(files) == 0 {
 		return nil
 	}
-	return patch.Render(w, files, patch.Options{Color: color, LineNumbers: o.LineNumbers})
+	return patch.Render(w, files, patch.Options{Color: color, LineNumbers: o.LineNumbers, Theme: patchTheme(o.Theme)})
 }
 
 // parseInput reads and parses the patch. Empty input yields no files and no

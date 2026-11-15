@@ -362,3 +362,48 @@ func TestTUILineNumbersToggle(t *testing.T) {
 		t.Errorf("gutter shown even though LineNumbers=false:\n%s", plain)
 	}
 }
+
+func TestTUINordStyles(t *testing.T) {
+	nord := tuiStylesFor(patch.ThemeNord)
+	checks := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"add foreground", fmt.Sprint(nord.add.GetForeground()), patch.Nord14},
+		{"delete foreground", fmt.Sprint(nord.del.GetForeground()), patch.Nord11},
+		{"hunk foreground", fmt.Sprint(nord.hunk.GetForeground()), patch.Nord8},
+		{"focus foreground", fmt.Sprint(nord.focusTitle.GetForeground()), patch.Nord8},
+		{"meta foreground", fmt.Sprint(nord.meta.GetForeground()), patch.Nord3},
+		{"binary foreground", fmt.Sprint(nord.binary.GetForeground()), patch.Nord13},
+		{"selection background", fmt.Sprint(nord.selected.GetBackground()), patch.Nord10},
+		{"selection foreground", fmt.Sprint(nord.selected.GetForeground()), patch.Nord6},
+		{"idle selection background", fmt.Sprint(nord.selectedIdle.GetBackground()), patch.Nord2},
+		{"added status", fmt.Sprint(nord.status('A').GetForeground()), patch.Nord14},
+		{"deleted status", fmt.Sprint(nord.status('D').GetForeground()), patch.Nord11},
+	}
+	for _, c := range checks {
+		if c.got != c.want {
+			t.Errorf("%s = %q, want %q", c.name, c.got, c.want)
+		}
+	}
+
+	def := tuiStylesFor(patch.ThemeDefault)
+	if got := fmt.Sprint(def.add.GetForeground()); got != "34" {
+		t.Errorf("default add foreground = %q, want 34", got)
+	}
+	if got := fmt.Sprint(def.selected.GetBackground()); got != "62" {
+		t.Errorf("default selection background = %q, want 62", got)
+	}
+}
+
+func TestTUIModelCarriesTheme(t *testing.T) {
+	files, err := patch.Parse([]byte(tuiPatch))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := newTUIModel(files, patch.Options{LineNumbers: true, Theme: patch.ThemeNord})
+	if got := fmt.Sprint(m.styles.add.GetForeground()); got != patch.Nord14 {
+		t.Errorf("model theme foreground = %q, want %q", got, patch.Nord14)
+	}
+}

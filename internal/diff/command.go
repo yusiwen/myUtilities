@@ -16,6 +16,7 @@ import (
 	"github.com/sergi/go-diff/diffmatchpatch"
 	"github.com/yusiwen/myUtilities/internal/core/browser"
 	"github.com/yusiwen/myUtilities/internal/core/httpserver"
+	"github.com/yusiwen/myUtilities/internal/core/patch"
 	"golang.org/x/term"
 )
 
@@ -36,11 +37,13 @@ type Options struct {
 type FileOptions struct {
 	File1 string `arg:"" name:"file1" help:"First file."`
 	File2 string `arg:"" name:"file2" help:"Second file."`
+	Theme string `help:"Color theme." enum:"default,nord" default:"default"`
 }
 
 type TextOptions struct {
 	Text1 string `arg:"" name:"text1" help:"First text."`
 	Text2 string `arg:"" optional:"" name:"text2" help:"Second text (omit for stdin)."`
+	Theme string `help:"Color theme." enum:"default,nord" default:"default"`
 }
 
 type ServeOptions struct {
@@ -59,7 +62,7 @@ func (o *FileOptions) Run() error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", o.File2, err)
 	}
-	fmt.Print(diffText(string(a), string(b)))
+	fmt.Print(diffText(string(a), string(b), patchTheme(o.Theme)))
 	return nil
 }
 
@@ -70,7 +73,7 @@ func (o *TextOptions) Run() error {
 		data, _ := io.ReadAll(os.Stdin)
 		text2 = strings.TrimRight(string(data), "\n\r")
 	}
-	fmt.Print(diffText(text1, text2))
+	fmt.Print(diffText(text1, text2, patchTheme(o.Theme)))
 	return nil
 }
 
@@ -312,9 +315,29 @@ func handleDiff(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func diffText(a, b string) string {
+func diffText(a, b string, theme patch.Theme) string {
 	dmp := diffmatchpatch.New()
 	diffs := dmp.DiffMain(a, b, true)
 	dmp.DiffCleanupSemantic(diffs)
-	return dmp.DiffPrettyText(diffs)
+
+	var sb strings.Builder
+	for _, d := range diffs {
+		switch d.Type {
+		case diffmatchpatch.DiffInsert:
+			sb.WriteString(patch.Paint(theme, patch.LineAdd, d.Text))
+		case diffmatchpatch.DiffDelete:
+			sb.WriteString(patch.Paint(theme, patch.LineDelete, d.Text))
+		default:
+			sb.WriteString(d.Text)
+		}
+	}
+	return sb.String()
+}
+
+// patchTheme maps the --theme flag to the palette used by the renderers.
+func patchTheme(name string) patch.Theme {
+	if name == "nord" {
+		return patch.ThemeNord
+	}
+	return patch.ThemeDefault
 }

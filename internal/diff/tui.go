@@ -36,27 +36,119 @@ type tuiModel struct {
 	width, height int
 	sel, scroll   int
 	focus         pane
+	styles        tuiStyles
 }
 
-var (
-	tuiHeaderStyle  = lipgloss.NewStyle().Bold(true)
-	tuiFooterStyle  = lipgloss.NewStyle().Faint(true)
-	tuiFocusTitle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	tuiTitleDim     = lipgloss.NewStyle().Faint(true)
-	tuiSelected     = lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("231")).Bold(true)
-	tuiSelectedIdle = lipgloss.NewStyle().Background(lipgloss.Color("238")).Foreground(lipgloss.Color("252"))
-	tuiAddStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("34"))
-	tuiDelStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("160"))
-	tuiHunkStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("37")).Bold(true)
-	tuiPathOldStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("160"))
-	tuiPathNewStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("34"))
-	tuiMetaStyle    = lipgloss.NewStyle().Faint(true)
-	tuiBinaryStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("178"))
-	tuiNoteStyle    = lipgloss.NewStyle().Faint(true)
-)
+// tuiStyles is the themed style set for the viewer.
+type tuiStyles struct {
+	header, footer, focusTitle, titleDim        lipgloss.Style
+	selected, selectedIdle                      lipgloss.Style
+	add, del, hunk, oldPath, newPath            lipgloss.Style
+	meta, binary, note, context                 lipgloss.Style
+	statusA, statusD, statusR, statusB, statusM lipgloss.Style
+}
+
+func tuiStylesFor(theme patch.Theme) tuiStyles {
+	if theme == patch.ThemeNord {
+		return nordTUIStyles()
+	}
+	return defaultTUIStyles()
+}
+
+func defaultTUIStyles() tuiStyles {
+	return tuiStyles{
+		header:       lipgloss.NewStyle().Bold(true),
+		footer:       lipgloss.NewStyle().Faint(true),
+		focusTitle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")),
+		titleDim:     lipgloss.NewStyle().Faint(true),
+		selected:     lipgloss.NewStyle().Background(lipgloss.Color("62")).Foreground(lipgloss.Color("231")).Bold(true),
+		selectedIdle: lipgloss.NewStyle().Background(lipgloss.Color("238")).Foreground(lipgloss.Color("252")),
+		add:          lipgloss.NewStyle().Foreground(lipgloss.Color("34")),
+		del:          lipgloss.NewStyle().Foreground(lipgloss.Color("160")),
+		hunk:         lipgloss.NewStyle().Foreground(lipgloss.Color("37")).Bold(true),
+		oldPath:      lipgloss.NewStyle().Foreground(lipgloss.Color("160")),
+		newPath:      lipgloss.NewStyle().Foreground(lipgloss.Color("34")),
+		meta:         lipgloss.NewStyle().Faint(true),
+		binary:       lipgloss.NewStyle().Foreground(lipgloss.Color("178")),
+		note:         lipgloss.NewStyle().Faint(true),
+		context:      lipgloss.NewStyle().Faint(true),
+		statusA:      lipgloss.NewStyle().Foreground(lipgloss.Color("34")).Bold(true),
+		statusD:      lipgloss.NewStyle().Foreground(lipgloss.Color("160")).Bold(true),
+		statusR:      lipgloss.NewStyle().Foreground(lipgloss.Color("37")).Bold(true),
+		statusB:      lipgloss.NewStyle().Foreground(lipgloss.Color("178")).Bold(true),
+		statusM:      lipgloss.NewStyle().Foreground(lipgloss.Color("178")).Bold(true),
+	}
+}
+
+func nordTUIStyles() tuiStyles {
+	return tuiStyles{
+		header:       lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(patch.Nord6)),
+		footer:       lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(patch.Nord4)),
+		focusTitle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(patch.Nord8)),
+		titleDim:     lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(patch.Nord4)),
+		selected:     lipgloss.NewStyle().Background(lipgloss.Color(patch.Nord10)).Foreground(lipgloss.Color(patch.Nord6)).Bold(true),
+		selectedIdle: lipgloss.NewStyle().Background(lipgloss.Color(patch.Nord2)).Foreground(lipgloss.Color(patch.Nord4)),
+		add:          lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord14)),
+		del:          lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord11)),
+		hunk:         lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(patch.Nord8)),
+		oldPath:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord11)),
+		newPath:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord14)),
+		meta:         lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord3)),
+		binary:       lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord13)),
+		note:         lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord3)),
+		context:      lipgloss.NewStyle().Faint(true).Foreground(lipgloss.Color(patch.Nord4)),
+		statusA:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord14)).Bold(true),
+		statusD:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord11)).Bold(true),
+		statusR:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord8)).Bold(true),
+		statusB:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord13)).Bold(true),
+		statusM:      lipgloss.NewStyle().Foreground(lipgloss.Color(patch.Nord13)).Bold(true),
+	}
+}
+
+func (s tuiStyles) line(kind patch.LineKind) lipgloss.Style {
+	switch kind {
+	case patch.LineHeader:
+		return s.header
+	case patch.LineMeta:
+		return s.meta
+	case patch.LineOldPath:
+		return s.oldPath
+	case patch.LineNewPath:
+		return s.newPath
+	case patch.LineHunk:
+		return s.hunk
+	case patch.LineContext:
+		return s.context
+	case patch.LineAdd:
+		return s.add
+	case patch.LineDelete:
+		return s.del
+	case patch.LineNoNewline:
+		return s.note
+	case patch.LineBinary:
+		return s.binary
+	default:
+		return lipgloss.NewStyle()
+	}
+}
+
+func (s tuiStyles) status(status byte) lipgloss.Style {
+	switch status {
+	case 'A':
+		return s.statusA
+	case 'D':
+		return s.statusD
+	case 'R', 'C':
+		return s.statusR
+	case 'B':
+		return s.statusB
+	default:
+		return s.statusM
+	}
+}
 
 func newTUIModel(files []patch.File, opts patch.Options) tuiModel {
-	m := tuiModel{files: files, focus: paneFiles}
+	m := tuiModel{files: files, focus: paneFiles, styles: tuiStylesFor(opts.Theme)}
 	for i := range files {
 		m.lines = append(m.lines, patch.Lines(files[i], opts))
 		m.stats = append(m.stats, statsFor(files[i]))
@@ -226,17 +318,17 @@ func (m tuiModel) headerLine() string {
 	if m.focus == paneDiff {
 		focus = "diff"
 	}
-	return tuiHeaderStyle.Render(fmt.Sprintf(" mu diff patch  |  %d file(s)  |  focus: %s ", len(m.files), focus))
+	return m.styles.header.Render(fmt.Sprintf(" mu diff patch  |  %d file(s)  |  focus: %s ", len(m.files), focus))
 }
 
 func (m tuiModel) footerLine() string {
-	return tuiFooterStyle.Render(" tab/arrows switch focus | j/k move | g/G top/bottom | ctrl+d/u page | q quit ")
+	return m.styles.footer.Render(" tab/arrows switch focus | j/k move | g/G top/bottom | ctrl+d/u page | q quit ")
 }
 
 func (m tuiModel) filesColumn(width, height int) []string {
-	title := tuiTitleDim
+	title := m.styles.titleDim
 	if m.focus == paneFiles {
-		title = tuiFocusTitle
+		title = m.styles.focusTitle
 	}
 	out := []string{padTo(title.Render(truncate(fmt.Sprintf(" FILES (%d) ", len(m.files)), width)), width)}
 
@@ -259,11 +351,11 @@ func (m tuiModel) filesColumn(width, height int) []string {
 		plain = padTo(plain, width)
 		switch {
 		case idx == m.sel && m.focus == paneFiles:
-			out = append(out, tuiSelected.Render(plain))
+			out = append(out, m.styles.selected.Render(plain))
 		case idx == m.sel:
-			out = append(out, tuiSelectedIdle.Render(plain))
+			out = append(out, m.styles.selectedIdle.Render(plain))
 		default:
-			status := statusStyle(m.stats[idx].status).Render(string(m.stats[idx].status))
+			status := m.styles.status(m.stats[idx].status).Render(string(m.stats[idx].status))
 			out = append(out, padTo(status+" "+path, width))
 		}
 	}
@@ -271,9 +363,9 @@ func (m tuiModel) filesColumn(width, height int) []string {
 }
 
 func (m tuiModel) diffColumn(width, height int) []string {
-	title := tuiTitleDim
+	title := m.styles.titleDim
 	if m.focus == paneDiff {
-		title = tuiFocusTitle
+		title = m.styles.focusTitle
 	}
 	titleText := " (no file) "
 	if m.sel >= 0 && m.sel < len(m.files) {
@@ -298,7 +390,7 @@ func (m tuiModel) diffColumn(width, height int) []string {
 			continue
 		}
 		line := content[idx]
-		out = append(out, padTo(tuiLineStyle(line.Kind).Render(truncate(line.Gutter+line.Text, width)), width))
+		out = append(out, padTo(m.styles.line(line.Kind).Render(truncate(line.Gutter+line.Text, width)), width))
 	}
 	return out
 }
@@ -339,48 +431,6 @@ func displayPath(f patch.File) string {
 		return f.OldPath
 	}
 	return "(unknown)"
-}
-
-func tuiLineStyle(kind patch.LineKind) lipgloss.Style {
-	switch kind {
-	case patch.LineHeader:
-		return tuiHeaderStyle
-	case patch.LineMeta:
-		return tuiMetaStyle
-	case patch.LineOldPath:
-		return tuiPathOldStyle
-	case patch.LineNewPath:
-		return tuiPathNewStyle
-	case patch.LineHunk:
-		return tuiHunkStyle
-	case patch.LineContext:
-		return tuiMetaStyle
-	case patch.LineAdd:
-		return tuiAddStyle
-	case patch.LineDelete:
-		return tuiDelStyle
-	case patch.LineNoNewline:
-		return tuiNoteStyle
-	case patch.LineBinary:
-		return tuiBinaryStyle
-	default:
-		return lipgloss.NewStyle()
-	}
-}
-
-func statusStyle(status byte) lipgloss.Style {
-	switch status {
-	case 'A':
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("34")).Bold(true)
-	case 'D':
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("160")).Bold(true)
-	case 'R', 'C':
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("37")).Bold(true)
-	case 'B':
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("178")).Bold(true)
-	default:
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("178")).Bold(true)
-	}
 }
 
 // runTUI starts the interactive viewer. The patch is already parsed, so stdin
