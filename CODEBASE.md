@@ -86,7 +86,8 @@
 │   │   ├── patch/             # Unified diff parsing and rendering
 │   │   │   ├── patch.go       #  Parse(): git diff / diff -u → []File with hunks
 │   │   │   ├── lines.go       #  Lines(): per-file display lines shared with the TUI
-│   │   │   └── render.go      #  Render(): line-number gutter, colour or plain
+│   │   │   ├── render.go      #  Render(): line-number gutter, colour or plain
+│   │   │   └── theme.go       #  ThemeDefault/ThemeNord palettes, Paint() for text diffs
 │   │   ├── misc/              # Misc tools business logic
 │   │   │   ├── uuid.go        #  GenUUID() — random v4 UUID
 │   │   │   ├── json.go        #  FormatJSON / ValidateJSON / MinifyJSON
