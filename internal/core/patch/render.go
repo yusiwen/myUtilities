@@ -14,6 +14,8 @@ type Options struct {
 	Color bool
 	// LineNumbers shows the old/new line-number gutter.
 	LineNumbers bool
+	// Theme selects the colour palette when Color is enabled.
+	Theme Theme
 }
 
 const (
@@ -29,6 +31,7 @@ const (
 // Render writes the parsed patch. Plain output (Color false) has no escape
 // codes, so it can be piped or saved.
 func Render(w io.Writer, files []File, opts Options) error {
+	pal := paletteFor(opts.Theme)
 	bw := bufio.NewWriter(w)
 	for i := range files {
 		if i > 0 {
@@ -38,41 +41,13 @@ func Render(w io.Writer, files []File, opts Options) error {
 		}
 		for _, line := range Lines(files[i], opts) {
 			if _, err := fmt.Fprintf(bw, "%s%s\n",
-				paint(line.Gutter, ansiDim, opts.Color),
-				paint(line.Text, kindColor(line.Kind), opts.Color)); err != nil {
+				paint(line.Gutter, pal.gutter, opts.Color),
+				paint(line.Text, pal.color(line.Kind), opts.Color)); err != nil {
 				return err
 			}
 		}
 	}
 	return bw.Flush()
-}
-
-// kindColor maps a rendered line kind to its ANSI colour.
-func kindColor(kind LineKind) string {
-	switch kind {
-	case LineHeader:
-		return ansiBold
-	case LineMeta:
-		return ansiDim
-	case LineOldPath:
-		return ansiRed
-	case LineNewPath:
-		return ansiGreen
-	case LineHunk:
-		return ansiBold + ansiCyan
-	case LineContext:
-		return ansiDim
-	case LineAdd:
-		return ansiGreen
-	case LineDelete:
-		return ansiRed
-	case LineNoNewline:
-		return ansiDim
-	case LineBinary:
-		return ansiYellow
-	default:
-		return ""
-	}
 }
 
 // gutterText sizes and pads the old/new line-number prefix.
