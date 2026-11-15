@@ -21,7 +21,7 @@ type PatchOptions struct {
 	Color       string `help:"Color output: auto, always, never." enum:"auto,always,never" default:"auto"`
 	LineNumbers bool   `negatable:"" default:"true" help:"Show old and new line numbers."`
 	TUI         bool   `help:"Open an interactive file list and diff viewer (requires a terminal)."`
-	Theme       string `help:"Color theme." enum:"default,nord" default:"default"`
+	Theme       string `help:"Color theme." enum:"default,nord" default:"nord"`
 }
 
 // Run renders the patch to stdout, or opens the interactive viewer with --tui.

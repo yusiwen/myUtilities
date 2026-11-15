@@ -43,6 +43,9 @@ func TestPatchFlagDefaults(t *testing.T) {
 	if o.Color != "auto" {
 		t.Errorf("Color = %q, want auto", o.Color)
 	}
+	if o.Theme != "nord" {
+		t.Errorf("Theme = %q, want nord", o.Theme)
+	}
 	if !o.LineNumbers {
 		t.Error("LineNumbers should default to true")
 	}
@@ -147,7 +150,7 @@ func TestPatchRejectsOversizedInput(t *testing.T) {
 }
 
 func TestPatchColorMode(t *testing.T) {
-	o := &PatchOptions{LineNumbers: true}
+	o := &PatchOptions{LineNumbers: true, Theme: "default"}
 	var colored bytes.Buffer
 	if err := o.render(strings.NewReader(patchSample), &colored, true); err != nil {
 		t.Fatalf("render: %v", err)
@@ -173,4 +176,15 @@ func (r *zerosReader) Read(p []byte) (int, error) {
 	}
 	r.remaining -= int64(len(p))
 	return len(p), nil
+}
+
+func TestPatchDefaultsToNord(t *testing.T) {
+	o := &PatchOptions{LineNumbers: true}
+	var buf bytes.Buffer
+	if err := o.render(strings.NewReader(patchSample), &buf, true); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if !strings.Contains(buf.String(), "\x1b[38;2;191;97;106m-old") {
+		t.Errorf("default rendering is not Nord:\n%q", buf.String())
+	}
 }
