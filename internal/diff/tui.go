@@ -36,6 +36,7 @@ type tuiModel struct {
 	width, height int
 	sel, scroll   int
 	focus         pane
+	filesHidden   bool
 	title         string
 	styles        tuiStyles
 }
@@ -172,8 +173,12 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "tab", "shift+tab":
 			m.toggleFocus()
+		case "b", "ctrl+b":
+			m.toggleFiles()
 		case "left":
-			m.focus = paneFiles
+			if !m.filesHidden {
+				m.focus = paneFiles
+			}
 		case "right":
 			m.focus = paneDiff
 		case "enter":
@@ -195,7 +200,22 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// toggleFiles hides or shows the file navigator. Hiding gives the whole width to
+// the diff and focuses it; showing returns focus to the list.
+func (m *tuiModel) toggleFiles() {
+	m.filesHidden = !m.filesHidden
+	if m.filesHidden {
+		m.focus = paneDiff
+		return
+	}
+	m.focus = paneFiles
+}
+
 func (m *tuiModel) toggleFocus() {
+	if m.filesHidden {
+		m.focus = paneDiff
+		return
+	}
 	if m.focus == paneFiles {
 		m.focus = paneDiff
 	} else {
@@ -205,7 +225,7 @@ func (m *tuiModel) toggleFocus() {
 
 func (m *tuiModel) move(delta int) {
 	if m.focus == paneFiles {
-		if len(m.files) == 0 {
+		if m.filesHidden || len(m.files) == 0 {
 			return
 		}
 		m.sel = clampInt(m.sel+delta, 0, len(m.files)-1)
@@ -221,7 +241,7 @@ func (m *tuiModel) page(delta int) {
 		step = 1
 	}
 	if m.focus == paneFiles {
-		if len(m.files) == 0 {
+		if m.filesHidden || len(m.files) == 0 {
 			return
 		}
 		m.sel = clampInt(m.sel+delta*step, 0, len(m.files)-1)
@@ -233,6 +253,9 @@ func (m *tuiModel) page(delta int) {
 
 func (m *tuiModel) jumpTop() {
 	if m.focus == paneFiles {
+		if m.filesHidden {
+			return
+		}
 		m.sel = 0
 		m.scroll = 0
 		return
@@ -242,6 +265,9 @@ func (m *tuiModel) jumpTop() {
 
 func (m *tuiModel) jumpBottom() {
 	if m.focus == paneFiles {
+		if m.filesHidden {
+			return
+		}
 		m.sel = max(0, len(m.files)-1)
 		m.scroll = 0
 		return
@@ -284,34 +310,60 @@ func (m tuiModel) View() string {
 	}
 
 	bodyH := m.bodyHeight()
-	leftW := m.width / 3
-	if leftW < 20 {
-		leftW = 20
-	}
-	if leftW > 44 {
-		leftW = 44
-	}
-	if leftW > m.width-25 {
-		leftW = m.width - 25
-	}
-	if leftW < 10 {
-		leftW = 10
-	}
-	rightW := m.width - leftW - 3
-	if rightW < 1 {
-		rightW = 1
-	}
-
-	left := m.filesColumn(leftW, bodyH)
-	right := m.diffColumn(rightW, bodyH)
 
 	lines := make([]string, 0, m.height)
 	lines = append(lines, padTo(truncate(m.headerLine(), m.width), m.width))
-	for i := 0; i < bodyH; i++ {
-		lines = append(lines, left[i]+" │ "+right[i])
+	if m.filesHidden {
+		right := m.diffColumn(m.width, bodyH)
+		for i := 0; i < bodyH; i++ {
+			lines = append(lines, right[i])
+		}
+	} else {
+		leftW := m.leftPaneWidth()
+		rightW := m.width - leftW - 3
+		if rightW < 1 {
+			rightW = 1
+		}
+		left := m.filesColumn(leftW, bodyH)
+		right := m.diffColumn(rightW, bodyH)
+		for i := 0; i < bodyH; i++ {
+			lines = append(lines, left[i]+" │ "+right[i])
+		}
 	}
 	lines = append(lines, padTo(truncate(m.footerLine(), m.width), m.width))
 	return strings.Join(lines, "\n")
+}
+
+// Width bounds for the file navigator. It is a navigation aid, not a content
+// pane, so it stays narrow: short names get a small column and long paths cap
+// out instead of eating the diff.
+const (
+	minFilesWidth = 18
+	maxFilesWidth = 32
+)
+
+// leftPaneWidth sizes the file column from its widest row.
+func (m tuiModel) leftPaneWidth() int {
+	widest := ansi.StringWidth(fmt.Sprintf(" FILES (%d) ", len(m.files)))
+	for i := range m.files {
+		if w := 2 + ansi.StringWidth(displayPath(m.files[i])); w > widest {
+			widest = w
+		}
+	}
+	width := widest
+	if width < minFilesWidth {
+		width = minFilesWidth
+	}
+	if width > maxFilesWidth {
+		width = maxFilesWidth
+	}
+	if limit := m.width - 25; width > limit {
+		width = limit
+	}
+	if width < 10 {
+		width = 10
+	}
+	return width
 }
 
 func (m tuiModel) headerLine() string {
@@ -327,7 +379,7 @@ func (m tuiModel) headerLine() string {
 }
 
 func (m tuiModel) footerLine() string {
-	return m.styles.footer.Render(" tab/arrows switch focus | j/k move | g/G top/bottom | ctrl+d/u page | q quit ")
+	return m.styles.footer.Render(" tab/arrows focus | j/k move | g/G top/bottom | ctrl+d/u page | b toggle files | q quit ")
 }
 
 func (m tuiModel) filesColumn(width, height int) []string {

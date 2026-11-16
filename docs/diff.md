@@ -114,11 +114,15 @@ git diff | mu diff --tui
 | `g`/`G` | first/last file, top/bottom of the diff |
 | `ctrl+d`/`ctrl+u`, PgDn/PgUp | page through the list or the diff |
 | `enter` | jump from the list into the diff |
+| `b`, `ctrl+b` | show or hide the file list; hiding gives the diff the full width |
 | `q`, `esc`, `ctrl+c` | quit |
 
 The focused pane's title and the header's `focus:` label show which side is
 active. File rows carry a status letter (`A` added, `D` deleted, `M` modified,
 `R` renamed, `C` copied, `B` binary), and the right title shows `+adds -deletes`.
+The file column is sized from its widest entry (18–32 cells), so short names do
+not steal a third of the terminal; `b` hides it entirely when a hunk needs the
+width.
 
 `--tui` requires a terminal on stdout; redirecting it exits 2. When the patch
 arrives on stdin the viewer reads keys from the controlling terminal, so
