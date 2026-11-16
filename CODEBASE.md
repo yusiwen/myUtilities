@@ -83,8 +83,9 @@
 │   │   │   └── browser.go     #  Open(url): start the platform launcher (open/xdg-open/rundll32), do not wait
 │   │   ├── merge/             # Line-based three-way merge
 │   │   │   └── merge.go       #  Merge(base, ours, theirs, Options) → Result; diff3 chunking, conflict markers
-│   │   ├── patch/             # Unified diff parsing and rendering
+│   │   ├── patch/             # Unified diff parsing, rendering and generation
 │   │   │   ├── patch.go       #  Parse(): git diff / diff -u → []File with hunks
+│   │   │   ├── from_texts.go  #  FromTexts(): two texts → one unified diff File (in process)
 │   │   │   ├── lines.go       #  Lines(): per-file display lines shared with the TUI
 │   │   │   ├── render.go      #  Render(): line-number gutter, colour or plain
 │   │   │   └── theme.go       #  ThemeDefault/ThemeNord palettes, Paint() for text diffs

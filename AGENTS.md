@@ -196,8 +196,9 @@ The `internal/core/` directory contains reusable business logic:
   - `NewDownloadServer(addr, handler)` — keeps `ReadHeaderTimeout` and `IdleTimeout` but leaves `ReadTimeout`/`WriteTimeout` at zero, because the shared 5-minute write budget truncates a large download
 - `internal/core/qr/` - QR rendering
   - `Terminal(text, level)` → `Rendered{Art, Width, Height}` — draws each module as two spaces painted with an explicit black or white ANSI background, so a code scans on both light and dark terminal themes; the 4-module quiet zone is drawn too, and colour runs are collapsed into one escape per run
-- `internal/core/patch/` - Unified diff parsing and rendering
+- `internal/core/patch/` - Unified diff parsing, rendering and generation
   - `Parse(data)` → `[]File` with headers, paths, hunks and line kinds; accepts `git diff` and `diff -u`, ignores mail/commit preambles, and rejects combined diffs and malformed hunk counts with the offending line number
+  - `FromTexts(oldPath, newPath, oldText, newText)` → `[]File` — builds a one-file unified diff in process: go-diff line encoding, 3 lines of context, hunks merge when the unchanged gap is ≤ 6, `/dev/null` sides, a binary notice for NUL input, CRLF and missing-final-newline handling. No `git` or `diff` process is started.
   - `Render(w, files, Options)` — old/new line-number gutter and colour or plain output; `mu diff patch` decides colour from `--color` and whether stdout is a terminal
   - `Lines(f, Options)` → `[]DisplayLine` — per-file lines with gutter and kind; shared by the plain renderer and the `--tui` viewer so the two cannot drift
   - `Theme`/`Nord*` — `ThemeDefault` (16-colour) and `ThemeNord` (24-bit ANSI from the official Nord palette); `Paint(theme, kind, text)` is shared with `mu diff file`/`text`, and the TUI builds its lipgloss styles from the same `Nord*` constants
@@ -228,9 +229,10 @@ The `internal/core/` directory contains reusable business logic:
   - `internal/core/installer` also exposes `AssetByURL` (resolve an asset by exact name + its SHA256 companion checksum, used by `internal/core/scip` for OS/arch-less launchers)
 
 - `internal/diff/` - Text comparison (`mu diff`)
-  - `file` / `text` print a terminal diff via `go-diff`
+  - the bare command is the default path: `mu diff a.txt b.txt` builds a unified diff with `internal/core/patch.FromTexts`, `mu diff change.patch` renders that file, and `mu diff` renders stdin (a terminal stdin is refused with a usage error). This is also the shape `git difftool` invokes (`mu diff "$LOCAL" "$REMOTE"`), and `pager.diff 'mu diff'` renders `git diff` output.
+  - `file` / `text` print a terminal inline diff via `go-diff`
   - `merge` runs the generic three-way merge (`--base/--ours/--theirs`, stdout, `git merge-file`-compatible exit codes), implemented by `internal/core/merge`; it has no git coupling.
-  - `patch` renders a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`, `--theme nord|default` (default `nord`)) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
+  - `patch` is the explicit spelling of the bare renderer: a unified diff from stdin or a file (`--color`, `--[no-]line-numbers`, `--theme nord|default` (default `nord`)) via `internal/core/patch`, so `git diff | mu diff patch` works without the diff module knowing about git. `--tui` opens a bubbletea viewer with a file list on the left and the selected diff on the right; stdin can carry the patch while keys come from `/dev/tty` (or `CONIN$` on Windows).
   - `serve` starts the CodeMirror merge view. With two file arguments it preloads them (`GET /api/diff/source`), binds loopback by default (`--host` overrides), and opens the default browser (`--no-open`) once the listener is bound. `RegisterHandlersWithSource` lets the gateway keep serving an empty editor, and `RegisterHandlers` answers `204` for `/api/diff/source`.
 
 - `internal/mock/` - Mock servers for development/testing
