@@ -407,3 +407,86 @@ func TestTUIModelCarriesTheme(t *testing.T) {
 		t.Errorf("model theme foreground = %q, want %q", got, patch.Nord14)
 	}
 }
+
+func TestTUIFilePaneWidth(t *testing.T) {
+	m := parseForTUI(t, tuiPatch)
+	m, _ = sendKey(t, m, tea.WindowSizeMsg{Width: 100, Height: 20})
+	if got := m.leftPaneWidth(); got != minFilesWidth {
+		t.Errorf("short names: width = %d, want %d", got, minFilesWidth)
+	}
+
+	long := newTUIModel([]patch.File{{NewPath: strings.Repeat("dir/", 12) + "file.txt"}}, patch.Options{})
+	long.width, long.height = 100, 20
+	if got := long.leftPaneWidth(); got != maxFilesWidth {
+		t.Errorf("long path: width = %d, want %d", got, maxFilesWidth)
+	}
+
+	narrow, _ := sendKey(t, parseForTUI(t, tuiPatch), tea.WindowSizeMsg{Width: 40, Height: 12})
+	if got := narrow.leftPaneWidth(); got != 15 {
+		t.Errorf("narrow terminal: width = %d, want 15", got)
+	}
+}
+
+func TestTUIFilesToggle(t *testing.T) {
+	m := parseForTUI(t, tuiPatch)
+	m, _ = sendKey(t, m, tea.WindowSizeMsg{Width: 100, Height: 20})
+	if m.filesHidden {
+		t.Fatal("the file list starts visible")
+	}
+	if plain := ansi.Strip(m.View()); !strings.Contains(plain, "FILES (2)") {
+		t.Fatalf("visible view has no file list:\n%s", plain)
+	}
+
+	m, _ = sendKey(t, m, runeKey("b"))
+	if !m.filesHidden {
+		t.Fatal("b did not hide the file list")
+	}
+	if m.focus != paneDiff {
+		t.Errorf("focus after hiding = %v, want diff", m.focus)
+	}
+
+	plain := ansi.Strip(m.View())
+	if strings.Contains(plain, "FILES") {
+		t.Errorf("hidden view still lists files:\n%s", plain)
+	}
+	if strings.Contains(plain, " │ ") {
+		t.Errorf("hidden view still has the pane separator:\n%s", plain)
+	}
+	if !strings.Contains(plain, "focus: diff") || !strings.Contains(plain, "new alpha") {
+		t.Errorf("hidden view lost the diff or focus label:\n%s", plain)
+	}
+	lines := strings.Split(plain, "\n")
+	if len(lines) != 20 {
+		t.Fatalf("hidden view has %d lines, want 20", len(lines))
+	}
+	for i, line := range lines {
+		if w := ansi.StringWidth(line); w > 100 {
+			t.Errorf("hidden line %d is %d cells wide, want <= 100", i, w)
+		}
+	}
+	if !strings.HasPrefix(lines[1], " alpha.txt") {
+		t.Errorf("diff panel does not start at column 0 when hidden: %q", lines[1])
+	}
+
+	// An invisible pane cannot take focus.
+	m, _ = sendKey(t, m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != paneDiff {
+		t.Error("tab focused the hidden file list")
+	}
+	m, _ = sendKey(t, m, tea.KeyMsg{Type: tea.KeyLeft})
+	if m.focus != paneDiff {
+		t.Error("left arrow focused the hidden file list")
+	}
+
+	// ctrl+b is an alias, and showing returns focus to the list.
+	m, _ = sendKey(t, m, tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.filesHidden || m.focus != paneFiles {
+		t.Errorf("ctrl+b: hidden=%v focus=%v, want visible/files", m.filesHidden, m.focus)
+	}
+	if plain := ansi.Strip(m.View()); !strings.Contains(plain, "FILES (2)") {
+		t.Errorf("file list did not come back:\n%s", plain)
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "b toggle files") {
+		t.Error("footer does not advertise the toggle key")
+	}
+}
