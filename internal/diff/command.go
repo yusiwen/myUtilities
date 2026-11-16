@@ -3,12 +3,14 @@ package diff
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -27,11 +29,124 @@ import (
 const maxSourceFileBytes = 5 << 20
 
 type Options struct {
+	// Bare is the hidden default command Kong selects when `mu diff` is called
+	// without a subcommand. It makes `mu diff a.txt b.txt` and `mu diff patchfile`
+	// work, which is also the shape `git difftool` invokes. The name is internal;
+	// hidden commands do not appear in help.
+	Bare BareOptions `cmd:"" name:"bare" hidden:"" default:"withargs"`
+
 	File  FileOptions  `cmd:"" name:"file" aliases:"f" help:"Compare two files."`
 	Text  TextOptions  `cmd:"" name:"text" aliases:"t" help:"Compare two text strings."`
 	Serve ServeOptions `cmd:"" name:"serve" help:"Start diff tool HTTP server."`
 	Merge MergeOptions `cmd:"" name:"merge" help:"Three-way merge of text files."`
-	Patch PatchOptions `cmd:"" name:"patch" help:"Render a unified diff from stdin."`
+	Patch PatchOptions `cmd:"" name:"patch" help:"Render a unified diff from stdin or a file (same as the default mode)."`
+}
+
+// BareOptions is the default `mu diff` mode:
+//
+//	mu diff a.txt b.txt      compare two files
+//	mu diff change.patch     render a unified diff file
+//	mu diff                  render a unified diff from stdin
+//
+// The third form is what a pager needs; the first is what `git difftool` passes
+// ($LOCAL and $REMOTE).
+type BareOptions struct {
+	Files       []string `arg:"" optional:"" name:"file" help:"Two files to compare, or one unified diff file (default: stdin)."`
+	Color       string   `help:"Color output: auto, always, never." enum:"auto,always,never" default:"auto"`
+	LineNumbers bool     `negatable:"" default:"true" help:"Show old and new line numbers."`
+	TUI         bool     `help:"Open an interactive file list and diff viewer (requires a terminal)."`
+	Theme       string   `help:"Color theme." enum:"default,nord" default:"nord"`
+}
+
+func (o *BareOptions) Run() error {
+	switch len(o.Files) {
+	case 0:
+		// A terminal stdin means no patch was piped in; reading it would hang.
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			return errors.New("no input: pass two files to compare, a unified diff file, or pipe a diff on stdin (run 'mu diff --help')")
+		}
+		return o.runPatch("")
+	case 1:
+		return o.runPatch(o.Files[0])
+	case 2:
+		files, err := compareFiles(o.Files[0], o.Files[1])
+		if err != nil {
+			return err
+		}
+		if len(files) == 0 {
+			return nil
+		}
+		return renderFiles(files, o.renderConfig(), os.Stdin, os.Stdout)
+	default:
+		return fmt.Errorf("expected two files to compare, a single unified diff file, or stdin; got %d arguments", len(o.Files))
+	}
+}
+
+// runPatch reuses the patch renderer, including its exit code of 2 for a read or
+// parse error.
+func (o *BareOptions) runPatch(file string) error {
+	return (&PatchOptions{
+		File:        file,
+		Color:       o.Color,
+		LineNumbers: o.LineNumbers,
+		TUI:         o.TUI,
+		Theme:       o.Theme,
+	}).Run()
+}
+
+func (o *BareOptions) renderConfig() renderConfig {
+	return renderConfig{
+		color:       o.Color,
+		lineNumbers: o.LineNumbers,
+		tui:         o.TUI,
+		theme:       patchTheme(o.Theme),
+		title:       "mu diff",
+	}
+}
+
+// compareFiles reads both sides and builds the unified diff model.
+func compareFiles(oldPath, newPath string) ([]patch.File, error) {
+	oldText, err := readDiffInput(oldPath)
+	if err != nil {
+		return nil, err
+	}
+	newText, err := readDiffInput(newPath)
+	if err != nil {
+		return nil, err
+	}
+	return patch.FromTexts(oldPath, newPath, oldText, newText), nil
+}
+
+// readDiffInput reads one side of a comparison. The size cap matches the patch
+// renderer because the whole diff is held in memory.
+func readDiffInput(path string) ([]byte, error) {
+	if isNullDevice(path) {
+		return nil, nil
+	}
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if fi.IsDir() {
+		return nil, fmt.Errorf("%s is a directory; comparing two trees is not supported", path)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", path, err)
+	}
+	if len(data) > maxPatchInputBytes {
+		return nil, fmt.Errorf("%s is larger than the %d MiB diff limit", path, maxPatchInputBytes>>20)
+	}
+	return data, nil
+}
+
+// isNullDevice reports whether path names the platform null device, which is how
+// git difftool represents an added or deleted file.
+func isNullDevice(path string) bool {
+	if path == os.DevNull || path == "/dev/null" {
+		return true
+	}
+	return runtime.GOOS == "windows" && strings.EqualFold(path, "NUL")
 }
 
 type FileOptions struct {

@@ -36,6 +36,7 @@ type tuiModel struct {
 	width, height int
 	sel, scroll   int
 	focus         pane
+	title         string
 	styles        tuiStyles
 }
 
@@ -148,7 +149,7 @@ func (s tuiStyles) status(status byte) lipgloss.Style {
 }
 
 func newTUIModel(files []patch.File, opts patch.Options) tuiModel {
-	m := tuiModel{files: files, focus: paneFiles, styles: tuiStylesFor(opts.Theme)}
+	m := tuiModel{files: files, focus: paneFiles, title: "mu diff patch", styles: tuiStylesFor(opts.Theme)}
 	for i := range files {
 		m.lines = append(m.lines, patch.Lines(files[i], opts))
 		m.stats = append(m.stats, statsFor(files[i]))
@@ -318,7 +319,11 @@ func (m tuiModel) headerLine() string {
 	if m.focus == paneDiff {
 		focus = "diff"
 	}
-	return m.styles.header.Render(fmt.Sprintf(" mu diff patch  |  %d file(s)  |  focus: %s ", len(m.files), focus))
+	title := m.title
+	if title == "" {
+		title = "mu diff patch"
+	}
+	return m.styles.header.Render(fmt.Sprintf(" %s  |  %d file(s)  |  focus: %s ", title, len(m.files), focus))
 }
 
 func (m tuiModel) footerLine() string {
@@ -409,6 +414,12 @@ func statsFor(f patch.File) fileStat {
 		st.status = 'R'
 	case strings.Contains(header, "copy from"):
 		st.status = 'C'
+	case f.OldPath == "/dev/null":
+		// A diff generated from two files has no "new file mode" header, so the
+		// null side is what marks an added file.
+		st.status = 'A'
+	case f.NewPath == "/dev/null":
+		st.status = 'D'
 	}
 	for _, h := range f.Hunks {
 		for _, line := range h.Lines {
@@ -437,7 +448,7 @@ func displayPath(f patch.File) string {
 // can be used for keys when the patch arrived through a pipe; in that case the
 // controlling terminal is opened instead. stdin and stdout are injected so the
 // terminal checks are testable.
-func runTUI(files []patch.File, opts patch.Options, stdin io.Reader, stdout *os.File) error {
+func runTUI(files []patch.File, opts patch.Options, title string, stdin io.Reader, stdout *os.File) error {
 	if !term.IsTerminal(int(stdout.Fd())) {
 		return fmt.Errorf("--tui requires a terminal on stdout; omit --tui to write the rendered patch")
 	}
@@ -456,7 +467,9 @@ func runTUI(files []patch.File, opts patch.Options, stdin io.Reader, stdout *os.
 		input = tty
 	}
 
-	program := tea.NewProgram(newTUIModel(files, opts),
+	model := newTUIModel(files, opts)
+	model.title = title
+	program := tea.NewProgram(model,
 		tea.WithAltScreen(),
 		tea.WithInput(input),
 		tea.WithOutput(stdout),

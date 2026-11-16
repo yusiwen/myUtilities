@@ -323,7 +323,7 @@ func TestTUIRequiresTerminal(t *testing.T) {
 	}
 	defer func() { _ = out.Close() }()
 
-	err = runTUI(files, patch.Options{LineNumbers: true}, strings.NewReader(""), out)
+	err = runTUI(files, patch.Options{LineNumbers: true}, "mu diff", strings.NewReader(""), out)
 	if err == nil || !strings.Contains(err.Error(), "requires a terminal") {
 		t.Fatalf("err = %v, want the terminal requirement", err)
 	}
