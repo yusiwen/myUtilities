@@ -3,10 +3,14 @@
 Compare two files or text strings with a side-by-side diff viewer. Supports both CLI and web UI.
 
 ```bash
-# Compare two files in the terminal
-mu diff file a.txt b.txt
+# Compare two files with line numbers and colour
+mu diff a.txt b.txt
 
-# Compare text strings
+# Render a patch from git, or from a file
+git diff | mu diff
+mu diff change.patch
+
+# Compare text strings inline
 mu diff text "old text" "new text"
 
 # Serve the web UI (standalone)
@@ -23,16 +27,48 @@ git diff | mu diff patch
 ```
 
 
-## Patch rendering
+## Comparing two files
 
-`mu diff patch` renders a unified diff that another tool produced. It reads a
-file or stdin, so it works with `git diff`, `git show`, `git format-patch` and
-plain `diff -u`:
+With two file paths, `mu diff` builds a unified diff in process and renders it
+with the same gutter, colours and themes as `mu diff patch`:
 
 ```bash
-git diff | mu diff patch
-git show HEAD~1 | mu diff patch --no-line-numbers
-diff -u old.txt new.txt | mu diff patch --color=always
+mu diff old.txt new.txt
+mu diff --tui old.txt new.txt
+```
+
+No `git` or `diff` process is started, so it behaves the same on Windows. The
+rules match `diff -U3`:
+
+- three lines of context; two changes whose unchanged gap is at most six lines
+  share one hunk, a seven-line gap starts a second hunk;
+- an empty or missing side (`/dev/null`, or `NUL` on Windows) renders as an added
+  or deleted file, and the TUI shows `A`/`D`;
+- a NUL byte on either side produces a `Binary files ... differ` notice instead of
+  hunks;
+- a missing final newline is marked with `\ No newline at end of file`;
+- CRLF input renders without the carriage return, and identical files print
+  nothing.
+
+Each side is capped at 50 MiB, the same limit as the patch renderer. A path that
+does not exist exits 1; a directory is refused because tree comparison is not
+supported.
+
+With one path, `mu diff` renders that unified diff file; with none, it renders a
+diff from stdin. The `patch` subcommand remains as the explicit form.
+
+
+## Patch rendering
+
+`mu diff` renders a unified diff that another tool produced. It reads a file or
+stdin, so it works with `git diff`, `git show`, `git format-patch` and plain
+`diff -u`; `mu diff patch` is the explicit spelling of the same path:
+
+```bash
+git diff | mu diff
+git show HEAD~1 | mu diff --no-line-numbers
+diff -u old.txt new.txt | mu diff --color=always
+mu diff change.patch
 mu diff patch change.patch
 ```
 
@@ -62,12 +98,13 @@ supported.
 
 ## Interactive viewer
 
-`mu diff patch --tui` opens a full-screen viewer: the changed files on the left,
-the selected file's diff on the right.
+`mu diff --tui` opens a full-screen viewer: the changed files on the left, the
+selected file's diff on the right. The same flag works on `mu diff patch`.
 
 ```bash
-mu diff patch --tui change.patch
-git diff | mu diff patch --tui
+mu diff --tui change.patch
+mu diff --tui old.txt new.txt
+git diff | mu diff --tui
 ```
 
 | Key | Action |
@@ -92,7 +129,8 @@ viewer too; colour is always on inside the TUI and follows `--theme`
 
 ## Themes
 
-`mu diff file`, `mu diff text` and `mu diff patch` accept `--theme nord|default`.
+`mu diff`, `mu diff file`, `mu diff text` and `mu diff patch` accept
+`--theme nord|default`.
 Nord is the default; `--theme default` restores the classic green/red/cyan
 palette. Nord uses the [Nord](https://www.nordtheme.com) palette:
 
@@ -155,6 +193,33 @@ git show :2:path > /tmp/ours
 git show :3:path > /tmp/theirs
 mu diff merge --base /tmp/base --ours /tmp/ours --theirs /tmp/theirs --style diff3 > path
 ```
+
+## Git integration
+
+`git difftool` invokes the tool with two file paths (`$LOCAL` and `$REMOTE`), which
+is exactly the two-argument form of `mu diff`:
+
+```bash
+git config --global difftool.mu.cmd 'mu diff "$LOCAL" "$REMOTE"'
+git config --global difftool.prompt false
+git difftool --tool=mu
+```
+
+`mu diff` exits 0 even when the files differ, so `--trust-exit-code` is safe. For
+an added file git passes `/dev/null` on the left, which renders as an addition.
+`git difftool -d` passes two directories instead and is not supported: it fails
+with `comparing two trees is not supported`.
+
+As a pager for patch output:
+
+```bash
+git -c pager.diff='mu diff' diff
+git -c pager.show='mu diff' show
+```
+
+Combined diffs (`diff --cc`, `@@@`) are rejected, so a pager configured this way
+shows an error for conflicted files during a merge; use `git diff` directly there.
+`git difftool` itself never sends a combined diff.
 
 ## Browser comparison
 
