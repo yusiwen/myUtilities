@@ -89,8 +89,11 @@ colours additions, deletions, context and hunk headers:
 | `--[no-]line-numbers` | on | show the old/new line-number gutter |
 | `--theme` | `nord` | `nord` (24-bit Nord palette) or `default` (classic 16-colour) |
 
-Plain mode has no ANSI escapes, so it can be redirected. A patch that cannot be
-parsed exits 2 with the offending line number; text that is not a diff exits 2
+Plain mode has no ANSI escapes, so it can be redirected. ANSI colour sequences in
+the input are stripped before parsing, so a colourised patch — `git diff
+--color=always`, or git handing its coloured diff to a pager — renders instead of
+failing; mu re-applies the selected theme. A patch that cannot be parsed exits 2
+with the offending line number; text that is not a diff exits 2
 with `input does not look like a unified diff`; binary input (a NUL byte) and
 patches over 50 MiB are refused. Combined diffs (`@@@`, `diff --cc`) are not
 supported.
@@ -217,9 +220,15 @@ with `comparing two trees is not supported`.
 As a pager for patch output:
 
 ```bash
-git -c pager.diff='mu diff' diff
-git -c pager.show='mu diff' show
+git config --global pager.diff 'mu diff'
+git config --global pager.show 'mu diff'
+git -c pager.diff='mu diff --tui' diff   # interactive viewer instead
 ```
+
+Git colourises the diff before handing it to a pager; `mu diff` strips those escape
+sequences before parsing and re-colours the text with its own theme, so no
+`color.diff=never` (or `--no-color`) is needed. The same applies to
+`git diff --color=always | mu diff`.
 
 Combined diffs (`diff --cc`, `@@@`) are rejected, so a pager configured this way
 shows an error for conflicted files during a merge; use `git diff` directly there.

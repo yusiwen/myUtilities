@@ -298,3 +298,50 @@ func TestParseRejectsMalformedHunks(t *testing.T) {
 		})
 	}
 }
+
+// TestParseStripsANSIColour pins the git-pager contract: git colourises the diff
+// before handing it to the pager, and mu re-colours it from the line kinds, so
+// incoming escape sequences must not reach the parser or the display text.
+func TestParseStripsANSIColour(t *testing.T) {
+	plain := "diff --git a/a.txt b/a.txt\n" +
+		"index 1111111..2222222 100644\n" +
+		"--- a/a.txt\n" +
+		"+++ b/a.txt\n" +
+		"@@ -1,3 +1,3 @@\n" +
+		" one\n" +
+		"-two\n" +
+		"+TWO\n" +
+		" three\n"
+	coloured := "\x1b[1mdiff --git a/a.txt b/a.txt\x1b[m\n" +
+		"\x1b[1mindex 1111111..2222222 100644\x1b[m\n" +
+		"\x1b[1m--- a/a.txt\x1b[m\n" +
+		"\x1b[1m+++ b/a.txt\x1b[m\n" +
+		"\x1b[36m@@ -1,3 +1,3 @@\x1b[m\n" +
+		" one\x1b[m\n" +
+		"\x1b[31m-two\x1b[m\n" +
+		"\x1b[32m+\x1b[m\x1b[32mTWO\x1b[m\n" +
+		" three\x1b[m\n"
+
+	plainFiles := mustParse(t, plain)
+	colouredFiles := mustParse(t, coloured)
+	if len(colouredFiles) != 1 {
+		t.Fatalf("coloured patch produced %d files, want 1", len(colouredFiles))
+	}
+	if got := colouredFiles[0].NewPath; got != "a.txt" {
+		t.Errorf("NewPath = %q, want a.txt", got)
+	}
+
+	var plainOut, colouredOut strings.Builder
+	if err := Render(&plainOut, plainFiles, Options{LineNumbers: true}); err != nil {
+		t.Fatalf("Render plain: %v", err)
+	}
+	if err := Render(&colouredOut, colouredFiles, Options{LineNumbers: true}); err != nil {
+		t.Fatalf("Render coloured: %v", err)
+	}
+	if got, want := colouredOut.String(), plainOut.String(); got != want {
+		t.Errorf("coloured render differs from plain:\n got %q\nwant %q", got, want)
+	}
+	if strings.ContainsRune(colouredOut.String(), 0x1b) {
+		t.Error("rendered output still contains an escape sequence")
+	}
+}

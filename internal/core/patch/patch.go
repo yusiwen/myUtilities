@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Kind is the role of one line inside a hunk.
@@ -233,9 +235,20 @@ func splitLines(data []byte) []string {
 	for i, line := range lines {
 		line = strings.TrimSuffix(line, "\n")
 		line = strings.TrimSuffix(line, "\r")
-		lines[i] = line
+		lines[i] = stripColour(line)
 	}
 	return lines
+}
+
+// stripColour removes ANSI escape sequences. Git colourises diff output before
+// handing it to a pager, and mu applies its own theme, so incoming escapes are
+// metadata rather than content; leaving them in place would hide the file and
+// hunk headers from the parser.
+func stripColour(line string) string {
+	if strings.IndexByte(line, 0x1b) < 0 {
+		return line
+	}
+	return ansi.Strip(line)
 }
 
 // parseDiffPath extracts the path from a "--- " or "+++ " line, dropping the

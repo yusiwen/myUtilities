@@ -197,7 +197,7 @@ The `internal/core/` directory contains reusable business logic:
 - `internal/core/qr/` - QR rendering
   - `Terminal(text, level)` → `Rendered{Art, Width, Height}` — draws each module as two spaces painted with an explicit black or white ANSI background, so a code scans on both light and dark terminal themes; the 4-module quiet zone is drawn too, and colour runs are collapsed into one escape per run
 - `internal/core/patch/` - Unified diff parsing, rendering and generation
-  - `Parse(data)` → `[]File` with headers, paths, hunks and line kinds; accepts `git diff` and `diff -u`, ignores mail/commit preambles, and rejects combined diffs and malformed hunk counts with the offending line number
+  - `Parse(data)` → `[]File` with headers, paths, hunks and line kinds; accepts `git diff` and `diff -u`, ignores mail/commit preambles, and rejects combined diffs and malformed hunk counts with the offending line number. ANSI escape sequences are stripped per line before parsing, so colourised diffs (git's pager, `--color=always`) parse exactly like plain ones
   - `FromTexts(oldPath, newPath, oldText, newText)` → `[]File` — builds a one-file unified diff in process: go-diff line encoding, 3 lines of context, hunks merge when the unchanged gap is ≤ 6, `/dev/null` sides, a binary notice for NUL input, CRLF and missing-final-newline handling. No `git` or `diff` process is started.
   - `Render(w, files, Options)` — old/new line-number gutter and colour or plain output; `mu diff patch` decides colour from `--color` and whether stdout is a terminal
   - `Lines(f, Options)` → `[]DisplayLine` — per-file lines with gutter and kind; shared by the plain renderer and the `--tui` viewer so the two cannot drift
