@@ -27,38 +27,66 @@ type PatchOptions struct {
 // Run renders the patch to stdout, or opens the interactive viewer with --tui.
 // A read or parse error exits 2.
 func (o *PatchOptions) Run() error {
-	files, err := o.parseInput(os.Stdin)
-	if err != nil {
+	if err := o.run(os.Stdin, os.Stdout); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
+	}
+	return nil
+}
+
+// run is Run without the process exit, so the bare `mu diff` command can share
+// the patch path and tests can drive it.
+func (o *PatchOptions) run(stdin io.Reader, stdout *os.File) error {
+	files, err := o.parseInput(stdin)
+	if err != nil {
+		return err
 	}
 	if len(files) == 0 {
 		return nil
 	}
+	return renderFiles(files, o.renderConfig(), stdin, stdout)
+}
 
-	if o.TUI {
-		opts := patch.Options{LineNumbers: o.LineNumbers, Theme: patchTheme(o.Theme)}
-		if err := runTUI(files, opts, os.Stdin, os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
-		}
-		return nil
+func (o *PatchOptions) renderConfig() renderConfig {
+	return renderConfig{
+		color:       o.Color,
+		lineNumbers: o.LineNumbers,
+		tui:         o.TUI,
+		theme:       patchTheme(o.Theme),
+		title:       "mu diff patch",
 	}
+}
 
-	color := false
-	switch o.Color {
+// renderConfig is the presentation half shared by `mu diff patch` and the bare
+// `mu diff` command.
+type renderConfig struct {
+	color       string
+	lineNumbers bool
+	tui         bool
+	theme       patch.Theme
+	title       string
+}
+
+// renderFiles writes the parsed files, or opens the interactive viewer.
+func renderFiles(files []patch.File, cfg renderConfig, stdin io.Reader, stdout *os.File) error {
+	opts := patch.Options{LineNumbers: cfg.lineNumbers, Theme: cfg.theme}
+	if cfg.tui {
+		return runTUI(files, opts, cfg.title, stdin, stdout)
+	}
+	opts.Color = colorEnabled(cfg.color, stdout)
+	return patch.Render(stdout, files, opts)
+}
+
+// colorEnabled resolves --color against the output terminal.
+func colorEnabled(mode string, out *os.File) bool {
+	switch mode {
 	case "always":
-		color = true
+		return true
 	case "never":
-		color = false
+		return false
 	default: // auto
-		color = term.IsTerminal(int(os.Stdout.Fd()))
+		return term.IsTerminal(int(out.Fd()))
 	}
-	if err := patch.Render(os.Stdout, files, patch.Options{Color: color, LineNumbers: o.LineNumbers, Theme: patchTheme(o.Theme)}); err != nil {
-		fmt.Fprintf(os.Stderr, "write output: %v\n", err)
-		os.Exit(2)
-	}
-	return nil
 }
 
 // render injects stdin and the output writer so the plain path is testable.

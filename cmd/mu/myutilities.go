@@ -49,7 +49,7 @@ type MyUtilities struct {
 	K8s        k8s.Options                 `cmd:"" name:"k8s" help:"Kubernetes utilities."`
 	Jar        jarinfo.Options             `cmd:"" name:"jar" help:"Jar utilities."`
 	Gateway    gateway.Options             `cmd:"" name:"gateway" help:"Start a unified gateway server for all mu services."`
-	Diff       diff.Options                `cmd:"" name:"diff" help:"Text diff tool."`
+	Diff       diff.Options                `cmd:"" name:"diff" help:"Diff two files or render a patch (also a git difftool)."`
 	Network    network.Options             `cmd:"" name:"network" help:"Network tools (DNS, DIG, HTTP client, server)."`
 	Misc       misc.Options                `cmd:"" name:"misc" help:"Miscellaneous tools (JSON, UUID, timestamp, hash)."`
 	Crypto     crypto.Options              `cmd:"" name:"crypto" help:"Crypto utilities."`
